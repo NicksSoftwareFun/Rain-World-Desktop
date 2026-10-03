@@ -1,0 +1,16 @@
+{
+  "name": "rain-world-desktop-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless smoke and behaviour tests for the Rain World Desktop prototype and wallpaper build",
+  "scripts": {
+    "test": "node smoke.mjs && node behaviour.mjs --quick",
+    "smoke": "node smoke.mjs",
+    "behaviour": "node behaviour.mjs",
+    "fake-helper": "node fake-helper.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.2"
+  }
+}
