@@ -352,7 +352,9 @@
         const m = this.mainPoint();
         const moved = this.lastCheck ? Math.hypot(m.x - this.lastCheck.x, m.y - this.lastCheck.y) : 99;
         this.lastCheck = { x: m.x, y: m.y };
-        const busy = this.pather && this.pather.goal && !this.grabbedBy && !this.holding;
+        // (sitting at its own goal isn't being stuck)
+        const gl = this.pather && this.pather.goal;
+        const busy = gl && Math.hypot(gl.x - m.x, gl.y - m.y) > this.W.cell * 1.5 && !this.grabbedBy && !this.holding;
         this.stillFor = moved < 3 && busy ? (this.stillFor || 0) + 5 : 0;
         if (this.stillFor >= 10 && this.caps && !this.nudge) {
           const W = this.W;
@@ -843,6 +845,13 @@
         if (g) return g;
       }
       const m = this.mainPoint();
+      // somewhere it can actually get to, and not where it already is
+      for (let k = 0; k < 6; k++) {
+        const g = Nav.randomValid(this.W, caps, m.x, m.y, radius, filter);
+        if (!g || Math.hypot(g.x - m.x, g.y - m.y) < 60) continue;
+        const r = Nav.findPath(this.W, m.x, m.y, g.x, g.y, caps, 4000);
+        if (r && r.complete) return g;
+      }
       return Nav.randomValid(this.W, caps, m.x, m.y, radius, filter);
     }
     // Somewhere anywhere on the map, favouring high ground (window tops,
@@ -885,7 +894,11 @@
       if (this.migrateCheck <= 0) {
         this.migrateCheck = 10;
         const perMin = this.eco.cfg.ecosystem.migrationPerMinute || 0;
-        if (this.age > 40 && Math.random() < perMin / 6) this.migrating = true;
+        // (some species settle in for longer: minStay seconds before they
+        // think of moving on, and migrateScale on the chance)
+        const stay = this.p.minStay || 40;
+        const k = this.p.migrateScale ?? 1;
+        if (this.age > stay && Math.random() < (perMin / 6) * k) this.migrating = true;
       }
       return !!this.migrating;
     }

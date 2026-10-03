@@ -24,6 +24,7 @@ without page errors, populate, and react to geometry changes.
 | --- | --- |
 | `soak` | errors, runaway population, active creatures getting stuck (burrowing away) |
 | `bodies` | centipedes folding in half, lizards hairpinning or balling up on poles |
+| `centipedes` | centipedes slipping off poles and ceilings, or sitting "stuck" until they burrow away |
 | `dropwigs` | dropwigs losing their grip on corners and falling in a loop |
 | `scramble` | slugcats bouncing off ledge corners instead of scrambling up from poles |
 | `jumps` | slugcats not jumping, centipedes able to jump (also reports lizard pole leaps and slugcat long leaps) |

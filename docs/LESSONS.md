@@ -29,6 +29,17 @@ next session doesn't relearn them.
   surface; crossing a corner they could drift out of grip range and fall
   (dropwigs did this ~50 times a minute). Long-legged ones now keep a 44 px
   reach while crossing.
+- **"Stuck" at your own goal.** The 25 s stuck safety net counted a
+  creature parked on its own goal as stuck, and the wander fallback often
+  picked an unreachable spot or the cell it stood in (the explore picker's
+  path search runs out of budget on far goals). Centipedes burrowed away
+  ~12 times per centipede-hour. Now arriving isn't being stuck, and the
+  fallback only picks a reachable spot at least 60 px away.
+- **Grip where the path is, not where the node is.** Path nodes sit at cell
+  centres, but the real surface can be nearly a cell away (an underside in
+  the top of its cell; a pole off-centre). Centipedes reach 34 px, hug poles
+  close, keep a pole's grip while their head is on one, and count a node
+  reached within their own body offset.
 - **Chains need a bend limit.** Verlet chains with only length constraints
   fold flat when the head doubles back (centipedes folded in 82% of frames).
   `Chain.limitBend` fixed it; anything new with a body should use it.

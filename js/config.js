@@ -349,6 +349,9 @@
           // chases further and longer, and shocks anything that comes close
           aggressive: true,
           vision: 480,
+          // and it stays: a big one settles in as the room's top hunter
+          minStay: 300,
+          migrateScale: 0.25,
         },
       },
       // Fliers. Noodleflies come as a family: an adult with a brood of

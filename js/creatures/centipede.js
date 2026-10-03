@@ -243,13 +243,22 @@
       }
       this.think(dt);
       this.pather.update(dt, h.x, h.y);
-      this.pather.advance(h.x, h.y, W.cell * 0.8);
+      // (a path node counts as reached within the body's own grip offset
+      // too: held off a surface by its size, a big one could otherwise sit a
+      // pole's width from the node, pushing at it forever)
+      this.pather.advance(h.x, h.y, W.cell * 0.8 + 3 * this.size);
       // Poles only count when the path uses one (see lizard.js). Grip range
       // covers path nodes that sit up to a cell from a partly covered wall.
+      // It also keeps its grip on a pole it's still on (or just came along)
+      // while stepping off it toward a ledge: let go early and it fell.
       const pn = this.pather.current();
-      const mask = pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1) ? this.mask : this.maskNoPole;
+      const onPole = W.pole(W.cellX(h.x), W.cellY(h.y));
+      const mask = (pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1)) || onPole ? this.mask : this.maskNoPole;
       const S = this.size;
-      let g = W.nearestSurface(h.x, h.y, 24 * S, mask);
+      // a long reach: a surface can sit most of a cell away from the path
+      // node's centre (an underside in the top of its cell), and a centipede
+      // bridges that rather than drop
+      let g = W.nearestSurface(h.x, h.y, Math.max(34, 24 * S), mask);
       if (this.dropT > 0) {
         this.dropT -= dt;
         g = null;
@@ -280,8 +289,10 @@
       }
       h.x += this.vx * dt;
       h.y += this.vy * dt;
+      // (a pole it wraps round, close in; anything flat it rides 5*S off)
+      const hold = (s) => (s.id && s.id.startsWith('pole') ? 1.5 * S : 5 * S);
       if (g && !leaving) {
-        const e = g.d - 5 * S;
+        const e = g.d - hold(g);
         h.x -= g.nx * e * 0.3;
         h.y -= g.ny * e * 0.3;
         this.contactId = g.id;
@@ -301,7 +312,7 @@
       for (let i = 1; i < P.length; i++) {
         const s = W.nearestSurface(P[i].x, P[i].y, 18 * S, mask);
         if (s) {
-          const e = s.d - 5 * S;
+          const e = s.d - hold(s);
           P[i].x -= s.nx * e * 0.35;
           P[i].y -= s.ny * e * 0.35;
         }

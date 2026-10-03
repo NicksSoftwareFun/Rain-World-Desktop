@@ -139,6 +139,55 @@ const checks = [
     ],
   },
   {
+    name: 'centipedes',
+    about: 'centipedes get about on every surface: they rarely lose their grip, and never sit stuck long enough to burrow away',
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.ecosystem.predation = false;
+        const S = e.cfg.species;
+        for (const k in S) S[k].weight = 0;
+        S.centipede.weight = 3;
+        S.centipede_medium.weight = 3;
+        S.centipede_medium.max = 3;
+        S.centipede_large.weight = 3;
+        S.centipede_large.max = 2;
+        e.restartWildlife();
+        let frames = 0;
+        let slips = 0;
+        let burrows = 0;
+        const B = RW.Creature.prototype.burrowAway;
+        RW.Creature.prototype.burrowAway = function () {
+          if (!this.burrow && this.species.startsWith('centipede')) burrows++;
+          return B.call(this);
+        };
+        const air = new Map();
+        for (let i = 0; i < mins * 3600; i++) {
+          e.tick(1 / 60);
+          for (const c of e.eco.creatures) {
+            if (!c.species.startsWith('centipede') || c.dead || c.corpse || c.leaving || c.grabbedBy) continue;
+            frames++;
+            // falling fast without meaning to (not a planned drop, not stunned)
+            const n = c.pather.current();
+            const falling = c.vy > 200;
+            if (falling && !air.get(c) && !(c.dropT > 0) && !(c.stunT > 0) && !(n && n.type === RW.Nav.FALL)) slips++;
+            air.set(c, falling);
+          }
+        }
+        RW.Creature.prototype.burrowAway = B;
+        const m = frames / 3600;
+        return { centipedeMinutes: +m.toFixed(1), slipsPerMin: +(slips / (m || 1)).toFixed(2), burrowsPerHour: +((burrows / (m || 1)) * 60).toFixed(1) };
+      }, T(5)),
+    // measured: ~0.15 slips per centipede-minute (was ~3), ~0.5 burrows per
+    // centipede-hour (was ~12: stuck "at" goals they'd already reached)
+    judge: (m) => [
+      m.centipedeMinutes < 10 && 'too few centipedes to judge',
+      m.slipsPerMin > 0.8 && `centipedes losing their grip (${m.slipsPerMin}/min)`,
+      m.burrowsPerHour > 4 && `centipedes getting stuck and burrowing away (${m.burrowsPerHour}/hour)`,
+    ],
+  },
+  {
     name: 'dropwigs',
     about: 'dropwigs keep their grip round corners and reach ceilings to ambush from',
     run: (page) =>
