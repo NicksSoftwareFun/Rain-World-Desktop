@@ -95,6 +95,28 @@
     mainPoint() {
       return this.pos;
     }
+    // Where things go for it: the neck, just behind the eyes, not the
+    // shoulder where the tail hangs. x/y report it, so every predator's
+    // chase and bite lines up on it.
+    neckPt() {
+      const A = this.archPts();
+      return A[A.length - 2];
+    }
+    // (worked out once per pose: predators ask for x/y a lot)
+    neckNow() {
+      const k = this.age + ',' + this.pos.x + ',' + this.pos.y;
+      if (this.neckKey !== k) {
+        this.neck = this.neckPt();
+        this.neckKey = k;
+      }
+      return this.neck;
+    }
+    get x() {
+      return this.neckNow().x;
+    }
+    get y() {
+      return this.neckNow().y;
+    }
     bounds() {
       const A = this.archPts();
       return RW.Creature.ptsBounds(A.concat(this.tail.pts, [this.needleTip()]), (this.D.wing[0] + 4) * this.L);
@@ -116,10 +138,12 @@
       const h = A[A.length - 1];
       const top = A[Math.floor(A.length * 0.45)];
       const r = this.D.rad * this.L;
+      const nk = A[A.length - 2];
       return [
-        { x: this.pos.x, y: this.pos.y, r: r + 1, part: 'body' },
-        { x: top.x, y: top.y, r: r + 2, part: 'body' },
+        { x: nk.x, y: nk.y, r: r + 2, part: 'head' }, // first: the part a biter goes for
         { x: h.x, y: h.y, r: r, part: 'head' },
+        { x: top.x, y: top.y, r: r + 2, part: 'body' },
+        { x: this.pos.x, y: this.pos.y, r: r + 1, part: 'body' },
       ];
     }
     onRockHit() {
@@ -302,12 +326,28 @@
       }
       this.huntCd -= dt;
       if (this.grabbedBy) {
-        // caught: hangs from the jaws (an infant dies of it in a moment)
-        const hp = this.grabbedBy.holdPoint();
-        this.pos.x = hp.x;
-        this.pos.y = hp.y;
+        // caught: hangs from the jaws by the neck (an infant dies of it in a
+        // moment)
+        const g = this.grabbedBy;
+        const hp = g.holdPoint();
+        // the body goes slack and dangles from the jaws, forward and down
+        const gx = g.x !== undefined ? g.x : hp.x;
+        const gy = g.y !== undefined ? g.y : hp.y;
+        const fwd = Math.hypot(hp.x - gx, hp.y - gy) > 1 ? Math.atan2(hp.y - gy, hp.x - gx) : Math.PI / 2;
+        // (if hanging down would put it through the floor, it lies out
+        // along the ground in front instead)
+        const len = this.D.archN * this.D.archSeg * this.L * 0.8;
+        let hang = fwd;
+        for (const t of [0.55, 0.35, 0.15, 0]) {
+          hang = U.lerpAngle(fwd, Math.PI / 2, t);
+          if (!this.W.isSolidPt(hp.x + Math.cos(hang) * len, hp.y + Math.sin(hang) * len) && !this.W.isSolidPt(hp.x + Math.cos(hang) * len * 0.5, hp.y + Math.sin(hang) * len * 0.5)) break;
+        }
+        this.aim = U.lerpAngle(this.aim, hang + Math.PI, U.approach(5, dt)); // aim runs shoulder -> head
+        this.curl += (0.15 - this.curl) * U.approach(4, dt);
+        const nk = this.neckPt();
+        this.pos.x += hp.x - nk.x;
+        this.pos.y += hp.y - nk.y;
         this.vx = this.vy = 0;
-        this.curl += (0.4 - this.curl) * U.approach(4, dt);
         if (this.infant && !this.corpse && (this.dieT -= dt) <= 0) this.kill();
         else if (!this.corpse) this.struggle(dt);
         this.updateTail(dt);
@@ -339,7 +379,27 @@
         this.pos.x = cx;
         this.pos.y = cy;
       } else this.anchor = null;
+      if (!this.anchor) this.keepHeadIn(dt);
       this.updateTail(dt);
+    }
+    // The drooping head and neck stay on screen and out of the floor: if
+    // they'd go past an edge or into solid ground, the body lifts clear.
+    keepHeadIn(dt, edgesOnly) {
+      const A = this.archPts();
+      let dx = 0;
+      let dy = 0;
+      for (const q of [A[A.length - 2], A[A.length - 1]]) {
+        if (q.x < 4) dx = Math.max(dx, 4 - q.x);
+        else if (q.x > this.W.w - 4) dx = Math.min(dx, this.W.w - 4 - q.x);
+        if (q.y > this.W.h - 4) dy = Math.min(dy, this.W.h - 4 - q.y);
+        else if (q.y < 4) dy = Math.max(dy, 4 - q.y);
+        else if (!edgesOnly && this.W.isSolidPt(q.x, q.y)) dy = Math.min(dy, -Math.min(3, 160 * dt));
+      }
+      if (!dx && !dy) return;
+      this.pos.x += dx;
+      this.pos.y += dy;
+      if (dy < 0) this.vy = Math.min(this.vy, 0);
+      if (dx) this.vx *= 0.5;
     }
 
     // The head looks toward the prey it's stalking, else the way it's
@@ -436,9 +496,38 @@
         }
         this.vx *= 0.7;
       }
-      this.curl += (0.35 - this.curl) * U.approach(3, dt);
-      this.aim = Math.PI / 2;
+      // the arch goes slack and lies out flat (hanging straight down it
+      // stood propped on its own head)
+      // which way it lies: flat ahead, flat behind, or hanging off an edge,
+      // whichever is clear of the ground
+      const len = this.D.archN * this.D.archSeg * this.L * 0.9;
+      const free = (a) =>
+        !this.W.isSolidPt(p.x + Math.cos(a) * len, p.y + Math.sin(a) * len) &&
+        !this.W.isSolidPt(p.x + Math.cos(a) * len * 0.5, p.y + Math.sin(a) * len * 0.5);
+      const ahead = this.facing > 0 ? 0 : Math.PI;
+      let want = null;
+      for (const a of [ahead, Math.PI - ahead, Math.PI / 2]) {
+        if (free(a)) {
+          want = a;
+          break;
+        }
+      }
+      if (want === null) {
+        // boxed in: flat toward whichever side has more room
+        const room = (a) => {
+          let d = 0;
+          while (d < len && !this.W.isSolidPt(p.x + Math.cos(a) * d, p.y)) d += 6;
+          return d;
+        };
+        want = room(0) >= room(Math.PI) ? 0 : Math.PI;
+      }
+      // face the way it lies, so what's left of the crook humps over the top
+      if (Math.abs(Math.cos(want)) > 0.5) this.facing = Math.cos(want) > 0 ? 1 : -1;
+      this.faceS += U.clamp(this.facing - this.faceS, -2.5 * dt, 2.5 * dt);
+      this.curl += (0.08 - this.curl) * U.approach(3, dt);
+      this.aim = U.lerpAngle(this.aim, want, U.approach(4, dt));
       this.needle *= 0.98;
+      this.keepHeadIn(dt, true);
     }
 
     // Transit: in by one den, a couple of meals (or a long while), out by the
