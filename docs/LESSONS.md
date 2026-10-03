@@ -42,6 +42,8 @@ next session doesn't relearn them.
   out of Multi-Project-Playground (whose site is the weather radar app) into
   its own repo, published from `main`. The session's GitHub app can't create
   repositories or change Pages settings; the owner does those by hand.
+  The repo is named `Rain-World-Desktop` and the Pages path is
+  case-sensitive: `/Rain-World-Desktop/` works, `/rain-world-desktop/` 404s.
 - **Shell editing.** Use exact-match replacements that assert the match is
   unique (a Python `assert s.count(a) == 1` pattern worked well). A sed range
   typo once wrote a stray copy of `base.js` into the repo under a garbage

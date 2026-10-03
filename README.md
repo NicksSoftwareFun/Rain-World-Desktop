@@ -10,7 +10,7 @@ Everything is plain JavaScript + `<canvas>`, with no build step and no dependenc
 ## Try it
 
 - **Browser prototype**: open `index.html` (or the hosted copy at
-  <https://nickssoftwarefun.github.io/rain-world-desktop/>). It shows a mock
+  <https://nickssoftwarefun.github.io/Rain-World-Desktop/>). It shows a mock
   Windows desktop with draggable, resizable windows and icons over the
   wallpaper. They are real geometry: drag a window and creatures standing on
   it ride along. **It's a preview only**: as a wallpaper it would only ever

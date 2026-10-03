@@ -62,13 +62,13 @@ they apply).
 
 ## Repository and GitHub Pages
 
-This repo, `NicksSoftwareFun/rain-world-desktop`, is the project's home. It
+This repo, `NicksSoftwareFun/Rain-World-Desktop`, is the project's home. It
 was developed inside `NicksSoftwareFun/Multi-Project-Playground`
 (`rain-world-desktop/` on branch `ccr-5e3d0da8-apficq`) until its history
 was moved here.
 
 GitHub Pages publishes **`main`** at
-https://nickssoftwarefun.github.io/rain-world-desktop/ (the prototype; also
+https://nickssoftwarefun.github.io/Rain-World-Desktop/ (the prototype; also
 `gallery.html`), updating a minute or two after each push. The owner wants
 the site to track development as it happens: work on `main`, or if the
 session is set up on another branch, merge it into `main` once it's
