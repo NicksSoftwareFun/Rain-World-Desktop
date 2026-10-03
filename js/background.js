@@ -329,7 +329,7 @@
       }
     }
     for (const l of ledges) {
-      if (rnd() < 0.5) dens.push({ x: Math.round(l.x + R(20, l.w - 20)), y: l.y, dir: 0, wall: false });
+      if (rnd() < 0.5) dens.push({ x: Math.round(l.x + R(20, l.w - 20)), y: l.y, dir: 0, wall: false, depth: l.h });
     }
 
     // Dangle fruit plants hang from ledge undersides and the top of the screen.
@@ -763,25 +763,69 @@
     }
   }
 
+  // Den pipes. On a ledge: a pipe sunk into the stone, its mouth flush with
+  // the top, the pipe walls showing down inside the ledge. In a screen wall:
+  // the end of a pipe coming out of the wall, with a flanged rim and a dark
+  // mouth. The blinking marks are drawn on the mouth by the ecosystem.
   function drawDenStatic(ctx, d, pal) {
-    const rim = U.mix(pal.dark, pal.light, 0.18);
+    const ledge = U.mix(pal.dark, pal.near, 0.6);
+    const metal = U.mix(pal.dark, pal.light, 0.2);
+    const lit = U.mix(metal, pal.light, 0.25);
+    const shade = U.mix(metal, pal.dark, 0.55);
+    const hole = '#050707';
     ctx.save();
     ctx.translate(d.x, d.y);
     if (d.wall) {
-      // pipe mouth set into the screen wall
-      ctx.fillStyle = U.rgba(rim);
-      ctx.fillRect(d.dir > 0 ? 0 : -14, -14, 14, 28);
-      ctx.fillStyle = '#000';
+      const f = d.dir; // +1: comes out of the left wall, pointing right
+      const X = (a, w) => (f > 0 ? a : -a - w); // mirror an x span
+      // pipe body out of the wall
+      ctx.fillStyle = U.rgba(metal);
+      ctx.fillRect(X(-2, 12), -11, 12, 22);
+      ctx.fillStyle = U.rgba(lit);
+      ctx.fillRect(X(-2, 12), -11, 12, 2);
+      ctx.fillStyle = U.rgba(shade);
+      ctx.fillRect(X(-2, 12), 7, 12, 4);
+      // seam where it meets the wall
+      ctx.fillStyle = U.rgba(pal.dark, 0.8);
+      ctx.fillRect(X(-2, 2), -13, 2, 26);
+      // flanged rim, bolted
+      ctx.fillStyle = U.rgba(U.mix(metal, pal.light, 0.1));
+      ctx.fillRect(X(10, 5), -14, 5, 28);
+      ctx.fillStyle = U.rgba(lit);
+      ctx.fillRect(X(10, 5), -14, 5, 2);
+      ctx.fillStyle = U.rgba(shade);
+      ctx.fillRect(X(10, 5), 11, 5, 3);
+      ctx.fillStyle = U.rgba(pal.dark);
+      ctx.fillRect(X(11, 2), -12, 2, 2);
+      ctx.fillRect(X(11, 2), 9, 2, 2);
+      // the mouth: dark, a lighter inner wall at the top for depth
+      ctx.fillStyle = hole;
       ctx.beginPath();
-      ctx.ellipse(d.dir > 0 ? 6 : -6, 0, 5, 10, 0, 0, U.TAU);
+      ctx.ellipse(f * 13, 0, 3.5, 9, 0, 0, U.TAU);
       ctx.fill();
+      ctx.fillStyle = U.rgba(shade);
+      ctx.fillRect(X(12, 2), -8, 2, 2);
     } else {
-      ctx.fillStyle = U.rgba(rim);
-      ctx.fillRect(-14, -5, 28, 7);
-      ctx.fillStyle = '#000';
-      ctx.beginPath();
-      ctx.ellipse(0, -2, 10, 3.5, 0, 0, U.TAU);
-      ctx.fill();
+      // sunk into the ledge: the opening is flush with the top
+      const depth = Math.max(8, Math.min(d.depth || 14, 22));
+      // pipe walls running down inside the ledge
+      ctx.fillStyle = U.rgba(U.mix(ledge, pal.dark, 0.5));
+      ctx.fillRect(-13, 2, 26, depth - 2);
+      ctx.fillStyle = U.rgba(metal);
+      ctx.fillRect(-13, 0, 3, depth);
+      ctx.fillRect(10, 0, 3, depth);
+      ctx.fillStyle = U.rgba(lit);
+      ctx.fillRect(-13, 0, 1, depth);
+      ctx.fillRect(10, 0, 1, depth);
+      // the dark shaft, with the far wall's lip catching a little light
+      ctx.fillStyle = hole;
+      ctx.fillRect(-10, 0, 20, depth);
+      ctx.fillStyle = U.rgba(shade);
+      ctx.fillRect(-10, 0, 20, 2);
+      // the rim, level with the ledge's lit top edge
+      ctx.fillStyle = U.rgba(lit);
+      ctx.fillRect(-15, 0, 5, 2);
+      ctx.fillRect(10, 0, 5, 2);
     }
     ctx.restore();
   }

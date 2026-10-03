@@ -535,14 +535,19 @@
         ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
       }
       // Den indicator dots blink like Rain World's shortcut entrances.
+      // Three short marks on the pipe mouth itself (the game's sign for a
+      // pipe that leads out of the room).
       for (const d of this.dens) {
         const on = Math.sin(this.t * 3 + d.x * 0.01) > 0.3;
         if (!on) continue;
-        const p = this.denSpawnPoint(d);
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        // sized and spaced in whole art pixels so none falls between them
+        const ap = this.artPx || 1;
+        const th = Math.max(1.6, ap);
+        const gap = Math.max(4, Math.ceil(4 / ap) * ap);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
         for (let k = -1; k <= 1; k++) {
-          if (d.wall) ctx.fillRect(p.x + d.dir * 4 - 1, p.y + k * 5 - 1, 2, 2);
-          else ctx.fillRect(p.x + k * 5 - 1, p.y - 6, 2, 2);
+          if (d.wall) ctx.fillRect(d.x + d.dir * 13 - 1.5, d.y + k * gap - th / 2, 3, th);
+          else ctx.fillRect(d.x - 2.5, d.y + 7 + k * gap - th / 2, 5, th); // stacked down the shaft
         }
       }
     }
