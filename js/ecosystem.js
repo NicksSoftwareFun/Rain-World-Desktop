@@ -118,6 +118,7 @@
       this.creatures = [];
       this.stats = { born: 0, eaten: 0, left: 0 };
       this.noSlugT = 0;
+      this.skips = {};
       this.spawnT = 60 / Math.max(0.1, +this.cfg.ecosystem.spawnPerMinute || 0.1);
       this.populate();
     }
@@ -218,7 +219,7 @@
         this.creatures.push(lead);
         let n = 1;
         const kid = species === 'noodlefly' ? 'noodlefly_infant' : 'squidcada';
-        const range = species === 'noodlefly' ? (S.noodlefly.params || {}).brood || [2, 4] : (S.squidcada.params || {}).flockSize || [2, 4];
+        const range = species === 'noodlefly' ? (S.noodlefly.params || {}).brood || [2, 4] : (S.squidcada.params || {}).flockSize || [2, 2];
         const want = U.randInt(range[0], range[1]) - (species === 'squidcada' ? 1 : 0);
         const room = Math.max(0, ((S[kid] && S[kid].max) || 10) - this.count(kid));
         for (let i = 0; i < Math.min(want, room); i++) {
@@ -262,14 +263,29 @@
       const cfg = this.cfg;
       const pop = this.population();
       const entries = [];
+      const waiting = []; // allowed and not at their cap, even if too big to fit right now
       for (const k of Object.keys(cfg.species)) {
         const s = cfg.species[k];
         if (!s.enabled || !(s.weight > 0)) continue;
         if (this.count(k) >= (s.max || 0)) continue;
+        waiting.push(k);
         if (pop + (s.popCost !== undefined ? +s.popCost : 1) > cfg.ecosystem.maxPopulation + 0.01) continue;
-        entries.push([k, s.weight]);
+        entries.push([k, s.weight * this.varietyBoost(k)]);
       }
-      return U.weighted(entries);
+      const pick = U.weighted(entries);
+      // every allowed species passed over this time waits one draw longer
+      if (pick) for (const k of waiting) this.skips[k] = k === pick ? 0 : this.skipsOf(k) + 1;
+      return pick;
+    }
+    // Variety: a species that hasn't come out in a while (or at all yet) is
+    // favoured, more so with each draw it misses, so one heavy weight can't
+    // crowd the rest out and every allowed creature gets its turn on screen.
+    skipsOf(k) {
+      if (!this.skips) this.skips = {};
+      return this.skips[k] === undefined ? 4 : this.skips[k]; // never seen: as if skipped a few times
+    }
+    varietyBoost(k) {
+      return Math.pow(1.4, Math.min(this.skipsOf(k), 14));
     }
 
     populate() {

@@ -96,7 +96,10 @@
       }
     } else if (name.startsWith('w_')) {
       const s = cfg.species[name.slice(2)];
-      if (s) s.weight = +val;
+      if (s) {
+        s.weight = +val;
+        s.enabled = s.weight > 0;
+      }
     } else if (name === 'palette') {
       cfg.world.palette = palettes[val] || palettes[0];
     } else if (name === 'mapSize') {

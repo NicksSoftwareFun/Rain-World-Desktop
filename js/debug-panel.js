@@ -206,17 +206,26 @@
       for (const key of Object.keys(cfg.species)) {
         const s = cfg.species[key];
         const en = h('input', { type: 'checkbox' });
-        en.checked = s.enabled;
+        en.checked = s.enabled && (s.weight > 0 || key === 'noodlefly_infant');
+        const wv = h('span', { class: 'val', text: String(s.weight) });
+        const w = h('input', { type: 'range', min: 0, max: 10, step: 0.5, value: s.weight });
         en.addEventListener('change', () => {
           s.enabled = en.checked;
+          // ticking a creature that's at zero gives it its usual weight back
+          if (en.checked && !(s.weight > 0) && key !== 'noodlefly_infant') {
+            const base = RW.BASE_CONFIG.species[key];
+            s.weight = base && base.weight > 0 ? base.weight : 1;
+            w.value = s.weight;
+            wv.textContent = String(s.weight);
+          }
           this.custom('wildlife');
           this.save();
         });
-        const wv = h('span', { class: 'val', text: String(s.weight) });
-        const w = h('input', { type: 'range', min: 0, max: 10, step: 0.5, value: s.weight });
         w.addEventListener('input', () => {
           s.weight = +w.value;
           wv.textContent = w.value;
+          // the box follows the slider to and from zero
+          if (key !== 'noodlefly_infant') en.checked = s.enabled = s.weight > 0;
           this.custom('wildlife');
           this.save();
         });

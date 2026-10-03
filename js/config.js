@@ -374,10 +374,10 @@
         label: 'Squidcada',
         enabled: true,
         weight: 1.2,
-        max: 6,
+        max: 4,
         popCost: 0.6,
         params: {
-          flockSize: [2, 4],
+          flockSize: [2, 2], // pairs: more read as a swarm
           blackChance: 0.35,
           escapeChance: 0.12,
         },
@@ -424,9 +424,9 @@
     },
     ambush: {
       label: 'Ambushers',
-      note: 'dropwigs on the ceilings and white lizards stalking in camouflage',
-      weights: { dropwig: 5, lizard_white: 3, slugcat: 4, batfly: 4, centipede: 4, squidcada: 1.5 },
-      caps: { dropwig: 2, lizard_white: 3 },
+      note: 'dropwigs on the ceilings, white and cyan lizards lying in wait, noodleflies stalking from above',
+      weights: { dropwig: 5, lizard_white: 3, lizard_cyan: 2.5, noodlefly: 1.5, slugcat: 4, batfly: 4, centipede: 4, squidcada: 1.5 },
+      caps: { dropwig: 2, lizard_white: 3, lizard_cyan: 2 },
     },
     daddy: {
       label: "Daddy's buffet",
@@ -490,8 +490,10 @@
       if (!base) continue;
       const w = P.weights ? P.weights[k] || 0 : base.weight;
       cfg.species[k].weight = w;
-      cfg.species[k].enabled = w > 0 || base.enabled;
+      cfg.species[k].enabled = w > 0; // a creature the preset leaves out shows unchecked
     }
+    // infants only ever come with their parents
+    if (cfg.species.noodlefly_infant && cfg.species.noodlefly) cfg.species.noodlefly_infant.enabled = cfg.species.noodlefly.enabled;
     // the weapon supply depends on both
     if (RW.SIZE_PRESETS[cfg.presets.size]) RW.applySizePreset(cfg, cfg.presets.size);
   };
@@ -500,7 +502,7 @@
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
-  const STORAGE_KEY = 'rw-desktop-config-v14'; // bumped when defaults change shape
+  const STORAGE_KEY = 'rw-desktop-config-v15'; // bumped when defaults change shape
 
   RW.loadConfig = function () {
     const cfg = RW.U.clone(RW.DEFAULT_CONFIG);
