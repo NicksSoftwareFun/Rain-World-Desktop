@@ -59,7 +59,10 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 - `Leg`: two-bone IK legs that plant and step.
 - `Creature`: `tick()` handles death (corpses are ragdolls with X eyes until
   eaten), stun, the burrow-away safety net for anything stuck 25 s,
-  unburrowing from inside geometry, leaving through dens. Also grabbing and
+  unburrowing from inside geometry, leaving through dens (`leave()` at a den
+  starts `piping`: the head, `pipeLead()`, crawls into the mouth and the body
+  follows via `pipeMove()`, clipped at the mouth by `Ecosystem.draw`; with no
+  den in reach it fades out). Also grabbing and
   being held (`holdPoint`), weapons (`hitParts`, `stun`, `kill`), goal picking
   (`readyForGoal`, `exploreGoal` with a `heightBias`), and the pole-to-ledge
   scramble (`cornerAhead`, `startScramble`, `stepScramble`).

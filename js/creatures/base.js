@@ -299,6 +299,7 @@
       this.age += dt;
       this.stateT += dt;
       if (this.burrow) return this.burrowStep(dt);
+      if (this.piping) return this.pipeStep(dt);
       if (this.leaving) {
         this.alpha -= dt * 2;
         if (this.alpha <= 0) this.dead = true;
@@ -539,6 +540,158 @@
     leave() {
       if (this.holding) this.release();
       this.leaving = true;
+      // at a den: squeeze in through the pipe mouth rather than fade out
+      const d = !this.grabbedBy && !this.corpse ? this.denMouthNear(70) : null;
+      if (d) this.startPiping(d);
+    }
+
+    // --- going into a pipe ---
+    // A den's mouth: where the opening is, the way into the pipe (a), and
+    // the way out of it (n, the side the creature stays visible on).
+    static denMouth(d) {
+      if (d.wall) return { x: d.x + d.dir * 12, y: d.y, ax: -d.dir, ay: 0 };
+      return { x: d.x, y: d.y, ax: 0, ay: 1 };
+    }
+    denMouthNear(range) {
+      const dens = (this.eco && this.eco.dens) || [];
+      const parts = this.hitParts ? this.hitParts() : [];
+      const pts = [this.mainPoint()].concat(parts);
+      let best = null;
+      let bd = range;
+      for (const d of dens) {
+        const mo = RW.Creature.denMouth(d);
+        for (const q of pts) {
+          const dd = Math.hypot(q.x - mo.x, q.y - mo.y);
+          if (dd < bd) {
+            bd = dd;
+            best = d;
+          }
+        }
+      }
+      return best;
+    }
+    // Head first: the lead point (the head) makes for the mouth and then
+    // down the pipe, and the body follows it in along its own path, as if
+    // squirming through a tight gap. The part that's in is hidden by
+    // clipping at the mouth (see Ecosystem.draw). Creatures without a body
+    // to follow (small fliers) slide in whole, squeezed toward the opening.
+    startPiping(d) {
+      const mo = RW.Creature.denMouth(d);
+      const sp = this.spine || this.chain;
+      let len;
+      if (sp instanceof RW.Chain) len = sp.seg.reduce((a, b) => a + b, 0) + 16;
+      else {
+        const b = this.bounds();
+        len = Math.hypot(b[2] - b[0], b[3] - b[1]) * 0.85 + 12;
+      }
+      this.piping = { t: 0, sx: mo.x, sy: mo.y, ax: mo.ax, ay: mo.ay, len: Math.min(420, len), k: 1, den: d };
+      this.label = '';
+      if (this.pather) this.pather.clear();
+      if ('vx' in this) this.vx = this.vy = 0;
+    }
+    pipeStep(dt) {
+      const pp = this.piping;
+      pp.t += dt;
+      const lead = this.pipeLead();
+      const along = (lead.x - pp.sx) * pp.ax + (lead.y - pp.sy) * pp.ay;
+      const speed = 50 + 130 * Math.min(1, pp.t / 0.6);
+      let dx;
+      let dy;
+      if (along < 3) {
+        // still outside: to the mouth first
+        const tx = pp.sx + pp.ax * 4 - lead.x;
+        const ty = pp.sy + pp.ay * 4 - lead.y;
+        const d = Math.hypot(tx, ty) || 1;
+        const st = Math.min(d, speed * dt);
+        dx = (tx / d) * st;
+        dy = (ty / d) * st;
+      } else {
+        // in: on down the pipe, kept to its middle
+        const px = -pp.ay;
+        const py = pp.ax;
+        const lat = (lead.x - pp.sx) * px + (lead.y - pp.sy) * py;
+        const fix = -lat * Math.min(1, 10 * dt);
+        dx = pp.ax * speed * dt + px * fix;
+        dy = pp.ay * speed * dt + py * fix;
+      }
+      const crawls = this.pipeMove(dx, dy, dt);
+      // a body that can't follow itself in is squeezed toward the opening
+      if (!crawls) pp.k = 1 - 0.6 * U.smooth(Math.min(1, pp.t / 0.4));
+      pp.den.busyT = 0.6; // its marks light up while something goes through
+      if (along >= pp.len || pp.t > 6) this.dead = true; // counted as left by the ecosystem
+      return false;
+    }
+    // The point that goes in first, and how the body follows it. Chain
+    // bodies (lizards, centipedes, dropwigs) follow their head link by link;
+    // returns false when the creature can only be moved whole.
+    pipeLead() {
+      const sp = this.spine || this.chain;
+      return sp instanceof RW.Chain ? sp.pts[0] : this.mainPoint();
+    }
+    pipeMove(dx, dy) {
+      const sp = this.spine || this.chain;
+      if (!(sp instanceof RW.Chain)) {
+        this.shiftAll(dx, dy);
+        return false;
+      }
+      const P = sp.pts;
+      P[0].x += dx;
+      P[0].y += dy;
+      sp.follow(1);
+      for (const q of P) {
+        q.px = q.x;
+        q.py = q.y;
+      }
+      // legs fold in against the body as it goes
+      if (this.legs) {
+        for (const l of this.legs) {
+          const a = P[Math.min(l.at || 0, P.length - 1)];
+          const f = l.leg.foot;
+          if (!f) continue;
+          f.x += (a.x - f.x) * 0.3;
+          f.y += (a.y - f.y) * 0.3;
+        }
+      }
+      return true;
+    }
+
+    // Eaten, despawned or left the screen.
+    remove() {
+      this.dead = true;
+      if (this.holding) this.release();
+    }
+    leave() {
+      if (this.holding) this.release();
+      this.leaving = true;
+      // at a den: squeeze in through the pipe mouth rather than fade out
+      const d = !this.grabbedBy && !this.corpse ? this.denMouthNear(70) : null;
+      if (d) this.startPiping(d);
+    }
+
+    // --- going into a pipe ---
+    // A den's mouth: where the opening is, the way into the pipe (a), and
+    // the way out of it (n, the side the creature stays visible on).
+    static denMouth(d) {
+      if (d.wall) return { x: d.x + d.dir * 12, y: d.y, ax: -d.dir, ay: 0 };
+      return { x: d.x, y: d.y, ax: 0, ay: 1 };
+    }
+    denMouthNear(range) {
+      const dens = (this.eco && this.eco.dens) || [];
+      const parts = this.hitParts ? this.hitParts() : [];
+      const pts = [this.mainPoint()].concat(parts);
+      let best = null;
+      let bd = range;
+      for (const d of dens) {
+        const mo = RW.Creature.denMouth(d);
+        for (const q of pts) {
+          const dd = Math.hypot(q.x - mo.x, q.y - mo.y);
+          if (dd < bd) {
+            bd = dd;
+            best = d;
+          }
+        }
+      }
+      return best;
     }
 
     // --- grabbing ---

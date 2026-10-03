@@ -124,6 +124,20 @@
     carry(dx, dy) {
       if (this.state === 'stuck' || this.corpse) this.shiftAll(dx, dy);
     }
+    // Into a pipe nose first: the body straightens along the pipe and the
+    // tail trails in after it.
+    pipeLead() {
+      return this.headPt();
+    }
+    pipeMove(dx, dy, dt) {
+      const pp = this.piping;
+      this.aim = U.lerpAngle(this.aim, Math.atan2(pp.ay, pp.ax), U.approach(10, dt));
+      this.curl += (0 - this.curl) * U.approach(8, dt);
+      this.needle *= 0.9;
+      this.pos.x += dx;
+      this.pos.y += dy; // (update() still swings the tail in after it)
+      return true;
+    }
     shiftAll(dx, dy) {
       this.pos.x += dx;
       this.pos.y += dy;

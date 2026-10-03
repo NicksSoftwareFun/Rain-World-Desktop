@@ -222,6 +222,27 @@
       this.weapon = this.offhand = null;
       super.leave();
     }
+    // Into a pipe head first, hips and tail following.
+    pipeLead() {
+      return this.head;
+    }
+    pipeMove(dx, dy) {
+      const h = this.head;
+      const hip = this.hip;
+      h.x += dx;
+      h.y += dy;
+      const d = Math.hypot(hip.x - h.x, hip.y - h.y) || 1;
+      hip.x = h.x + ((hip.x - h.x) / d) * 11;
+      hip.y = h.y + ((hip.y - h.y) / d) * 11;
+      hip.px = hip.x;
+      hip.py = hip.y;
+      const P = this.tail.pts;
+      P[0].x = hip.x;
+      P[0].y = hip.y;
+      this.tail.follow(1);
+      this.handPt = this.handPt2 = null;
+      return true;
+    }
     carry(dx, dy) {
       this.hip.x += dx;
       this.hip.y += dy;

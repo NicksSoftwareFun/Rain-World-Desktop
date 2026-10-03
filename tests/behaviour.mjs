@@ -369,7 +369,7 @@ const checks = [
           if (i % 60) continue;
           for (const c of e.eco.creatures) {
             if (!isFinite(c.x) || !isFinite(c.y)) out.bad++;
-            if (c.isFlier && !c.dead && (c.x < -5 || c.y < -5 || c.x > e.world.w + 5 || c.y > e.world.h + 5)) out.offScreen++;
+            if (c.isFlier && !c.dead && !c.piping && (c.x < -5 || c.y < -5 || c.x > e.world.w + 5 || c.y > e.world.h + 5)) out.offScreen++;
           }
         }
         return out;

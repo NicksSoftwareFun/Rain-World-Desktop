@@ -510,24 +510,34 @@
       // they're drawn afterwards, by drawLate.
       this.late = [];
       for (const c of sorted) {
-        if (c.ghostAlpha && c.ghostAlpha() < 0.99) this.late.push(c);
-        else if (c.burrow) {
-          // only the part still above the surface it's digging into shows
-          const b = c.burrow;
-          const tx = -b.ny;
-          const ty = b.nx;
+        if (c.burrow || c.piping) {
+          // only the part still out of the surface (or the pipe) shows;
+          // going into a pipe the body is also squeezed in toward the
+          // pipe's axis, as if squirming through the gap
+          const b = c.burrow || c.piping;
+          const nx = c.burrow ? b.nx : -b.ax;
+          const ny = c.burrow ? b.ny : -b.ay;
+          const tx = -ny;
+          const ty = nx;
           const F = 1e4;
           ctx.save();
           ctx.beginPath();
           ctx.moveTo(b.sx + tx * F, b.sy + ty * F);
           ctx.lineTo(b.sx - tx * F, b.sy - ty * F);
-          ctx.lineTo(b.sx - tx * F + b.nx * F, b.sy - ty * F + b.ny * F);
-          ctx.lineTo(b.sx + tx * F + b.nx * F, b.sy + ty * F + b.ny * F);
+          ctx.lineTo(b.sx - tx * F + nx * F, b.sy - ty * F + ny * F);
+          ctx.lineTo(b.sx + tx * F + nx * F, b.sy + ty * F + ny * F);
           ctx.closePath();
           ctx.clip();
+          if (c.piping) {
+            const q = b.k - 1; // scale across the axis (direction tx, ty) by k
+            ctx.translate(b.sx, b.sy);
+            ctx.transform(1 + q * tx * tx, q * tx * ty, q * tx * ty, 1 + q * ty * ty, 0, 0);
+            ctx.translate(-b.sx, -b.sy);
+          }
           c.draw(ctx);
           ctx.restore();
-        } else c.draw(ctx);
+        } else if (c.ghostAlpha && c.ghostAlpha() < 0.99) this.late.push(c);
+        else c.draw(ctx);
       }
       for (const it of this.items) if (over(it)) it.draw(ctx);
       for (const p of this.particles) {
@@ -538,7 +548,8 @@
       // Three short marks on the pipe mouth itself (the game's sign for a
       // pipe that leads out of the room).
       for (const d of this.dens) {
-        const on = Math.sin(this.t * 3 + d.x * 0.01) > 0.3;
+        if (d.busyT > 0) d.busyT -= 1 / 60;
+        const on = d.busyT > 0 || Math.sin(this.t * 3 + d.x * 0.01) > 0.3;
         if (!on) continue;
         // sized and spaced in whole art pixels so none falls between them
         const ap = this.artPx || 1;
