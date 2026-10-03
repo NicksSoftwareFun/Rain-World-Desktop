@@ -19,7 +19,7 @@
       this.chain = new RW.Chain(x, y, this.n, 6.5 * S, U.sign(), 0);
       this.diet = p.diet || [];
       this.hp = 1;
-      this.fullT = U.rand(0, 20);
+      this.fullT = p.aggressive ? 0 : U.rand(0, 20); // the aggressive kind arrives hungry
       this.eatT = 0;
       this.cols = p.colors || ['#e3892c', '#e9b23a', '#8f2f17', '#7a2614'];
       this.vx = 0;
@@ -133,14 +133,34 @@
           this.eco.consume(prey, this);
           this.holding = null;
           this.eatT = 0;
-          this.fullT = U.rand(40, 80);
+          this.fullT = this.p.aggressive ? U.rand(8, 18) : U.rand(40, 80);
         }
         return;
       }
       this.fullT -= dt;
       const perceive = this.perceiveT <= 0;
+      // the aggressive kind lashes out at anything that comes too close,
+      // hungry or not (not at its own kind or a Daddy Long Legs)
+      this.lashCd = (this.lashCd || 0) - dt;
+      if (this.p.aggressive && perceive && this.lashCd <= 0) {
+        const r = 22 * this.size;
+        for (const c of this.eco.creatures) {
+          if (c === this || c.dead || c.corpse || c.leaving || c.grabbedBy || c.species === this.species || c.species === 'daddy') continue;
+          const hp = c.hitParts ? c.hitParts()[0] : { x: c.x, y: c.y, r: 6 };
+          if (U.dist(h.x, h.y, hp.x, hp.y) > r + hp.r) continue;
+          this.eco.burst(hp.x, hp.y, '#fff2a0', 10);
+          c.stun(2);
+          this.lashCd = 3;
+          // and if it's food, it's dinner
+          if (this.diet.some((s) => (s.endsWith('*') ? c.species.startsWith(s.slice(0, -1)) : s === c.species)) && this.state !== 'hunt') {
+            this.prey = c;
+            this.setState('hunt');
+          }
+          break;
+        }
+      }
       if (perceive && this.diet.length && this.fullT <= 0 && this.state !== 'hunt' && this.state !== 'flee') {
-        const v = 200 * this.size;
+        const v = this.p.vision || 200 * this.size;
         const prey = this.nearestOf(this.diet, v, (c) => c.canBeGrabbed() && c.nearGround(32 * this.size) && this.canSee(c.x, c.y, v)) || this.nearestCorpse(this.diet, v * 0.7);
         if (prey) {
           this.prey = prey;
@@ -151,7 +171,7 @@
       if (this.state === 'hunt' && perceive && this.threatNear(170)) this.setState('wander');
       if (this.state === 'hunt') {
         const prey = this.prey;
-        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > 18) {
+        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18)) {
           this.prey = null;
           this.setState('wander');
         } else {

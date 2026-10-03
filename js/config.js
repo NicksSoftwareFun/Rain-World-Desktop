@@ -327,7 +327,7 @@
           toughness: 1.5,
           diet: ['slugcat', 'centipede', 'dropwig', 'noodlefly_infant', 'squidcada', 'noodlefly'], // bigger prey than batflies
           threats: ['daddy', 'centipede_large', 'lizard_*'],
-          colors: ['#dc6a22', '#e8882e', '#9a3414', '#86300f'],
+          colors: ['#e65a1c', '#ee7024', '#a8301a', '#922814'], // orange
         },
       },
       centipede_large: {
@@ -340,11 +340,15 @@
           size: 2,
           segments: [10, 13],
           speed: 38,
-          huntSpeed: 95, // a burst of speed that can run down the slower lizards
+          huntSpeed: 105, // a burst of speed that can run down most lizards
           toughness: 3,
           diet: ['lizard_*', 'slugcat', 'centipede_medium', 'dropwig', 'squidcada', 'noodlefly'], // hunts lizards
           threats: ['daddy'],
-          colors: ['#d9601e', '#e27a2c', '#8e2c12', '#7c2610'],
+          colors: ['#f02a24', '#ff3c2a', '#b81c1c', '#a01818'], // red, the shade of a red lizard
+          // highly aggressive: hungry again soon after a meal, sees and
+          // chases further and longer, and shocks anything that comes close
+          aggressive: true,
+          vision: 480,
         },
       },
       // Fliers. Noodleflies come as a family: an adult with a brood of

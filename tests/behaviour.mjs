@@ -382,7 +382,11 @@ const checks = [
         e.restartWildlife();
         const slug = e.eco.spawn('slugcat');
         const ad = e.eco.spawn('noodlefly', slug.x + 120, slug.y - 90);
-        for (let i = 0; i < 60; i++) e.tick(1 / 60);
+        // (no throwing while it's staged: a spear at the adult spoils it)
+        for (let i = 0; i < 60; i++) {
+          slug.throwCd = 9;
+          e.tick(1 / 60);
+        }
         const inf = ad.family.infants[0];
         inf.pos.x = slug.hip.x;
         inf.pos.y = slug.hip.y - 10;
