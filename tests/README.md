@@ -29,6 +29,7 @@ without page errors, populate, and react to geometry changes.
 | `jumps` | slugcats not jumping, centipedes able to jump (also reports lizard pole leaps and slugcat long leaps) |
 | `fruit` | fruit dropping by itself or piling up |
 | `transients` | slugcats / Daddy Long Legs leaving before two meals; batflies running out |
+| `fliers` | noodlefly families hunting, feeding and leaving together, revenge for a grabbed infant, squidcadas feeding and resting, fliers leaving the screen |
 | `rain` | the rain curve, waterfalls in light rain, rain blocked by horizontal poles |
 | `presets` | defaults, ledge rows growing with map size, nests, pixel scales, wildlife restart |
 

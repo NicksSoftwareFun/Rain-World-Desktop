@@ -86,6 +86,7 @@
       this.diet = ['slugcat', 'centipede', 'dropwig'];
       if (species === 'lizard_green' || species === 'lizard_cyan') this.diet.push('lizard_blue');
       this.diet.push('centipede_medium'); // the wiki: lizards eat adult centipedes too
+      this.diet.push('noodlefly_infant', 'noodlefly', 'squidcada'); // fliers, when they come low enough
       this.hp = 1; // fighting condition; recovers slowly
       this.home = null; // favourite hangout: { sid, ox } on top of a solid
       this.homeAwayT = 0;
@@ -330,7 +331,7 @@
       if (perceive && this.fullT <= 0) {
         const vision = this.p.vision || 300;
         if (this.giveUpT > 0) this.giveUpT -= 0.25;
-        const prey = this.nearestOf(this.diet, vision, (c) => !c.grabbedBy && !(this.giveUpT > 0 && c === this.gaveUpOn) && this.canSee(c.x, c.y, vision));
+        const prey = this.nearestOf(this.diet, vision, (c) => !c.grabbedBy && !(this.giveUpT > 0 && c === this.gaveUpOn) && c.nearGround(45 * this.L) && this.canSee(c.x, c.y, vision));
         if (prey) {
           if (this.state !== 'hunt') this.noticeT = 0.45 * (1.4 - pe.aggression); // freeze and stare before the charge
           this.prey = prey;

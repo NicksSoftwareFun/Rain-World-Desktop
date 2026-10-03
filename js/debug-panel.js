@@ -83,7 +83,7 @@
       const n = {};
       for (const c of this.engine.eco.creatures) {
         if (c.dead || c.corpse) continue;
-        const k = c.species.startsWith('lizard') ? 'lizards' : c.species.startsWith('centipede') ? 'centipedes' : c.species === 'daddy' ? 'daddy' : c.species === 'batfly' ? 'batflies (free)' : c.species + 's';
+        const k = c.species.startsWith('lizard') ? 'lizards' : c.species.startsWith('centipede') ? 'centipedes' : c.species.startsWith('noodlefly') ? 'noodleflies' : c.species === 'daddy' ? 'daddy' : c.species === 'batfly' ? 'batflies (free)' : c.species + 's';
         n[k] = (n[k] || 0) + 1;
       }
       return Object.entries(n)
@@ -178,12 +178,11 @@
       this.el.appendChild(
         h('div', { class: 'presets' },
           this.presetPicker('Size', RW.SIZE_PRESETS, 'size', (name) => {
-            const before = cfg.world.mapSize;
-            const ps = cfg.world.pixelScale;
+            // a new size: world and rain settings back to their defaults
+            RW.resetWorldAndRain(cfg);
             RW.applySizePreset(cfg, name);
             this.save();
-            if (cfg.world.mapSize !== before) eng.regenerate(false);
-            else if (cfg.world.pixelScale !== ps) eng.applyPalette();
+            eng.regenerate(false);
             this.render();
           }),
           this.presetPicker('Wildlife', W, 'wildlife', (name) => {

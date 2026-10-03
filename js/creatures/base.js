@@ -616,6 +616,13 @@
       }
       return best;
     }
+    // Within reach of a walker: anything not flying, or a flier that has come
+    // down near a surface (resting, hovering low, stuck after a stab).
+    nearGround(r) {
+      if (!this.isFlier || this.corpse || this.stunT > 0) return true;
+      const m = this.mainPoint();
+      return !!this.W.nearestSurface(m.x, m.y, r || 40, null);
+    }
     threatNear(range) {
       const t = this.nearestOf(this.threats, range, (c) => !c.holding && !c.lurking && this.canSee(c.x, c.y, range));
       return t;

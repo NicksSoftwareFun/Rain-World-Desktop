@@ -310,7 +310,7 @@
           segments: [6, 9],
           speed: 55,
           huntSpeed: 80,
-          diet: ['batfly'], // small ones snatch batflies
+          diet: ['batfly', 'noodlefly_infant'], // small ones snatch batflies and infant noodleflies
         },
       },
       centipede_medium: {
@@ -325,7 +325,7 @@
           speed: 45,
           huntSpeed: 85,
           toughness: 1.5,
-          diet: ['slugcat', 'centipede', 'dropwig'], // bigger prey than batflies
+          diet: ['slugcat', 'centipede', 'dropwig', 'noodlefly_infant', 'squidcada', 'noodlefly'], // bigger prey than batflies
           threats: ['daddy', 'centipede_large', 'lizard_*'],
           colors: ['#d0662a', '#dc8a2e', '#6a2412', '#5a1e10'],
         },
@@ -342,9 +342,44 @@
           speed: 38,
           huntSpeed: 95, // a burst of speed that can run down the slower lizards
           toughness: 3,
-          diet: ['lizard_*', 'slugcat', 'centipede_medium', 'dropwig'], // hunts lizards
+          diet: ['lizard_*', 'slugcat', 'centipede_medium', 'dropwig', 'squidcada', 'noodlefly'], // hunts lizards
           threats: ['daddy'],
           colors: ['#b8401e', '#c45a24', '#4a160c', '#3c120a'],
+        },
+      },
+      // Fliers. Noodleflies come as a family: an adult with a brood of
+      // infants (infants only ever arrive with an adult).
+      noodlefly: {
+        label: 'Noodlefly',
+        enabled: true,
+        weight: 0.6,
+        max: 2,
+        popCost: 1.5,
+        params: {
+          brood: [2, 4], // infants that come with it
+          vision: 420,
+        },
+      },
+      noodlefly_infant: {
+        label: 'Infant Noodlefly',
+        enabled: true,
+        weight: 0, // never on their own
+        max: 10,
+        popCost: 0.25,
+        params: {
+          escapeChance: 0,
+        },
+      },
+      squidcada: {
+        label: 'Squidcada',
+        enabled: true,
+        weight: 1.2,
+        max: 6,
+        popCost: 0.6,
+        params: {
+          flockSize: [2, 4],
+          blackChance: 0.35,
+          escapeChance: 0.12,
         },
       },
     },
@@ -399,6 +434,12 @@
       weights: { daddy: 2.5, slugcat: 5, batfly: 4, centipede: 5, lizard_pink: 1 },
       caps: { daddy: 2 },
     },
+    fliers: {
+      label: 'Fliers',
+      note: 'noodlefly families and squidcada flocks overhead, with prey and a few hunters below',
+      weights: { noodlefly: 2, squidcada: 3, slugcat: 3, batfly: 3, centipede: 4, lizard_pink: 1, lizard_blue: 1, centipede_large: 0.5 },
+      caps: { noodlefly: 2, squidcada: 1.5 },
+    },
     peaceful: {
       label: 'Peaceful',
       note: 'no predators: slugcats, batflies and small centipedes going about their day',
@@ -427,6 +468,16 @@
       // batflies cost nothing toward the population, so they grow more slowly
       const f = (base && base.popCost === 0 ? Math.pow(P.caps, 0.6) : P.caps) * ((wild.caps && wild.caps[k]) || 1);
       if (base) cfg.species[k].max = Math.max(1, Math.round(base.max * f));
+    }
+  };
+  // Picking a size starts the world and the rain from their defaults (then
+  // the size's own map scale and pixels); called only when the owner picks
+  // a different size, not each time a preset is re-applied.
+  RW.resetWorldAndRain = function (cfg) {
+    // in place: other code holds on to these objects
+    for (const k of ['world', 'rain']) {
+      for (const key of Object.keys(cfg[k])) delete cfg[k][key];
+      Object.assign(cfg[k], RW.U.clone(RW.DEFAULT_CONFIG[k]));
     }
   };
   RW.applyWildlifePreset = function (cfg, name) {

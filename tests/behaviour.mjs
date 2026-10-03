@@ -327,6 +327,76 @@ const checks = [
     warn: (m) => !m.slugLeft && 'no slugcat finished its visit this run',
   },
   {
+    name: 'fliers',
+    about: 'noodlefly families hunt, feed and leave together; a grabbed infant gets avenged; squidcadas flock, rest and feed; fliers stay on screen',
+    run: async (page) => {
+      const m = await page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        RW.applyWildlifePreset(e.cfg, 'fliers');
+        e.restartWildlife();
+        const out = { noodleMeals: 0, squidMeals: 0, squidRests: 0, squidPlays: 0, familiesLeft: 0, leftEarly: 0, infantsLeftWithFamily: 0, offScreen: 0, bad: 0 };
+        const cons = e.eco.consume.bind(e.eco);
+        e.eco.consume = (prey, by) => {
+          if (by && by.species === 'noodlefly') out.noodleMeals++;
+          if (by && by.species === 'squidcada') out.squidMeals++;
+          return cons(prey, by);
+        };
+        const S = RW.Creatures.Squidcada.prototype;
+        const ss = S.setState;
+        S.setState = function (st) {
+          if (st !== this.state && st === 'rest') out.squidRests++;
+          if (st !== this.state && st === 'play') out.squidPlays++;
+          return ss.call(this, st);
+        };
+        const C = RW.Creature.prototype;
+        const lv = C.leave;
+        C.leave = function () {
+          if (this.species === 'noodlefly' && !e.eco.shouldShelter()) {
+            out.familiesLeft++;
+            if (this.meals < 2 && this.age <= 240) out.leftEarly++;
+          }
+          if (this.species === 'noodlefly_infant' && this.family.exitDen) out.infantsLeftWithFamily++;
+          return lv.apply(this, arguments);
+        };
+        for (let i = 0; i < mins * 3600; i++) {
+          e.tick(1 / 60);
+          if (i % 60) continue;
+          for (const c of e.eco.creatures) {
+            if (!isFinite(c.x) || !isFinite(c.y)) out.bad++;
+            if (c.isFlier && !c.dead && (c.x < -5 || c.y < -5 || c.x > e.world.w + 5 || c.y > e.world.h + 5)) out.offScreen++;
+          }
+        }
+        return out;
+      }, T(6));
+      // revenge, staged: a slugcat grabs an infant next to its adult
+      m.avenged = await page.evaluate(() => {
+        const e = RW_APP.engine;
+        const S = e.cfg.species;
+        for (const k in S) S[k].weight = 0;
+        e.restartWildlife();
+        const slug = e.eco.spawn('slugcat');
+        const ad = e.eco.spawn('noodlefly', slug.x + 120, slug.y - 90);
+        for (let i = 0; i < 60; i++) e.tick(1 / 60);
+        const inf = ad.family.infants[0];
+        inf.pos.x = slug.hip.x;
+        inf.pos.y = slug.hip.y - 10;
+        inf.cling = -1;
+        slug.grab(inf);
+        return ad.vengeance === slug;
+      });
+      return m;
+    },
+    judge: (m) => [
+      m.bad && `${m.bad} non-finite positions`,
+      m.offScreen > 5 && `fliers off screen (${m.offScreen} samples)`,
+      m.leftEarly && `${m.leftEarly} noodlefly families left before eating twice`,
+      !m.avenged && 'an adult noodlefly did not go after whoever grabbed its infant',
+      m.noodleMeals + m.squidMeals < 1 && 'fliers never ate',
+    ],
+    warn: (m) => (!m.familiesLeft && 'no noodlefly family finished its visit') || (!m.squidRests && 'no squidcada rested'),
+  },
+  {
     name: 'rain',
     about: 'rain eases into and out of the downpour exponentially; waterfalls only in real rain; rain falls past horizontal poles',
     run: (page) =>

@@ -141,7 +141,7 @@
       const perceive = this.perceiveT <= 0;
       if (perceive && this.diet.length && this.fullT <= 0 && this.state !== 'hunt' && this.state !== 'flee') {
         const v = 200 * this.size;
-        const prey = this.nearestOf(this.diet, v, (c) => c.canBeGrabbed() && this.canSee(c.x, c.y, v)) || this.nearestCorpse(this.diet, v * 0.7);
+        const prey = this.nearestOf(this.diet, v, (c) => c.canBeGrabbed() && c.nearGround(32 * this.size) && this.canSee(c.x, c.y, v)) || this.nearestCorpse(this.diet, v * 0.7);
         if (prey) {
           this.prey = prey;
           this.setState('hunt');

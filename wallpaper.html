@@ -32,6 +32,8 @@
 <script src="js/creatures/daddy.js"></script>
 <script src="js/creatures/dropwig.js"></script>
 <script src="js/creatures/batfly.js"></script>
+<script src="js/creatures/noodlefly.js"></script>
+<script src="js/creatures/squidcada.js"></script>
 <script src="js/creatures/centipede.js"></script>
 <script src="js/ecosystem.js"></script>
 <script src="js/engine.js"></script>
@@ -81,7 +83,10 @@
   window.livelyPropertyListener = function (name, val) {
     cfg.presets = cfg.presets || {};
     if (name === 'sizePreset') {
+      const was = cfg.presets.size;
       cfg.presets.size = sizeNames[val - 1] || 'custom';
+      // a different size: world and rain settings back to their defaults
+      if (cfg.presets.size !== was && RW.SIZE_PRESETS[cfg.presets.size]) RW.resetWorldAndRain(cfg);
     } else if (name === 'wildlifePreset') {
       const was = cfg.presets.wildlife;
       cfg.presets.wildlife = wildNames[val - 1] || 'custom';

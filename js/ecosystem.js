@@ -169,6 +169,8 @@
       const C = RW.Creatures;
       if (species.indexOf('lizard') === 0) return C.Lizard;
       if (species.indexOf('centipede') === 0) return C.Centipede;
+      if (species.indexOf('noodlefly') === 0) return C.Noodlefly;
+      if (species === 'squidcada') return C.Squidcada;
       return {
         slugcat: C.Slugcat,
         daddy: C.Daddy,
@@ -208,6 +210,24 @@
         this.stats.born += n;
         return first;
       }
+      if (species === 'noodlefly' || species === 'squidcada') {
+        // a noodlefly family (an adult and its brood) or a squidcada flock
+        const S = this.cfg.species;
+        const group = species === 'noodlefly' ? { adult: null, infants: [] } : { members: [] };
+        const lead = new Cls(this, species, x, y, group);
+        this.creatures.push(lead);
+        let n = 1;
+        const kid = species === 'noodlefly' ? 'noodlefly_infant' : 'squidcada';
+        const range = species === 'noodlefly' ? (S.noodlefly.params || {}).brood || [2, 4] : (S.squidcada.params || {}).flockSize || [2, 4];
+        const want = U.randInt(range[0], range[1]) - (species === 'squidcada' ? 1 : 0);
+        const room = Math.max(0, ((S[kid] && S[kid].max) || 10) - this.count(kid));
+        for (let i = 0; i < Math.min(want, room); i++) {
+          this.creatures.push(new Cls(this, kid, x + U.rand(-14, 14), y + U.rand(-10, 10), group));
+          n++;
+        }
+        this.stats.born += n;
+        return lead;
+      }
       const c = new Cls(this, species, x, y);
       this.creatures.push(c);
       this.stats.born++;
@@ -227,7 +247,7 @@
       }
       let caps = FLOOR_CAPS;
       let filter = null;
-      if (species === 'batfly' || species === 'daddy') {
+      if (species === 'batfly' || species === 'daddy' || species.indexOf('noodlefly') === 0 || species === 'squidcada') {
         caps = AIR_CAPS;
         filter = (cx, cy) => W.surfDist(cx, cy) >= 3;
       } else if (species === 'dropwig') {
@@ -456,7 +476,7 @@
       for (const c of this.creatures) if (c.alpha > 0) dirty.push(c.bounds());
       for (const p of this.particles) dirty.push([p.x - 3, p.y - 3, p.x + 3, p.y + 3]);
       for (const d of this.dens) dirty.push([d.x - 24, d.y - 18, d.x + 24, d.y + 18]);
-      const order = { daddy: 0, dropwig: 2, centipede: 3, slugcat: 4, batfly: 5 };
+      const order = { daddy: 0, dropwig: 2, centipede: 3, slugcat: 4, squidcada: 4.5, noodlefly: 4.6, noodlefly_infant: 4.7, batfly: 5 };
       const sorted = this.creatures.slice().sort((a, b) => (order[a.species] ?? 1) - (order[b.species] ?? 1));
       // weapons stuck in creatures or in flight draw over them; the rest under
       const over = (it) => it.state === 'embedded' || it.state === 'flying';

@@ -44,6 +44,9 @@ next session doesn't relearn them.
   repositories or change Pages settings; the owner does those by hand.
   The repo is named `Rain-World-Desktop` and the Pages path is
   case-sensitive: `/Rain-World-Desktop/` works, `/rain-world-desktop/` 404s.
+- **`U.weighted` takes `[value, weight]` pairs.** Swapping them returns a
+  number instead of the value; a creature's colour set came back as `5` and
+  it drew in leftover colours (it looked like a background vine).
 - **Shell editing.** Use exact-match replacements that assert the match is
   unique (a Python `assert s.count(a) == 1` pattern worked well). A sed range
   typo once wrote a stray copy of `base.js` into the repo under a garbage
@@ -95,6 +98,13 @@ Creatures should read as Rain World creatures. Specific asks, roughly in order:
 - **Interaction**: no click-to-drop-food; dragging a creature picks it up
   limp, releasing drops it. Corpses stay as limp ragdolls with X eyes until
   eaten.
+- **Fliers** (from the wiki pages the owner supplied): noodleflies need only
+  the pack behaviour (infants with their adult), hunting and eating, and
+  adults avenging infants; they're transients. Infants are prey for slugcats
+  and centipedes; lizards and centipedes can try to eat all three fliers;
+  adult noodleflies eat lizards and smaller. Art should look almost identical
+  to the game: review it with a Sonnet "art director" subagent against the
+  wiki images (see CLAUDE.md).
 - **Settings**: Size presets Compact..XL (Normal is default; Compact was the
   original default), Wildlife presets to show off behaviours, collapsible
   panel sections, changing wildlife restarts creatures and the rain.

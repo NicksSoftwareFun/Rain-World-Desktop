@@ -36,6 +36,8 @@ Everything is plain JavaScript + `<canvas>`, with no build step and no dependenc
 | **Dropwigs** | Spiny ambushers that wait flattened against ceilings (window undersides!) and drop onto prey passing below. Prey can't see them while they lurk. |
 | **Batflies** | Flocking prey that hatch from a nest hanging under a ledge (every map has one; it lets out a new flock when they run low), roost on it and on grass and pole tops, and scatter from danger. |
 | **Small centipedes** | Armoured segments rippling over any surface on a wave of legs. |
+| **Noodleflies** | A family passing through: an adult (a long crook-shaped body with a needle for a mouth and a long hanging tail) and its brood of infants, flying about it or clinging to its tail. Adults stalk lizards and anything smaller, wind up and stab, and feed on the wing; after two meals the family leaves by the farthest pipe. Grab or kill an infant and it cries out: the nearest adult hunts whoever was closest. Infants are prey for slugcats (who knock them down with rocks) and centipedes. |
+| **Squidcadas** | White and black slugcat-sized fliers with buzzing wings and squid arms, in small flocks. They circle each other in play, rest on ledges when tired, snatch batflies and small centipedes, now and then headbutt a slugcat, and gang up on whatever grabs one of them. Lizards and centipedes catch fliers that come low. |
 
 ## Configuring
 
@@ -45,11 +47,12 @@ titles.
 
 - **Presets** (top of the panel, and in Lively's Customise panel):
   - **Size**: Compact, Normal (the default), Large, XL. Sets the map size,
-    population, spawn rate, rocks and spears, and each species' cap. Bigger
+    population, spawn rate, rocks and spears, and each species' cap. Picking
+    a size also puts the World and Rain cycle settings back to their defaults. Bigger
     maps get more rows of ledges and proportionally more poles, fruit plants
     and batfly nests, so there's no empty space. Compact is the old default.
   - **Wildlife**: Balanced (the default), Lizard turf wars, Slugcat hunters,
-    Centipede hunt, Ambushers, Daddy's buffet, Peaceful. Sets the spawn
+    Centipede hunt, Ambushers, Daddy's buffet, Fliers, Peaceful. Sets the spawn
     weights to show off a set of behaviours; creatures that aren't in the new
     mix walk off to a den.
   - Changing a setting a preset governs by hand switches that preset to

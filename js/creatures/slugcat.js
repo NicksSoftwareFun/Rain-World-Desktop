@@ -75,8 +75,8 @@
       this.lie = 0; // 0 standing .. 1 lying flat
       this.reachTo = null; // something the near hand is reaching for
       this.handPt = null;
-      this.diet = ['batfly', 'centipede'];
-      this.threats = ['lizard_*', 'daddy', 'dropwig', 'centipede_medium', 'centipede_large'];
+      this.diet = ['batfly', 'centipede', 'noodlefly_infant'];
+      this.threats = ['lizard_*', 'daddy', 'dropwig', 'centipede_medium', 'centipede_large', 'noodlefly'];
       this.bloodColor = '#3a1f22';
     }
 
@@ -381,9 +381,9 @@
 
       // Prey knocked down by a rock: go and pick it up.
       if (perceive && this.hunger > 0.3 && this.state !== 'forage' && this.wants('meat')) {
-        let downed = this.nearestOf(['batfly', 'centipede'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1);
+        let downed = this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1);
         if (!downed) {
-          const c = this.nearestCorpse(['batfly', 'centipede'], 320);
+          const c = this.nearestCorpse(['batfly', 'centipede', 'noodlefly_infant'], 320);
           if (c && (c.size || 1) <= 1) downed = c;
         }
         if (downed) {
@@ -443,7 +443,7 @@
         }
       }
       if (this.hunger > 0.3 && this.wants('meat')) {
-        const bf = this.nearestOf(['batfly'], 50, (c) => c.canBeGrabbed());
+        const bf = this.nearestOf(['batfly', 'noodlefly_infant'], 50, (c) => c.canBeGrabbed() && c.state !== 'cling');
         if (bf) {
           this.reachTo = bf.mainPoint();
           if (this.grounded && bf.y < hip.y) {
@@ -464,7 +464,7 @@
 
       // Armed and hungry: knock prey out of the air, or fruit off its vine.
       if (perceive && this.weapon && this.hunger > 0.35 && this.throwCd <= 0 && !this.item && Math.random() < 0.35) {
-        const bf = this.wants('meat') && this.nearestOf(['batfly', 'centipede'], 240, (c) => !c.grabbedBy && !(c.stunT > 0) && (c.size || 1) <= 1 && U.dist(c.x, c.y, hip.x, hip.y) > 40 && this.canSee(c.x, c.y, 240));
+        const bf = this.wants('meat') && this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 240, (c) => !c.grabbedBy && !(c.stunT > 0) && (c.size || 1) <= 1 && U.dist(c.x, c.y, hip.x, hip.y) > 40 && this.canSee(c.x, c.y, 240));
         if (bf) this.startThrow(bf);
         else if (this.wants('fruit') && !this.findFruit(500)) {
           // ripe fruit only comes down when something hits it (a rock's
@@ -581,11 +581,11 @@
     foodAround(kind) {
       const eco = this.eco;
       if (kind === 'fruit') return eco.items.some((it) => it instanceof RW.Fruit && !it.dead && !it.heldBy) || eco.plants.some((p) => p.ripe());
-      return eco.creatures.some((c) => (c.species === 'batfly' || (c.species === 'centipede' && (c.size || 1) <= 1)) && !c.dead && !c.leaving && !c.grabbedBy);
+      return eco.creatures.some((c) => (c.species === 'batfly' || c.species === 'noodlefly_infant' || (c.species === 'centipede' && (c.size || 1) <= 1)) && !c.dead && !c.leaving && !c.grabbedBy);
     }
     // Hunting for meat: the nearest small prey to head towards.
     meatTarget(range) {
-      return this.nearestOf(['batfly', 'centipede'], range, (c) => !c.grabbedBy && (c.size || 1) <= 1);
+      return this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], range, (c) => !c.grabbedBy && (c.size || 1) <= 1);
     }
     findWeapon(range) {
       const hip = this.hip;
@@ -644,7 +644,8 @@
       if (t === this.grabbedBy) return 'spear';
       if (t.tip && !t.spine && !t.chain) return 'rock';
       if (t.species && t.species.startsWith('lizard_')) return t.p && t.p.stunImmune ? 'spear' : 'rock';
-      if (t.species === 'batfly' || (t.species === 'centipede' && (t.size || 1) <= 1)) return 'rock';
+      // (a rock knocks an infant noodlefly down without it crying out)
+      if (t.species === 'batfly' || t.species === 'noodlefly_infant' || (t.species === 'centipede' && (t.size || 1) <= 1)) return 'rock';
       return 'spear';
     }
     startThrow(t) {

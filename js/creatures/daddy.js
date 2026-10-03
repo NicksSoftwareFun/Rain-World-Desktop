@@ -88,7 +88,7 @@
       this.fullT = U.rand(5, 20);
       this.meals = 0; // a transient: two meat meals, then off out of another pipe
       this.huntT = 0;
-      this.diet = ['slugcat', 'lizard_*', 'dropwig', 'centipede', 'batfly'];
+      this.diet = ['slugcat', 'lizard_*', 'dropwig', 'centipede', 'batfly', 'squidcada', 'noodlefly', 'noodlefly_infant'];
       this.isFlier = true;
       this.mass = 6;
       this.bloodColor = '#151830';

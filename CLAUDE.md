@@ -29,6 +29,13 @@ Read these before changing things:
   ask for (or use) the Rain World wiki page; they can upload pages as HTML
   when the wiki can't be fetched.
 - Usage is limited: measure, fix, verify, move on. Don't gold-plate.
+- **Art reviews**: for new or reworked creature art, the owner asks for a
+  Sonnet "art director" review: spawn a background `Agent` (model `sonnet`)
+  that reads the wiki reference images and your screenshots, makes its own
+  shots, and reports a prioritized critique without editing files; then
+  implement it and re-shoot. Download wiki images from
+  `https://static.wikitide.net/rainworldwiki/<h>/<hh>/<File_name>` where
+  `hh` is the first two hex digits of md5(File_name).
 
 ## Workflow
 
