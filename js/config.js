@@ -327,7 +327,7 @@
           toughness: 1.5,
           diet: ['slugcat', 'centipede', 'dropwig', 'noodlefly_infant', 'squidcada', 'noodlefly'], // bigger prey than batflies
           threats: ['daddy', 'centipede_large', 'lizard_*'],
-          colors: ['#d0662a', '#dc8a2e', '#6a2412', '#5a1e10'],
+          colors: ['#dc6a22', '#e8882e', '#9a3414', '#86300f'],
         },
       },
       centipede_large: {
@@ -344,7 +344,7 @@
           toughness: 3,
           diet: ['lizard_*', 'slugcat', 'centipede_medium', 'dropwig', 'squidcada', 'noodlefly'], // hunts lizards
           threats: ['daddy'],
-          colors: ['#b8401e', '#c45a24', '#4a160c', '#3c120a'],
+          colors: ['#d9601e', '#e27a2c', '#8e2c12', '#7c2610'],
         },
       },
       // Fliers. Noodleflies come as a family: an adult with a brood of

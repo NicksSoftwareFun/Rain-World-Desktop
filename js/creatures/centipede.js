@@ -298,98 +298,157 @@
       this.phase += (Math.hypot(this.vx, this.vy) * dt * 0.45) / S;
     }
 
+    // Drawn after the game's sprites: a row of square-ish armour plates,
+    // vivid orange with a darker belly band and a black rim, black gaps
+    // between them; thin black jointed legs, a pair per plate; a dark head
+    // with pincers; and long whip antennae at both ends (from a distance
+    // you can't tell which end is the front).
     draw(ctx) {
       const P = this.chain.pts;
       const n = P.length;
       ctx.save();
       ctx.globalAlpha = this.alpha;
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       const S = this.size;
-      const head = U.mix(this.cols[0], this.cols[1], this.hue);
-      const tail = U.mix(this.cols[2], this.cols[3], this.hue);
-      // legs: a travelling wave, one pair per segment
-      ctx.strokeStyle = '#2a1a12';
-      ctx.lineWidth = 1.1 * Math.sqrt(S);
-      ctx.beginPath();
-      for (let i = 0; i < n; i++) {
+      const ap = (this.eco && this.eco.artPx) || 1;
+      const seg = 6.5 * S;
+      const front = U.mix(this.cols[0], this.cols[1], this.hue);
+      const back = U.mix(this.cols[2], this.cols[3], this.hue);
+      const ink = '#140c0a';
+      const tangent = (i) => {
         const a = P[Math.max(0, i - 1)];
         const b = P[Math.min(n - 1, i + 1)];
-        let tx = a.x - b.x;
-        let ty = a.y - b.y;
-        const tl = Math.hypot(tx, ty) || 1;
-        tx /= tl;
-        ty /= tl;
+        const tl = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        return { x: (a.x - b.x) / tl, y: (a.y - b.y) / tl };
+      };
+      // legs: thin and jointed, a pair per plate, stepping in a travelling
+      // wave; knees out along the body, feet down on the surface
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = Math.max(ap, 0.8 * Math.sqrt(S));
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const t = tangent(i);
         for (const s of [-1, 1]) {
           const w = Math.sin(this.phase + i * 0.9 + (s > 0 ? Math.PI : 0));
+          const st = this.corpse ? 0 : w * 2.2;
+          const lift = this.corpse ? 0 : Math.max(0, w) * 1.2;
+          const kx = P[i].x - this.ux * (3.4 - lift) * S + t.x * (s * 2.4 + st * 0.5) * S;
+          const ky = P[i].y - this.uy * (3.4 - lift) * S + t.y * (s * 2.4 + st * 0.5) * S;
           ctx.moveTo(P[i].x, P[i].y);
-          const st = this.corpse ? 0 : w * 2.5;
-          ctx.lineTo(P[i].x - this.ux * 5.5 * S + tx * (st + s * 1.5) * S, P[i].y - this.uy * 5.5 * S + ty * (st + s * 1.5) * S);
+          ctx.lineTo(kx, ky);
+          ctx.lineTo(P[i].x - this.ux * (7 - lift) * S + t.x * (s * 3.4 + st) * S, P[i].y - this.uy * (7 - lift) * S + t.y * (s * 3.4 + st) * S);
         }
       }
       ctx.stroke();
-      // shell segments, tail first
+      // antennae at both ends: long dark whips, curving out and swaying
+      const whips = (end, nb) => {
+        const e = P[end];
+        const ea = Math.atan2(P[end].y - P[nb].y, P[end].x - P[nb].x);
+        const len = Math.max(3.4 * seg, 0.3 * n * seg); // about a third of the body
+        ctx.beginPath();
+        // seen side on, both arch up off the surface, one a little higher
+        const up = Math.cos(ea) * -this.uy - Math.sin(ea) * -this.ux > 0 ? -1 : 1;
+        for (const s of [-1, 1]) {
+          const sw = this.corpse ? 0.5 * s : Math.sin(this.age * (end ? 2.1 : 2.6) + s * 1.3 + end) * 0.18;
+          const lift = up * (s > 0 ? 0.55 : 0.2);
+          const a1 = ea + lift + sw * 0.5;
+          const a2 = ea + lift * 1.6 + up * 0.35 + sw;
+          const cx = e.x + Math.cos(a1) * len * 0.55;
+          const cy = e.y + Math.sin(a1) * len * 0.55;
+          ctx.moveTo(e.x, e.y);
+          ctx.quadraticCurveTo(cx, cy, cx + Math.cos(a2) * len * 0.5, cy + Math.sin(a2) * len * 0.5);
+        }
+        ctx.stroke();
+        // thicker at the root
+        ctx.save();
+        ctx.lineWidth *= 1.8;
+        ctx.beginPath();
+        for (const s of [-1, 1]) {
+          const lift = up * (s > 0 ? 0.55 : 0.2);
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(e.x + Math.cos(ea + lift) * len * 0.22, e.y + Math.sin(ea + lift) * len * 0.22);
+        }
+        ctx.stroke();
+        ctx.restore();
+      };
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = Math.max(ap, 0.7 * Math.sqrt(S));
+      whips(0, 1);
+      whips(n - 1, n - 2);
+      // plates, tail first so each overlaps the one behind it
+      const roundRect = (x, y, w, h, r) => {
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      };
       for (let i = n - 1; i >= 0; i--) {
-        const a = P[Math.max(0, i - 1)];
-        const b = P[Math.min(n - 1, i + 1)];
-        const ang = Math.atan2(a.y - b.y, a.x - b.x);
-        const t = i / (n - 1);
-        const col = i === 0 ? U.scale(tail, 0.85) : U.mix(head, tail, t);
-        const sz = (i === 0 ? 4.6 : 4.2 - t * 1.2) * S;
+        const t = tangent(i);
+        const ang = Math.atan2(t.y, t.x);
+        const k = i / (n - 1);
+        // a touch fuller at the head, ~15% slimmer by the tail; a dark cap
+        // at each end (the head a bit bigger)
+        const endTaper = i === 0 ? 1.08 : i === n - 1 ? 0.78 : 1.02 - 0.17 * k;
+        const hh = 3.3 * S * endTaper; // half height
+        const hl = seg * 0.5 * (i === 0 ? 1.05 : i === n - 1 ? 0.85 : 1); // half length
+        // which local side faces the surface: the belly band goes there
+        const belly = -Math.sin(ang) * -this.ux + Math.cos(ang) * -this.uy > 0 ? 1 : -1;
+        const cap = i === 0 || i === n - 1;
+        const col = cap ? (i === 0 ? '#2a1410' : '#24120e') : U.mix(front, back, k * 0.6);
         ctx.save();
         ctx.translate(P[i].x, P[i].y);
         ctx.rotate(ang);
-        ctx.fillStyle = U.rgba(U.scale(col, 0.55));
+        ctx.fillStyle = ink;
         ctx.beginPath();
-        ctx.ellipse(0, 0, sz * 1.05, sz * 0.85, 0, 0, U.TAU);
+        roundRect(-hl - 0.6 * S, -hh - 0.6 * S, hl * 2 + 1.2 * S, hh * 2 + 1.2 * S, hh * 0.55);
         ctx.fill();
+        ctx.fillStyle = U.rgba(U.scale(col, 0.5));
+        ctx.beginPath();
+        roundRect(-hl + 0.4 * S, -hh, hl * 2 - 0.8 * S, hh * 2, hh * 0.45);
+        ctx.fill();
+        // the lit plate: everything but the belly band
         ctx.fillStyle = U.rgba(col);
         ctx.beginPath();
-        ctx.ellipse(0.5, 0, sz * 0.85, sz * 0.7, 0, 0, U.TAU);
+        roundRect(-hl + 0.4 * S, belly > 0 ? -hh : -hh * 0.35, hl * 2 - 0.8 * S, hh * 1.35, hh * 0.45);
         ctx.fill();
-        ctx.fillStyle = U.rgba(U.mix(col, '#fff3c0', 0.35));
-        ctx.fillRect(-0.5, -sz * 0.45, sz * 0.8, 1);
-        // dark seam between plates
-        ctx.fillStyle = 'rgb(30,14,10)';
-        ctx.fillRect(-sz * 0.95, -sz * 0.7, Math.max(1, S * 0.7), sz * 1.4);
+        if (cap) {
+          ctx.fillStyle = '#4a2418'; // a dull sheen on the dark cap
+          ctx.fillRect(-hl * 0.4, belly > 0 ? -hh * 0.7 : hh * 0.4, hl * 0.8, Math.max(ap, 0.7 * S));
+        } else {
+          // a pale glint along the top edge
+          ctx.fillStyle = U.rgba(U.mix(col, '#ffd9a0', 0.4));
+          ctx.fillRect(-hl * 0.45, belly > 0 ? -hh * 0.75 : hh * 0.45, hl * 0.9, Math.max(ap, 0.7 * S));
+        }
         if (i === 0) {
+          // mandibles: two hooks reaching forward and curling down
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = Math.max(ap, 1.1 * Math.sqrt(S));
+          ctx.beginPath();
+          for (const o of [0, 0.35]) {
+            const y0 = belly * hh * (0.15 + o);
+            ctx.moveTo(hl * 0.7, y0);
+            ctx.quadraticCurveTo(hl + 5 * S, y0 - belly * hh * 0.15, hl + 4 * S, y0 + belly * hh * 0.8);
+          }
+          ctx.stroke();
           if (this.corpse) {
             // dead: little X'd eyes
             ctx.strokeStyle = '#f2d36b';
-            ctx.lineWidth = 0.8;
+            ctx.lineWidth = Math.max(ap, 0.8);
             ctx.beginPath();
-            for (const ey of [-1.6 * S, 1 * S]) {
-              ctx.moveTo(sz * 0.3, ey - 0.8);
-              ctx.lineTo(sz * 0.3 + 1.6, ey + 0.8);
-              ctx.moveTo(sz * 0.3 + 1.6, ey - 0.8);
-              ctx.lineTo(sz * 0.3, ey + 0.8);
+            for (const ey of [-hh * 0.45, hh * 0.25]) {
+              ctx.moveTo(0, ey - 0.8 * S);
+              ctx.lineTo(1.6 * S, ey + 0.8 * S);
+              ctx.moveTo(1.6 * S, ey - 0.8 * S);
+              ctx.lineTo(0, ey + 0.8 * S);
             }
             ctx.stroke();
-          } else {
-            ctx.fillStyle = '#f2d36b';
-            ctx.fillRect(sz * 0.4, -1.8 * S, Math.max(1, S * 0.8), Math.max(1, S * 0.8));
-            ctx.fillRect(sz * 0.4, 0.8 * S, Math.max(1, S * 0.8), Math.max(1, S * 0.8));
           }
         }
         ctx.restore();
       }
-      // antennae and tail prongs
-      const h = P[0];
-      const ha = Math.atan2(P[0].y - P[1].y, P[0].x - P[1].x);
-      ctx.strokeStyle = U.rgba(U.scale(head, 0.7));
-      ctx.lineWidth = 0.9 * Math.sqrt(S);
-      ctx.beginPath();
-      for (const s of [-1, 1]) {
-        const a = ha + s * 0.5 + (this.corpse ? 0.6 * s : Math.sin(this.age * 6 + s) * 0.15);
-        ctx.moveTo(h.x, h.y);
-        ctx.quadraticCurveTo(h.x + Math.cos(ha) * 6 * S, h.y + Math.sin(ha) * 6 * S, h.x + Math.cos(a) * 10 * S, h.y + Math.sin(a) * 10 * S);
-      }
-      const tl = P[n - 1];
-      const ta = Math.atan2(P[n - 1].y - P[n - 2].y, P[n - 1].x - P[n - 2].x);
-      for (const s of [-1, 1]) {
-        ctx.moveTo(tl.x, tl.y);
-        ctx.lineTo(tl.x + Math.cos(ta + s * 0.4) * 6 * S, tl.y + Math.sin(ta + s * 0.4) * 6 * S);
-      }
-      ctx.stroke();
       ctx.restore();
       this.drawPath(ctx, this.pather);
       this.drawDebug(ctx);
