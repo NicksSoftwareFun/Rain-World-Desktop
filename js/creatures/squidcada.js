@@ -137,9 +137,9 @@
         ax -= this.vx * 2;
         ay -= this.vy * 2;
       }
-      const clear = 26;
+      const clear = this.routeT > 0 ? 12 : 26;
       const s = this.W.nearestSurface(p.x, p.y, clear, null);
-      if (s && this.state !== 'land') {
+      if (s && this.state !== 'land' && !(this.state === 'leave' && this.diving)) {
         const k = (clear - s.d) * 14;
         ax += s.nx * k;
         ay += s.ny * k;
@@ -222,8 +222,10 @@
         this.setState('leave');
         const den = eco.nearestDen(p.x, p.y);
         if (den) {
-          this.fly(dt, den.x, den.y, 130, 4, 60);
-          if (U.dist(p.x, p.y, den.x, den.y) < 22) this.leave();
+          const wp = this.airWaypoint(dt, den.x, den.y);
+          this.fly(dt, wp.x, wp.y, 130, 4, 60);
+          this.diving = U.dist(p.x, p.y, den.x, den.y) < 120;
+          if (U.dist(p.x, p.y, den.x, den.y) < 28) this.leave();
         }
         return;
       }
@@ -347,7 +349,8 @@
         this.goalT = U.rand(2, 5);
       }
       const g = this.goal;
-      this.fly(dt, g ? g.x : undefined, g ? g.y : undefined, 90, 2.2);
+      const wp = g && this.airWaypoint(dt, g.x, g.y);
+      this.fly(dt, wp ? wp.x : undefined, wp ? wp.y : undefined, 90, 2.2);
     }
 
     // Headbutt: pause, flutter, then dart straight at it; bounce off things.
@@ -401,7 +404,8 @@
       const at = this.landAt;
       if (this.state === 'land') {
         if (!at) return this.setState('fly');
-        this.fly(dt, at.x, at.y, 80, 3, 30);
+        const wp = this.airWaypoint(dt, at.x, at.y);
+        this.fly(dt, wp.x, wp.y, 80, 3, 30);
         if (U.dist(p.x, p.y, at.x, at.y) < 6 || this.stateT > 6) this.setState('rest');
         return;
       }

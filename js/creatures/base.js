@@ -329,7 +329,7 @@
         return false;
       }
       // No den reachable from here: slip away quietly rather than wait forever.
-      if (this.state === 'leave' && this.stateT > 30) this.leave();
+      if (this.state === 'leave' && this.stateT > (this.isFlier ? 60 : 30)) this.leave();
       // Easing out of a wedged spot (see below): a couple of px a frame.
       if (this.nudge) {
         const m = this.mainPoint();
@@ -615,6 +615,30 @@
         }
       }
       return best;
+    }
+    // Fliers: the next point to steer for on the way to (x, y): straight there
+    // when the way is clear, otherwise the next waypoint of an open-air route
+    // round whatever's in the way (they used to press against the underside
+    // of a ledge between them and a den and never get there). The route has
+    // its own planner, so the walkers' stuck rules don't apply to fliers.
+    airWaypoint(dt, x, y) {
+      const m = this.mainPoint();
+      this.routeT = (this.routeT || 0) - dt;
+      if (this.W.lineClear(m.x, m.y, x, y)) {
+        if (this.airPather) this.airPather.clear();
+        return { x, y };
+      }
+      this.routeT = 0.5; // threading a route: fly() keeps only a small clearance
+      const P = this.airPather || (this.airPather = new Pather(this, { fly: true }));
+      P.interval = 0.8;
+      P.setGoal(x, y);
+      P.update(dt, m.x, m.y);
+      P.advance(m.x, m.y, this.W.cell * 1.3);
+      // aim past the next waypoint when the one after is in sight: smoother
+      const n = P.current();
+      const n2 = P.peek(1);
+      if (n2 && this.W.lineClear(m.x, m.y, n2.x, n2.y)) return { x: n2.x, y: n2.y };
+      return n ? { x: n.x, y: n.y } : { x, y };
     }
     // Within reach of a walker: anything not flying, or a flier that has come
     // down near a surface (resting, hovering low, stuck after a stab).

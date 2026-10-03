@@ -154,8 +154,14 @@
         // and comes down; the nose droops on round, limp, until the
         // proboscis comes out (feeding or hunting), when it straightens into
         // a spear
-        let crook = -1.57 + 3.1 * Math.min(1, k / (noseAt - 1)) + Math.sin(this.age * 1.7 + k * 0.6) * 0.03;
-        if (k >= noseAt) crook += (k - noseAt + 1) * 0.42 + Math.sin(this.age * 1.1) * 0.05;
+        let crook = -1.57 + 3.0 * Math.min(1, k / (noseAt - 1)) + Math.sin(this.age * 1.7 + k * 0.6) * 0.03;
+        if (k >= noseAt) {
+          // the nose hangs straight down, floppy: swaying, and trailing
+          // behind when it flies
+          const j = k - noseAt + 1;
+          const trail = U.clamp(this.vx * this.facing * 0.004, -0.4, 0.5);
+          crook = Math.PI / 2 + Math.sin(this.age * 2.3 + j * 0.9) * 0.1 * j + trail * j;
+        }
         const cr = this.facing > 0 ? crook : Math.PI - crook;
         ang = U.lerpAngle(this.aim, cr, this.curl);
         if (k === noseAt - 1) noseBase = ang;
@@ -201,7 +207,9 @@
         ax -= this.vx * 1.5;
         ay -= this.vy * 1.5;
       }
-      const clear = this.D.clear * this.L;
+      // (a big clearance in open air; just a little while threading a route
+      // between ledges, or it balances against the walls and hangs there)
+      const clear = this.state === 'leave' && this.diving ? 0 : this.routeT > 0 ? 14 * this.L : this.D.clear * this.L;
       const s = this.W.nearestSurface(p.x, p.y, clear, null);
       if (s) {
         const k = (clear - s.d) * 14;
@@ -232,7 +240,7 @@
 
     // ------------------------------------------------------------- update --
     update(dt) {
-      this.flap += dt * (this.infant ? 46 : 34);
+      this.flap += dt * (this.infant ? 80 : 58); // a quick buzz
       if (!this.tick(dt)) {
         this.updateTail(dt);
         return;
@@ -253,10 +261,18 @@
       if (this.infant) this.thinkInfant(dt);
       else this.thinkAdult(dt);
       // ease the body between the crook and the straight stabbing pose
+      // (slowly enough to read as a wind-up, quickly for a clinging infant)
       const straight = this.state === 'windup' || this.state === 'stab' || this.state === 'stuck' || this.state === 'cling';
-      this.curl += ((straight ? 0 : this.holding ? 0.45 : 1) - this.curl) * U.approach(straight ? 14 : 4, dt);
+      const rate = this.state === 'cling' ? 14 : this.state === 'windup' ? 6 : this.state === 'recover' ? 2.5 : 4;
+      this.curl += ((straight ? 0 : this.holding ? 0.45 : 1) - this.curl) * U.approach(rate, dt);
       const out = (straight && this.state !== 'cling') || this.state === 'stalk' || this.holding;
       this.needle += ((out ? 1 : 0) - this.needle) * U.approach(out ? 10 : 3, dt);
+      // wind-up and recovery: the head stays put and the body moves round it
+      if (this.anchor && (this.state === 'windup' || this.state === 'recover')) {
+        const h = this.headPt();
+        this.pos.x += this.anchor.x - h.x;
+        this.pos.y += this.anchor.y - h.y;
+      } else this.anchor = null;
       this.updateTail(dt);
     }
 
@@ -359,8 +375,14 @@
       const den = (!this.eco.shouldShelter() && this.family.exitDen) || this.eco.nearestDen(p.x, p.y);
       this.setState('leave');
       if (!den) return;
-      this.fly(dt, den.x, den.y, this.infant ? 140 : 120, 4);
-      if (U.dist(p.x, p.y, den.x, den.y) < 22) this.leave();
+      // close to the pipe it stops shying off the wall round it and goes in
+      // (head first or shoulder first, whichever gets there)
+      const d = U.dist(p.x, p.y, den.x, den.y);
+      this.diving = d < 160 * this.L;
+      const wp = this.airWaypoint(dt, den.x, den.y);
+      this.fly(dt, wp.x, wp.y, this.infant ? 140 : 120, this.diving ? 6 : 4);
+      const h = this.headPt();
+      if (d < 30 || U.dist(h.x, h.y, den.x, den.y) < 30) this.leave();
     }
 
     thinkAdult(dt) {
@@ -392,7 +414,7 @@
         if (this.stateT > 3) {
           this.vx = -Math.cos(this.aim) * 90;
           this.vy = -Math.sin(this.aim) * 90 - 40;
-          this.setState('recover');
+          this.startRecover();
         }
         return;
       }
@@ -417,29 +439,46 @@
       }
       const g = this.goal;
       const near = g && U.dist(p.x, p.y, g.x, g.y) < 30;
-      this.fly(dt, g ? g.x : undefined, g ? g.y : undefined, near ? 20 : 70, near ? 1.2 : 2);
+      const wp = g && this.airWaypoint(dt, g.x, g.y);
+      this.fly(dt, wp ? wp.x : undefined, wp ? wp.y : undefined, near ? 20 : 70, near ? 1.2 : 2);
     }
 
-    // Stalk to a striking distance, wind up (straighten, needle out, draw
-    // back), stab in a straight line; a miss into a wall gets it stuck.
+    // Hunting, in four smooth beats: line the head up at striking distance
+    // from the target, wind up (the body straightens out behind the head
+    // along the line to the target and draws back a little), fly in along
+    // that line, and after a miss coast to a stop, curl back up and line up
+    // again. During the wind-up and the recovery the head is the anchor
+    // (`this.anchor`), so straightening and curling never yank it about.
+    headPt() {
+      const A = this.archPts();
+      return A[A.length - 1];
+    }
     hunt(dt, t) {
       const p = this.pos;
+      const L = this.L;
       const tp = t.mainPoint();
+      const head = this.headPt();
+      const toT = Math.atan2(tp.y - head.y, tp.x - head.x);
       if (this.state === 'windup') {
-        this.aim = Math.atan2(tp.y - p.y, tp.x - p.x);
-        this.facing = Math.cos(this.aim) >= 0 ? 1 : -1;
-        this.vx += (-Math.cos(this.aim) * 30 - this.vx) * U.approach(6, dt);
-        this.vy += (-Math.sin(this.aim) * 30 - this.vy) * U.approach(6, dt);
-        p.x += this.vx * dt;
-        p.y += this.vy * dt;
-        if (this.stateT > 0.5) {
+        // keep lined up on it, drawing back slowly
+        this.aim = U.lerpAngle(this.aim, toT, U.approach(5, dt));
+        const back = 34 * L * (1 - Math.min(1, this.stateT / 0.6));
+        this.anchor.x -= Math.cos(this.aim) * back * dt;
+        this.anchor.y -= Math.sin(this.aim) * back * dt;
+        this.vx = this.vy = 0;
+        if (this.stateT > 0.6) {
           this.setState('stab');
-          this.vx = Math.cos(this.aim) * 480;
-          this.vy = Math.sin(this.aim) * 480;
+          this.anchor = null;
+          const tip = this.needleTip();
+          // fly in far enough to run it through, quick off the mark
+          this.lunge = U.clamp((U.dist(tip.x, tip.y, tp.x, tp.y) + 40 * L) / 0.3, 200, 560);
         }
         return;
       }
       if (this.state === 'stab') {
+        const k = U.approach(22, dt);
+        this.vx += (Math.cos(this.aim) * this.lunge - this.vx) * k;
+        this.vy += (Math.sin(this.aim) * this.lunge - this.vy) * k;
         p.x += this.vx * dt;
         p.y += this.vy * dt;
         const tip = this.needleTip();
@@ -458,20 +497,27 @@
             this.vy *= 0.2;
           } else {
             c.stun(1.2);
-            this.setState('recover');
+            this.startRecover();
           }
           return;
         }
         if (this.W.isSolidPt(tip.x, tip.y)) {
           this.setState('stuck');
+          this.vx = this.vy = 0;
           return;
         }
-        if (this.stateT > 0.35 || p.x < 6 || p.x > this.W.w - 6 || p.y < 6 || p.y > this.W.h - 6) this.setState('recover');
+        if (this.stateT > 0.38 || p.x < 6 || p.x > this.W.w - 6 || p.y < 6 || p.y > this.W.h - 6) this.startRecover();
         return;
       }
       if (this.state === 'recover') {
-        this.fly(dt, undefined, undefined, 0, 0);
-        if (this.stateT > 0.7) {
+        // missed: coast to a stop, curling back up around the head
+        const f = Math.pow(0.03, dt);
+        this.vx *= f;
+        this.vy *= f;
+        this.anchor.x += this.vx * dt;
+        this.anchor.y += this.vy * dt;
+        if (this.stateT > 0.9) {
+          this.anchor = null;
           this.attempts = (this.attempts || 0) + 1;
           if (this.attempts > 5 && !this.vengeance) {
             this.target = null;
@@ -481,23 +527,37 @@
         }
         return;
       }
-      // stalking: hang off to one side and a little above, in clear sight
+      // Stalking: bring the head round to striking distance, a little above
+      // the target and in clear sight, turning to face it as it goes.
       if (this.state !== 'stalk') this.setState('stalk');
-      const dx = p.x - tp.x;
-      const dy = p.y - tp.y;
+      this.anchor = null;
+      const strike = (this.D.needleOut + 26) * L;
+      const dx = head.x - tp.x;
+      const dy = head.y - tp.y;
       const d = Math.hypot(dx, dy) || 1;
-      const reach = (this.D.archN * this.D.archSeg + this.D.needleOut) * this.L * 0.75;
-      const sx = tp.x + (dx / d) * reach;
-      const sy = tp.y + (dy / d) * reach * 0.6 - reach * 0.3;
-      this.facing = tp.x >= p.x ? 1 : -1;
-      this.fly(dt, sx, sy, this.vengeance ? 170 : 130, 3);
-      const clear = this.W.lineClear(p.x, p.y, tp.x, tp.y);
-      if (d < reach * 1.5 && clear && this.stateT > 1) this.setState('windup');
+      const sx = tp.x + (dx / d) * strike;
+      const sy = tp.y + (dy / d) * strike * 0.7 - strike * 0.3;
+      // steer the shoulder so that the head arrives there
+      const wp = this.airWaypoint(dt, p.x + (sx - head.x), p.y + (sy - head.y));
+      this.fly(dt, wp.x, wp.y, this.vengeance ? 170 : 130, 3);
+      if ((tp.x - head.x) * this.facing < -30 * L) this.facing = -this.facing; // only turn round if it's well behind
+      this.aim = U.lerpAngle(this.aim, toT, U.approach(3, dt));
+      const lined = U.dist(head.x, head.y, sx, sy) < 18 * L;
+      if (lined && this.stateT > 0.8 && this.W.lineClear(head.x, head.y, tp.x, tp.y)) {
+        this.setState('windup');
+        this.anchor = { x: head.x, y: head.y };
+        this.vx = this.vy = 0;
+      }
       if (this.stateT > 14 && !this.vengeance) {
         this.target = null;
         this.huntCd = U.rand(8, 16);
         this.setState('drift');
       }
+    }
+    startRecover() {
+      this.setState('recover');
+      const h = this.headPt();
+      this.anchor = { x: h.x, y: h.y };
     }
 
     // Infants: keep close to the family's adult, flying about it or clinging
@@ -560,7 +620,8 @@
         const r = 55 + (this.id % 3) * 18;
         const cx = a.pos.x + a.facing * a.D.archSeg * a.D.archN * 0.3;
         const cy = a.pos.y - a.D.archSeg * a.D.archN * 0.15;
-        this.fly(dt, cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.6, 140, 3);
+        const wp = this.airWaypoint(dt, cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.6);
+        this.fly(dt, wp.x, wp.y, 140, 3);
       } else {
         this.goalT -= dt;
         if (!this.goal || this.goalT <= 0) {
