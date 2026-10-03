@@ -54,24 +54,26 @@ Its page is [`artifact.html`](artifact.html). To update it from a new session:
 read it first (`Artifact` action `read` with that URL), then publish
 `artifact.html` with `url` set to that URL and a `files` map of every script
 and stylesheet it loads, e.g. `{"js/creatures/lizard.js":
-"rain-world-desktop/js/creatures/lizard.js", ...}` (paths in the map are the
-`src`/`href` values in `artifact.html`). On later updates in the same session,
+"js/creatures/lizard.js", ...}` (keys are the `src`/`href` values in
+`artifact.html`, sources are paths in this repo). On later updates in the same session,
 only the changed files need to be in the map. Add new script files to both
 `index.html` and `artifact.html` (and `wallpaper.html`, `gallery.html` where
 they apply).
 
-## GitHub Pages mirror
+## Repository and GitHub Pages
 
-This folder is mirrored to its own repo, `NicksSoftwareFun/rain-world-desktop`,
-whose `main` branch GitHub Pages publishes at
-https://nickssoftwarefun.github.io/rain-world-desktop/ (the prototype;
-`gallery.html` and `wallpaper.html` too). Pages can't live in
-Multi-Project-Playground: that repo's one Pages site is the weather radar app.
+This repo, `NicksSoftwareFun/rain-world-desktop`, is the project's home. It
+was developed inside `NicksSoftwareFun/Multi-Project-Playground`
+(`rain-world-desktop/` on branch `ccr-5e3d0da8-apficq`) until its history
+was moved here.
 
-After pushing the development branch, run `rain-world-desktop/tools/sync-pages.sh`
-(it pushes the folder's split-out history to the mirror's `main`; needs the
-mirror repo attached to the session with push access, via `add_repo`). The
-session's GitHub app can't create repositories, so the owner created the mirror repo by hand.
+GitHub Pages publishes **`main`** at
+https://nickssoftwarefun.github.io/rain-world-desktop/ (the prototype; also
+`gallery.html`), updating a minute or two after each push. The owner wants
+the site to track development as it happens: work on `main`, or if the
+session is set up on another branch, merge it into `main` once it's
+verified so the site updates (say so to the owner). `.nojekyll` keeps Pages
+from running Jekyll over the files.
 
 ## Open items
 

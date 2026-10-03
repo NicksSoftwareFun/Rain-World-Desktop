@@ -3,7 +3,7 @@
 Headless checks for the prototype and the wallpaper build. Node 18+.
 
 ```sh
-cd rain-world-desktop/tests
+cd tests
 npm install                      # Playwright (ESM won't find a global install)
 export CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome   # cloud sessions; omit if Playwright has its own browser
 npm test                         # smoke + quick behaviour checks (~4 min)

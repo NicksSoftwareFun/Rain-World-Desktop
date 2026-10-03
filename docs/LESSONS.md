@@ -38,10 +38,10 @@ next session doesn't relearn them.
   every property on start; the preset dropdowns are reapplied after each
   property so their order doesn't matter, and the individual sliders only
   count when that preset is *Custom*.
-- **GitHub Pages:** this repo's single Pages site belongs to the weather
-  radar app (deployed from the repo's default branch). Don't add another
-  Pages workflow here; the Rain World site is published from its own repo
-  (see `CLAUDE.md`).
+- **GitHub Pages:** a repo has one Pages site. That's why the project moved
+  out of Multi-Project-Playground (whose site is the weather radar app) into
+  its own repo, published from `main`. The session's GitHub app can't create
+  repositories or change Pages settings; the owner does those by hand.
 - **Shell editing.** Use exact-match replacements that assert the match is
   unique (a Python `assert s.count(a) == 1` pattern worked well). A sed range
   typo once wrote a stray copy of `base.js` into the repo under a garbage

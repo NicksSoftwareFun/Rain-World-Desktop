@@ -2,7 +2,7 @@
 // thing that has gone wrong before (bodies folding, dropwigs falling off
 // corners, fruit dropping by itself...) and passes or fails on a threshold.
 //
-//   cd rain-world-desktop/tests && npm install
+//   cd tests && npm install
 //   node behaviour.mjs                 all checks (~10-15 min)
 //   node behaviour.mjs --quick         shorter runs (~5 min), looser numbers
 //   node behaviour.mjs bodies fruit    just the named checks

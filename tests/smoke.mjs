@@ -2,7 +2,7 @@
 // simulates a few minutes (including a rain downpour) and fails on page
 // errors, non-finite creature positions or an empty ecosystem.
 //
-//   cd rain-world-desktop/tests && npm install && npm test
+//   cd tests && npm install && npm test
 //   (CHROMIUM_PATH=/path/to/chrome to use a preinstalled browser)
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
