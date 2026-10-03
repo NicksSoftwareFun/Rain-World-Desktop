@@ -64,6 +64,8 @@
       this.vx = U.rand(-30, 30);
       this.vy = -20;
       this.facing = U.sign();
+      this.faceS = this.facing; // eases through the turn
+      this.look = this.facing > 0 ? 0.4 : Math.PI - 0.4; // where the head is looking
       this.curl = 1; // 1 = the resting crook, 0 = held out straight
       this.aim = 0; // direction of the straightened body
       this.needle = 0; // 0 retracted .. 1 fully out
@@ -148,22 +150,36 @@
       let ang = 0;
       const noseAt = n - this.D.nose;
       let noseBase = 0;
+      let prevD = 0;
       for (let k = 0; k < n; k++) {
         const t = k / (n - 1);
         // facing right: rises straight up out of the tail, curls over the top
         // and comes down; the nose droops on round, limp, until the
         // proboscis comes out (feeding or hunting), when it straightens into
         // a spear
-        let crook = -1.57 + 3.0 * Math.min(1, k / (noseAt - 1)) + Math.sin(this.age * 1.7 + k * 0.6) * 0.03;
-        if (k >= noseAt) {
-          // the nose hangs straight down, floppy: swaying, and trailing
-          // behind when it flies
+        let cr;
+        if (k < noseAt) {
+          // measured from straight up and scaled by faceS, so a turn swings
+          // the crook over the top instead of flipping it
+          const crook = 3.0 * Math.min(1, k / (noseAt - 1)) + Math.sin(this.age * 1.7 + k * 0.6) * 0.03;
+          cr = -Math.PI / 2 + crook * this.faceS;
+        } else {
+          // the nose hangs down, floppy, but the head looks where it's going:
+          // the first nose segment leans most toward `look`, the rest droop
           const j = k - noseAt + 1;
-          const trail = U.clamp(this.vx * this.facing * 0.004, -0.4, 0.5);
-          crook = Math.PI / 2 + Math.sin(this.age * 2.3 + j * 0.9) * 0.1 * j + trail * j;
+          const hang = Math.PI / 2 + Math.sin(this.age * 2.3 + j * 0.9) * 0.1 * j;
+          cr = U.lerpAngle(hang, this.look, Math.max(0.2, 0.75 - 0.2 * (j - 1)));
         }
-        const cr = this.facing > 0 ? crook : Math.PI - crook;
-        ang = U.lerpAngle(this.aim, cr, this.curl);
+        // straight (along aim) to curled: each segment turns the same way
+        // round as the one before it, or an aim straight down could send
+        // half the arch one way and half the other, a loop
+        let dA = U.angleDiff(this.aim, cr);
+        if (k === 0) {
+          if (Math.abs(dA) > 2.8) dA = -this.facing * Math.abs(dA);
+        } else if (dA - prevD > Math.PI) dA -= 2 * Math.PI;
+        else if (dA - prevD < -Math.PI) dA += 2 * Math.PI;
+        prevD = dA;
+        ang = this.aim + dA * this.curl;
         if (k === noseAt - 1) noseBase = ang;
         if (k >= noseAt) ang = U.lerpAngle(ang, noseBase, U.clamp(this.needle * 1.4, 0, 1));
         x += Math.cos(ang) * seg;
@@ -182,11 +198,26 @@
     // The tail hangs from the shoulder, swinging behind when it darts about.
     updateTail(dt, grav) {
       const P = this.tail.pts;
+      // through a lunge and the swing back round the head the tail travels
+      // with the body (it's carried, not dragged): left to trail it got
+      // flung forward when the lunge stopped and wrapped into a ring
+      const lunging = this.state === 'windup' || this.state === 'stab' || this.state === 'recover';
+      if (lunging && this.lastPos) {
+        const dx = (this.pos.x - this.lastPos.x) * 0.85;
+        const dy = (this.pos.y - this.lastPos.y) * 0.85;
+        for (let i = 1; i < P.length; i++) {
+          P[i].x += dx;
+          P[i].px += dx;
+          P[i].y += dy;
+          P[i].py += dy;
+        }
+      }
+      this.lastPos = { x: this.pos.x, y: this.pos.y };
       P[0].x = P[0].px = this.pos.x;
       P[0].y = P[0].py = this.pos.y;
-      this.tail.verlet(1, 0.9, 0, grav === undefined ? this.D.tailGrav : grav, dt);
+      this.tail.verlet(1, lunging ? 0.82 : 0.9, 0, grav === undefined ? this.D.tailGrav : grav, dt);
       this.tail.follow(1);
-      this.tail.limitBend(0.5, 2, P.length, 0.5);
+      this.tail.limitBend(this.infant ? 0.5 : 0.2, 2, P.length, 0.5); // stiff enough that a whip never wraps into a ring
       for (let i = 2; i < P.length; i++) this.W.collideCircle(P[i], 1.5);
     }
 
@@ -230,7 +261,31 @@
       }
       p.x = U.clamp(p.x, 6, this.W.w - 6);
       p.y = U.clamp(p.y, 6, this.W.h - 6);
-      if (Math.abs(this.vx) > 15 && this.curl > 0.5) this.facing = Math.sign(this.vx);
+      // turn round only for a steady push the other way, and not again for
+      // a while (bobbing and dodging used to flick it back and forth);
+      // hunting decides its own facing
+      const hunting = this.state === 'stalk' || this.state === 'windup' || this.state === 'stab' || this.state === 'recover';
+      if (!hunting && this.curl > 0.5) {
+        const back = Math.abs(this.vx) > 35 && Math.sign(this.vx) !== this.facing;
+        this.turnWant = back ? (this.turnWant || 0) + dt : 0;
+        if (this.turnWant > 0.4) this.turn();
+      }
+    }
+    // While it's straight (winding up, after a stab) it can face whichever
+    // side it's aiming at for free: curling back up the wrong way round tied
+    // it in a loop.
+    faceAim() {
+      const f = Math.cos(this.aim) >= 0 ? 1 : -1;
+      if (f === this.facing) return;
+      this.facing = f;
+      this.turnedAt = this.age;
+      if (this.curl < 0.4) this.faceS = f;
+    }
+    turn() {
+      if (this.age - (this.turnedAt || -9) < 1.5) return;
+      this.facing = -this.facing;
+      this.turnedAt = this.age;
+      this.turnWant = 0;
     }
     // Somewhere open to drift to, near (x, y).
     airGoal(x, y, r) {
@@ -260,10 +315,13 @@
       }
       if (this.infant) this.thinkInfant(dt);
       else this.thinkAdult(dt);
+      // a steady swing over the top, about 0.8 s end to end
+      this.faceS += U.clamp(this.facing - this.faceS, -2.5 * dt, 2.5 * dt);
+      this.updateLook(dt);
       // ease the body between the crook and the straight stabbing pose
       // (slowly enough to read as a wind-up, quickly for a clinging infant)
       const straight = this.state === 'windup' || this.state === 'stab' || this.state === 'stuck' || this.state === 'cling';
-      const rate = this.state === 'cling' ? 14 : this.state === 'windup' ? 6 : this.state === 'recover' ? 2.5 : 4;
+      const rate = this.state === 'cling' ? 14 : this.state === 'windup' ? 6 : this.state === 'recover' ? 4.5 : 4;
       this.curl += ((straight ? 0 : this.holding ? 0.45 : 1) - this.curl) * U.approach(rate, dt);
       const out = (straight && this.state !== 'cling') || this.state === 'stalk' || this.holding;
       this.needle += ((out ? 1 : 0) - this.needle) * U.approach(out ? 10 : 3, dt);
@@ -274,6 +332,29 @@
         this.pos.y += this.anchor.y - h.y;
       } else this.anchor = null;
       this.updateTail(dt);
+    }
+
+    // The head looks toward the prey it's stalking, else the way it's
+    // flying (never far upward: the nose still droops), else ahead.
+    updateLook(dt) {
+      let dx = this.facing;
+      let dy = 0;
+      const t = this.target || this.vengeance;
+      if (t && (this.state === 'stalk' || this.state === 'windup')) {
+        const tp = t.mainPoint();
+        const A = this.archPts();
+        const h = A[A.length - 1];
+        dx = tp.x - h.x;
+        dy = tp.y - h.y;
+      } else if (Math.hypot(this.vx, this.vy) > 25) {
+        dx = this.vx;
+        dy = this.vy;
+      }
+      const d = Math.hypot(dx, dy) || 1;
+      dx /= d;
+      dy = Math.max(dy / d, -0.2) + 0.35;
+      if (dx * this.facing < 0) dx *= 0.3; // a glance back, not a twist round
+      this.look = U.lerpAngle(this.look, Math.atan2(dy, dx), U.approach(3, dt));
     }
 
     // A creature to blame: the one nearest the infant (not a noodlefly).
@@ -398,8 +479,9 @@
         this.aim = this.facing > 0 ? 1.1 : Math.PI - 1.1;
         this.fly(dt, undefined, undefined, 0, 0);
         if (this.eatT > 4) {
-          this.eco.consume(this.holding, this);
-          this.holding = null;
+          // it sucks the insides out through the needle: the husk drops and
+          // stays, still there for scavengers
+          this.eco.drain(this.holding, this);
           this.eatT = 0;
           this.meals++;
           this.huntCd = U.rand(12, 25);
@@ -484,7 +566,7 @@
         const tip = this.needleTip();
         // the needle finds whatever it's pointed at
         for (const c of this.eco.creatures) {
-          if (c === this || c.dead || c.leaving || c.species.startsWith('noodlefly') || c.grabbedBy) continue;
+          if (c === this || c.dead || c.drained || c.leaving || c.species.startsWith('noodlefly') || c.grabbedBy) continue;
           if (c !== t && !this.diet.some((s) => (s.endsWith('*') ? c.species.startsWith(s.slice(0, -1)) : s === c.species))) continue;
           const parts = c.hitParts ? c.hitParts() : [{ x: c.x, y: c.y, r: 8 }];
           if (!parts.some((q) => U.dist(q.x, q.y, tip.x, tip.y) < q.r + 3)) continue;
@@ -511,12 +593,12 @@
       }
       if (this.state === 'recover') {
         // missed: coast to a stop, curling back up around the head
-        const f = Math.pow(0.03, dt);
+        const f = Math.pow(0.002, dt);
         this.vx *= f;
         this.vy *= f;
         this.anchor.x += this.vx * dt;
         this.anchor.y += this.vy * dt;
-        if (this.stateT > 0.9) {
+        if (this.stateT > 0.5) {
           this.anchor = null;
           this.attempts = (this.attempts || 0) + 1;
           if (this.attempts > 5 && !this.vengeance) {
@@ -540,11 +622,12 @@
       // steer the shoulder so that the head arrives there
       const wp = this.airWaypoint(dt, p.x + (sx - head.x), p.y + (sy - head.y));
       this.fly(dt, wp.x, wp.y, this.vengeance ? 170 : 130, 3);
-      if ((tp.x - head.x) * this.facing < -30 * L) this.facing = -this.facing; // only turn round if it's well behind
+      if ((tp.x - head.x) * this.facing < -30 * L) this.turn(); // only turn round if it's well behind
       this.aim = U.lerpAngle(this.aim, toT, U.approach(3, dt));
       const lined = U.dist(head.x, head.y, sx, sy) < 18 * L;
-      if (lined && this.stateT > 0.8 && this.W.lineClear(head.x, head.y, tp.x, tp.y)) {
+      if (lined && this.stateT > (this.attempts ? 0.25 : 0.8) && this.W.lineClear(head.x, head.y, tp.x, tp.y)) {
         this.setState('windup');
+        this.faceAim();
         this.anchor = { x: head.x, y: head.y };
         this.vx = this.vy = 0;
       }
@@ -556,6 +639,7 @@
     }
     startRecover() {
       this.setState('recover');
+      this.faceAim();
       const h = this.headPt();
       this.anchor = { x: h.x, y: h.y };
     }
@@ -671,7 +755,7 @@
       }
       // shading along the arch: a pale rim on the outside of the curl, a
       // dark line along the belly
-      const s = this.facing * (this.curl > 0.3 ? 1 : 0) || 1;
+      const s = (this.faceS >= 0 ? 1 : -1) * (this.curl > 0.3 ? 1 : 0) || 1;
       const edge = (off, color, from, to) => {
         ctx.strokeStyle = color;
         ctx.lineWidth = Math.max(ap, 0.8 * L);
@@ -775,7 +859,7 @@
       const L = this.L;
       const ap = this.eco.artPx || 1;
       const root = A[Math.min(A.length - 1, Math.floor(A.length * 0.3))];
-      const f = this.facing;
+      const f = this.faceS >= 0 ? 1 : -1; // the wings swap over mid-turn
       const angs = [-2.2, -1.85, 0.35, 0.7];
       const lens = [this.D.wing[0], this.D.wing[0] * 0.92, this.D.wing[1], this.D.wing[1] * 0.92];
       ctx.lineCap = 'butt';

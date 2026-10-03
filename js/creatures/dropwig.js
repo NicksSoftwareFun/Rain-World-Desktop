@@ -22,7 +22,10 @@
       this.spine = new RW.Chain(x, y, 3, [8, 7], U.sign(), 0);
       this.vx = 0;
       this.vy = 0;
-      this.caps = { walls: true, ceil: true, poles: false, fall: true, wallCost: 1.1, ceilCost: 1.0 };
+      // ceilLeap: a long straight-up jump from a floor to the underside of a
+      // ledge overhead (up to 9 cells), so they spread out under the ledges
+      // instead of all trekking to the screen edges to climb
+      this.caps = { walls: true, ceil: true, poles: false, fall: true, wallCost: 1.1, ceilCost: 1.0, ceilLeap: 9 };
       this.mask = { floor: true, walls: true, ceil: true, poles: false };
       this.pather = new RW.Pather(this, this.caps);
       this.legs = [];
@@ -253,6 +256,18 @@
         this.dropT -= dt;
         g = null;
       }
+      if (this.leap) {
+        // mid-leap: nothing to hold until it reaches the underside it's
+        // jumping for, where the long legs catch hold
+        const lp = this.leap;
+        lp.t += dt;
+        const near = U.dist(h.x, h.y, lp.tx, lp.ty) < W.cell * 1.3;
+        g = near || lp.t > lp.dur ? W.nearestSurface(h.x, h.y, 30, this.mask) : null;
+        if (g || lp.t > lp.dur + 0.8) {
+          this.leap = null;
+          this.pather.timer = Math.min(this.pather.timer, 0.1);
+        }
+      }
       this.grip = g;
       let leaving = false;
 
@@ -282,7 +297,35 @@
         const node = this.pather.current();
         let dvx = 0;
         let dvy = 0;
-        if (node && this.state !== 'wait' && this.state !== 'feed') {
+        let leapFor = null;
+        if (!this.leap && node && node.type === Nav.JUMP && g && this.state !== 'wait' && this.state !== 'feed') {
+          // a leap up to a ceiling: get under it, gather, spring
+          const prev = this.pather.previous();
+          if (!prev || U.dist(h.x, h.y, prev.x, prev.y) < W.cell * 1.2) {
+            this.leapWind = (this.leapWind || 0) + dt;
+            this.vx *= 0.8;
+            this.vy *= 0.8;
+            if (this.leapWind > 0.3) leapFor = node;
+          } else {
+            const dx = prev.x - h.x;
+            const dy = prev.y - h.y;
+            const d = Math.hypot(dx, dy) || 1;
+            dvx = (dx / d) * this.speed;
+            dvy = (dy / d) * this.speed;
+          }
+        } else this.leapWind = 0;
+        if (leapFor) {
+          // straight up on an arc that tops out right at the underside
+          this.leapWind = 0;
+          const apexY = leapFor.y - 4;
+          const vy0 = -Math.sqrt(2 * GRAV * Math.max(10, h.y - apexY));
+          const tUp = -vy0 / GRAV;
+          this.vx = (leapFor.x - h.x) / tUp;
+          this.vy = vy0;
+          this.leap = { t: 0, tx: leapFor.x, ty: leapFor.y, dur: tUp };
+          g = null;
+          this.grip = null;
+        } else if (node && !this.leap && node.type !== Nav.JUMP && this.state !== 'wait' && this.state !== 'feed') {
           let ty = node.y;
           if (node.type === Nav.FALL && g) {
             if (Math.abs(node.x - h.x) < W.cell * 0.6) this.dropT = 0.35;

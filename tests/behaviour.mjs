@@ -166,7 +166,7 @@ const checks = [
             grip.set(c.id, !!c.grip);
             if (c.state === 'wait' && state.get(c.id) !== 'wait') waits++;
             state.set(c.id, c.state);
-            if (had && !c.grip && (c.state === 'seek' || c.state === 'leave') && !(c.dropT > 0)) losses++;
+            if (had && !c.grip && (c.state === 'seek' || c.state === 'leave') && !(c.dropT > 0) && !c.leap) losses++; // a ceiling leap lets go on purpose
           }
         }
         const dwMin = frames / 3600;
@@ -341,6 +341,11 @@ const checks = [
           if (by && by.species === 'noodlefly') out.noodleMeals++;
           if (by && by.species === 'squidcada') out.squidMeals++;
           return cons(prey, by);
+        };
+        const drn = e.eco.drain.bind(e.eco);
+        e.eco.drain = (prey, by) => {
+          out.noodleMeals++;
+          return drn(prey, by);
         };
         const S = RW.Creatures.Squidcada.prototype;
         const ss = S.setState;

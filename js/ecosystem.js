@@ -293,6 +293,14 @@
       this.stats.eaten++;
     }
 
+    // A noodlefly has sucked a kill dry: the husk drops and stays on the map.
+    drain(prey, by) {
+      if (!prey || prey.dead) return;
+      if (by && by.holding === prey) by.release();
+      prey.drained = true;
+      this.stats.eaten++;
+    }
+
     burst(x, y, color, n) {
       for (let i = 0; i < n; i++) {
         const a = U.rand(0, U.TAU);

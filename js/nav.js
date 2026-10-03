@@ -169,6 +169,24 @@
           list.push(tcy * W.cols + tcx, Math.hypot(tx, ty) * 1.3 + 4);
         }
       }
+      // Ceiling leapers (dropwigs): straight up from a floor to the
+      // underside of a ledge overhead, when the column is open all the way.
+      // Cheap, so they spread out under the ledges instead of trekking to
+      // the screen edges to climb.
+      if (c.ceilLeap) {
+        for (const tx of [0, -1, 1]) {
+          const tcx = cx + tx;
+          if (!W.inBounds(tcx, cy) || W.solid(tcx, cy)) continue;
+          for (let ty = -2; ty >= -c.ceilLeap; ty--) {
+            const tcy = cy + ty;
+            if (!W.inBounds(tcx, tcy) || W.solid(tcx, tcy)) break;
+            if (W.solid(tcx, tcy - 1)) {
+              list.push(tcy * W.cols + tcx, -ty * 0.5 + 3);
+              break;
+            }
+          }
+        }
+      }
     }
     m.set(ci, list);
     return list;
@@ -304,7 +322,7 @@
         }
       }
 
-      if (c.jumpX > 0) {
+      if (c.jumpX > 0 || c.ceilLeap > 0) {
         const list = jumpEdges(W, cx, cy, c);
         for (let k = 0; k < list.length; k += 2) relax(list[k], list[k + 1], JUMP);
       }
@@ -341,7 +359,7 @@
   }
 
   function capsKey(c) {
-    return [c.fly ? 1 : 0, c.walls ? 1 : 0, c.ceil ? 1 : 0, c.poles ? 1 : 0, c.fall ? 1 : 0, c.jumpX | 0, c.jumpUp | 0, c.leapPoles ? 1 : 0].join('');
+    return [c.fly ? 1 : 0, c.walls ? 1 : 0, c.ceil ? 1 : 0, c.poles ? 1 : 0, c.fall ? 1 : 0, c.jumpX | 0, c.jumpUp | 0, c.leapPoles ? 1 : 0, c.ceilLeap | 0].join(',');
   }
 
   // Every cell a creature with these caps can be in (and the standable ones),
