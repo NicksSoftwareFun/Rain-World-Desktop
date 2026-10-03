@@ -233,7 +233,8 @@
         // eating: hovering, arms wrapped round the catch
         this.setState('eat');
         this.eatT = (this.eatT || 0) + dt;
-        this.fly(dt, undefined, undefined, 0, 0, 40);
+        const g = this.keepCatchOnScreen();
+        this.fly(dt, g ? g.x : undefined, g ? g.y : undefined, g ? 60 : 0, g ? 3 : 0, 40);
         if (this.eatT > 3) {
           eco.consume(this.holding, this);
           this.holding = null;

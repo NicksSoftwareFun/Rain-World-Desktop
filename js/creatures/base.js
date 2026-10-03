@@ -896,6 +896,21 @@
       const m = this.mainPoint();
       return [m.x - 48, m.y - 48, m.x + 48, m.y + 48];
     }
+    // Feeding on the wing: where to drift so the catch hanging off us stays
+    // on screen (null when it already is).
+    keepCatchOnScreen() {
+      const c = this.holding;
+      if (!c) return null;
+      const m = 30;
+      const W = this.W;
+      let dx = 0;
+      let dy = 0;
+      if (c.x < m) dx = m - c.x;
+      else if (c.x > W.w - m) dx = W.w - m - c.x;
+      if (c.y < m) dy = m - c.y;
+      else if (c.y > W.h - m) dy = W.h - m - c.y;
+      return dx || dy ? { x: this.pos.x + dx * 2, y: this.pos.y + dy * 2 } : null;
+    }
     static ptsBounds(pts, pad) {
       let x0 = Infinity;
       let y0 = Infinity;

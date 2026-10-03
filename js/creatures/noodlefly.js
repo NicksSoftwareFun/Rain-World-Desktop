@@ -330,6 +330,14 @@
         const h = this.headPt();
         this.pos.x += this.anchor.x - h.x;
         this.pos.y += this.anchor.y - h.y;
+        // straightening out behind the head mustn't push the body off
+        // screen: if it would, the head gives way instead
+        const cx = U.clamp(this.pos.x, 6, this.W.w - 6);
+        const cy = U.clamp(this.pos.y, 6, this.W.h - 6);
+        this.anchor.x += cx - this.pos.x;
+        this.anchor.y += cy - this.pos.y;
+        this.pos.x = cx;
+        this.pos.y = cy;
       } else this.anchor = null;
       this.updateTail(dt);
     }
@@ -477,7 +485,8 @@
         this.setState('eat');
         this.eatT = (this.eatT || 0) + dt;
         this.aim = this.facing > 0 ? 1.1 : Math.PI - 1.1;
-        this.fly(dt, undefined, undefined, 0, 0);
+        const g = this.keepCatchOnScreen();
+        this.fly(dt, g ? g.x : undefined, g ? g.y : undefined, g ? 60 : 0, g ? 3 : 0);
         if (this.eatT > 4) {
           // it sucks the insides out through the needle: the husk drops and
           // stays, still there for scavengers
