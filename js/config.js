@@ -406,44 +406,44 @@
     turf: {
       label: 'Lizard turf wars',
       note: 'every colour of lizard staking out ledges, fighting over hangouts and kills',
-      weights: { lizard_pink: 3, lizard_green: 2, lizard_blue: 3, lizard_white: 1.5, lizard_red: 1, lizard_yellow: 2.5, lizard_cyan: 2, slugcat: 2, batfly: 3, centipede: 4 },
+      weights: { lizard_pink: 3, lizard_green: 2, lizard_blue: 3, lizard_white: 1.5, lizard_red: 1, lizard_yellow: 2.5, lizard_cyan: 2, slugcat: 2, batfly: 3, centipede: 4, squidcada: 1 },
       caps: { lizard_pink: 2, lizard_green: 2, lizard_blue: 2, lizard_white: 2, lizard_red: 2, lizard_yellow: 2, lizard_cyan: 2 },
     },
     hunters: {
       label: 'Slugcat hunters',
       note: 'slugcats with rocks and spears knocking down fruit and batflies, fending off a few lizards',
-      weights: { slugcat: 8, batfly: 5, centipede: 5, centipede_medium: 1, lizard_pink: 1, lizard_green: 1 },
+      weights: { slugcat: 8, batfly: 5, centipede: 5, centipede_medium: 1, lizard_pink: 1, lizard_green: 1, squidcada: 1.5, noodlefly: 0.5 },
       caps: { slugcat: 2 },
       weapons: 1.6,
     },
     centipedes: {
       label: 'Centipede hunt',
       note: 'centipedes of every size; the big ones go after lizards',
-      weights: { centipede: 5, centipede_medium: 3, centipede_large: 2, lizard_pink: 2, lizard_blue: 2, lizard_green: 1.5, slugcat: 2, batfly: 3 },
+      weights: { centipede: 5, centipede_medium: 3, centipede_large: 2, lizard_pink: 2, lizard_blue: 2, lizard_green: 1.5, slugcat: 2, batfly: 3, squidcada: 1, noodlefly: 0.4 },
       caps: { centipede_medium: 2, centipede_large: 2 },
     },
     ambush: {
       label: 'Ambushers',
       note: 'dropwigs on the ceilings and white lizards stalking in camouflage',
-      weights: { dropwig: 5, lizard_white: 3, slugcat: 4, batfly: 4, centipede: 4 },
+      weights: { dropwig: 5, lizard_white: 3, slugcat: 4, batfly: 4, centipede: 4, squidcada: 1.5 },
       caps: { dropwig: 2, lizard_white: 3 },
     },
     daddy: {
       label: "Daddy's buffet",
       note: 'Daddy Long Legs drifting through a crowd of prey',
-      weights: { daddy: 2.5, slugcat: 5, batfly: 4, centipede: 5, lizard_pink: 1 },
+      weights: { daddy: 2.5, slugcat: 5, batfly: 4, centipede: 5, lizard_pink: 1, squidcada: 2, noodlefly: 0.5 },
       caps: { daddy: 2 },
     },
-    fliers: {
-      label: 'Fliers',
-      note: 'noodlefly families and squidcada flocks overhead, with prey and a few hunters below',
-      weights: { noodlefly: 2, squidcada: 3, slugcat: 3, batfly: 3, centipede: 4, lizard_pink: 1, lizard_blue: 1, centipede_large: 0.5 },
-      caps: { noodlefly: 2, squidcada: 1.5 },
+    flyers: {
+      label: 'Flyers',
+      note: 'noodlefly families, squidcada flocks and batflies, with slugcats and small centipedes for prey',
+      weights: { noodlefly: 2.5, squidcada: 3, batfly: 3, slugcat: 4, centipede: 5 },
+      caps: { noodlefly: 2, squidcada: 1.5, slugcat: 1.5, centipede: 1.5 },
     },
     peaceful: {
       label: 'Peaceful',
-      note: 'no predators: slugcats, batflies and small centipedes going about their day',
-      weights: { slugcat: 5, batfly: 5, centipede: 5 },
+      note: 'no predators: slugcats, batflies, small centipedes and squidcadas going about their day',
+      weights: { slugcat: 5, batfly: 5, centipede: 5, squidcada: 2 },
     },
   };
   RW.LIZARD_SPECIES = LIZ;

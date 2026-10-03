@@ -333,7 +333,7 @@ const checks = [
       const m = await page.evaluate((mins) => {
         const e = RW_APP.engine;
         e.cfg.rain.enabled = false;
-        RW.applyWildlifePreset(e.cfg, 'fliers');
+        RW.applyWildlifePreset(e.cfg, 'flyers');
         e.restartWildlife();
         const out = { noodleMeals: 0, squidMeals: 0, squidRests: 0, squidPlays: 0, familiesLeft: 0, leftEarly: 0, infantsLeftWithFamily: 0, offScreen: 0, bad: 0 };
         const cons = e.eco.consume.bind(e.eco);
@@ -485,7 +485,7 @@ const checks = [
       }),
     judge: (m) => {
       const s = m.sizes;
-      const peaceful = new Set(['batfly', 'centipede', 'slugcat']);
+      const peaceful = new Set(['batfly', 'centipede', 'slugcat', 'squidcada']);
       return [
         m.defaults !== 'normal/balanced' && `defaults are ${m.defaults}, expected normal/balanced`,
         s.compact.tiers !== 3 && `compact should have 3 ledge rows (${s.compact.tiers})`,

@@ -10,31 +10,55 @@
   const RW = window.RW;
   const U = RW.U;
   const AIR = { fly: true, key: 'air' };
-  const TAIL_GRAV = 520;
 
-  // Colour variants, by how often they turn up (the wiki's palettes: adults
-  // mostly reds, then pinks, purples, white, black with red wings, rarely
-  // blue with red eyes; infants reds and pinks, now and then grey).
+  // Proportions in world units (a slugcat stands about 30 tall). From the
+  // game: the adult's arch is ~2.7 slugcats wide, its tail ~4 slugcats long,
+  // each wing ~3; infants are about a slugcat long. Bodies are thin for their
+  // size (the arch ~6 thick at its top, the tail a hairline).
+  const DIMS = {
+    adult: { archN: 10, nose: 3, archSeg: 13, tailN: 24, tailSeg: 5, archW: [1.5, 3.0, 1.5], tailW: 1.3, needleIn: 6, needleOut: 46, wing: [86, 66], clear: 60, rad: 6, tailGrav: 700 },
+    infant: { archN: 7, nose: 2, archSeg: 3.2, tailN: 7, tailSeg: 2.0, archW: [0.6, 1.1, 0.7], tailW: 0.7, needleIn: 1.5, needleOut: 9, wing: [15, 11], clear: 22, rad: 2.5, tailGrav: 150 },
+  };
+
+  // Colour variants, by how often they turn up (the wiki's eight: red,
+  // purplish pink, bright red, dark purple, white, uniform red, black with
+  // red-rooted wings, blue or purple with red eyes). Tails fade body -> end.
   const ADULT = [
-    [{ body: '#8e1730', stripe: '#d4566e', end: '#24060d', wing: '#c9cad3', eye: '#d9d6dc' }, 5],
-    [{ body: '#a63c6e', stripe: '#e48ab4', end: '#2c0c1e', wing: '#d0cbd8', eye: '#e0dce4' }, 2],
-    [{ body: '#c21d24', stripe: '#f2685e', end: '#320708', wing: '#d6cfcf', eye: '#e4dede' }, 2],
-    [{ body: '#4c1a46', stripe: '#8e4e86', end: '#14060f', wing: '#bdb9c9', eye: '#d0ccd8' }, 1.5],
-    [{ body: '#d6d1d6', stripe: '#fbfafb', end: '#77727b', wing: '#e2e2ea', eye: '#4a4650' }, 1],
-    [{ body: '#241719', stripe: '#553339', end: '#0a0607', wing: '#c8484c', eye: '#d6d2d2' }, 1],
-    [{ body: '#2b3c8e', stripe: '#6f8fe6', end: '#0c1230', wing: '#c4cbe0', eye: '#e04040' }, 0.3],
+    [{ body: '#8e1730', stripe: '#d4566e', belly: '#4a1020', end: '#3a1124', wing: '#aeb2c0', eye: '#d9d6dc' }, 4],
+    [{ body: '#b02e6e', stripe: '#e58ab8', belly: '#5a1438', end: '#3a1430', wing: '#b8b4c4', wingBase: '#d85a90', eye: '#e6e2ea' }, 2],
+    [{ body: '#e0404e', stripe: '#ff9da0', belly: '#7a1622', end: '#4a1420', wing: '#c4bcbc', wingBase: '#d85a70', eye: '#f0e8e8' }, 2],
+    [{ body: '#3c2070', stripe: '#6c50b8', belly: '#1c1036', end: '#22163e', wing: '#aeacc0', eye: '#d8d4e4' }, 1.5],
+    [{ body: '#e6e4e6', stripe: '#ffffff', belly: '#a8a4ac', end: '#8a8890', wing: '#d8d8e0', eye: '#4a4650' }, 1],
+    [{ body: '#c41a2a', stripe: '#d63442', belly: '#7a0e18', end: '#86141e', wing: '#c0b8b8', eye: '#e8e0e0' }, 1.5],
+    [{ body: '#1a1418', stripe: '#463238', belly: '#0c0a0c', end: '#5a1820', wing: '#c8c4c4', wingBase: '#c8343c', eye: '#d6d2d2' }, 1],
+    [{ body: '#2a4aa8', stripe: '#6a8ae8', belly: '#162a64', end: '#1c2a5a', wing: '#e6dcb0', eye: '#e03a3a' }, 0.3],
+    [{ body: '#4a2a7c', stripe: '#7a5ab8', belly: '#24143e', end: '#2a1a46', wing: '#b4b0c4', eye: '#e03a3a' }, 0.5],
   ];
+  // infants: slim dusty-rose or crimson crescents (now and then grey)
   const INFANT = [
-    [{ body: '#b8304a', stripe: '#ec7f92', end: '#4a0d18', wing: '#d8d3da', eye: '#f0ecf0' }, 5],
-    [{ body: '#d0587a', stripe: '#f4a6bc', end: '#5a1a2c', wing: '#dcd6de', eye: '#f4eef4' }, 2],
-    [{ body: '#86767c', stripe: '#bcadb3', end: '#2a2226', wing: '#d0ccd2', eye: '#f0eeee' }, 1],
+    [{ body: '#c97d88', stripe: '#e8c3ca', belly: '#8a4a56', end: '#7a3a48', wing: '#a9c4c8', eye: '#f0ecf0' }, 3],
+    [{ body: '#e0405a', stripe: '#f4a0ae', belly: '#8a1a2e', end: '#7a2032', wing: '#a9c4c8', eye: '#f4eef4' }, 3],
+    [{ body: '#8a7a80', stripe: '#c0b2b8', belly: '#4a4044', end: '#5a4e54', wing: '#b4c4c8', eye: '#f0eeee' }, 1],
   ];
+
+  // One pass of corner cutting: smooths the jointed tail into a curve.
+  function chaikin(P) {
+    const out = [P[0]];
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i];
+      const b = P[i + 1];
+      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 }, { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    out.push(P[P.length - 1]);
+    return out;
+  }
 
   class Noodlefly extends RW.Creature {
     constructor(eco, species, x, y, family) {
       super(eco, species, x, y);
       this.infant = species === 'noodlefly_infant';
-      const L = (this.L = (this.infant ? 0.42 : 1) * (this.p.size || 1));
+      const L = (this.L = this.p.size || 1);
+      this.D = DIMS[this.infant ? 'infant' : 'adult'];
       this.isFlier = true;
       this.pos = { x, y };
       this.vx = U.rand(-30, 30);
@@ -45,9 +69,9 @@
       this.needle = 0; // 0 retracted .. 1 fully out
       this.flap = U.rand(0, 10);
       this.col = U.weighted(this.infant ? INFANT : ADULT);
-      const n = this.infant ? 5 : 12;
+      const n = this.D.tailN;
       const segs = [];
-      for (let i = 0; i < n; i++) segs.push((this.infant ? 2.6 : 5.4) * L * (1 - (i / n) * 0.3));
+      for (let i = 0; i < n; i++) segs.push(this.D.tailSeg * L * (1 - (i / n) * 0.25));
       this.tail = new RW.Chain(x, y, n, segs, 0, 1);
       this.family = family || { adult: null, infants: [] };
       if (this.infant) this.family.infants.push(this);
@@ -71,7 +95,7 @@
     }
     bounds() {
       const A = this.archPts();
-      return RW.Creature.ptsBounds(A.concat(this.tail.pts, [this.needleTip()]), 26 * this.L);
+      return RW.Creature.ptsBounds(A.concat(this.tail.pts, [this.needleTip()]), (this.D.wing[0] + 4) * this.L);
     }
     carry(dx, dy) {
       if (this.state === 'stuck' || this.corpse) this.shiftAll(dx, dy);
@@ -88,9 +112,12 @@
     hitParts() {
       const A = this.archPts();
       const h = A[A.length - 1];
+      const top = A[Math.floor(A.length * 0.45)];
+      const r = this.D.rad * this.L;
       return [
-        { x: this.pos.x, y: this.pos.y, r: 5 * this.L + 1, part: 'body' },
-        { x: h.x, y: h.y, r: 4 * this.L + 1, part: 'head' },
+        { x: this.pos.x, y: this.pos.y, r: r + 1, part: 'body' },
+        { x: top.x, y: top.y, r: r + 2, part: 'body' },
+        { x: h.x, y: h.y, r: r, part: 'head' },
       ];
     }
     onRockHit() {
@@ -113,18 +140,26 @@
     // resting, straightened along `aim` to stab).
     archPts() {
       const L = this.L;
-      const n = this.infant ? 5 : 7;
-      const seg = (this.infant ? 3.1 : 4.7) * L;
+      const n = this.D.archN;
+      const seg = this.D.archSeg * L;
       const out = [{ x: this.pos.x, y: this.pos.y }];
       let x = this.pos.x;
       let y = this.pos.y;
       let ang = 0;
+      const noseAt = n - this.D.nose;
+      let noseBase = 0;
       for (let k = 0; k < n; k++) {
         const t = k / (n - 1);
-        // facing right: starts up and forward, curls over to point down
-        const crook = -0.8 + 2.55 * t + Math.sin(this.age * 1.7 + k * 0.6) * 0.04;
+        // facing right: rises straight up out of the tail, curls over the top
+        // and comes down; the nose droops on round, limp, until the
+        // proboscis comes out (feeding or hunting), when it straightens into
+        // a spear
+        let crook = -1.57 + 3.1 * Math.min(1, k / (noseAt - 1)) + Math.sin(this.age * 1.7 + k * 0.6) * 0.03;
+        if (k >= noseAt) crook += (k - noseAt + 1) * 0.42 + Math.sin(this.age * 1.1) * 0.05;
         const cr = this.facing > 0 ? crook : Math.PI - crook;
         ang = U.lerpAngle(this.aim, cr, this.curl);
+        if (k === noseAt - 1) noseBase = ang;
+        if (k >= noseAt) ang = U.lerpAngle(ang, noseBase, U.clamp(this.needle * 1.4, 0, 1));
         x += Math.cos(ang) * seg;
         y += Math.sin(ang) * seg;
         out.push({ x, y });
@@ -135,7 +170,7 @@
     needleTip() {
       const A = this.archPts();
       const h = A[A.length - 1];
-      const len = (2 + this.needle * 24) * this.L;
+      const len = (this.D.needleIn + this.needle * (this.D.needleOut - this.D.needleIn)) * this.L;
       return { x: h.x + Math.cos(this.headAng) * len, y: h.y + Math.sin(this.headAng) * len };
     }
     // The tail hangs from the shoulder, swinging behind when it darts about.
@@ -143,7 +178,7 @@
       const P = this.tail.pts;
       P[0].x = P[0].px = this.pos.x;
       P[0].y = P[0].py = this.pos.y;
-      this.tail.verlet(1, 0.9, 0, grav === undefined ? TAIL_GRAV : grav, dt);
+      this.tail.verlet(1, 0.9, 0, grav === undefined ? this.D.tailGrav : grav, dt);
       this.tail.follow(1);
       this.tail.limitBend(0.5, 2, P.length, 0.5);
       for (let i = 2; i < P.length; i++) this.W.collideCircle(P[i], 1.5);
@@ -166,7 +201,7 @@
         ax -= this.vx * 1.5;
         ay -= this.vy * 1.5;
       }
-      const clear = (this.infant ? 14 : 26) + 6;
+      const clear = this.D.clear * this.L;
       const s = this.W.nearestSurface(p.x, p.y, clear, null);
       if (s) {
         const k = (clear - s.d) * 14;
@@ -177,7 +212,7 @@
       this.vy += ay * dt;
       p.x += this.vx * dt;
       p.y += this.vy * dt;
-      const c = this.W.collideCircle(p, 3 * this.L + 1);
+      const c = this.W.collideCircle(p, this.D.rad * this.L);
       if (c) {
         const vn = this.vx * c.nx + this.vy * c.ny;
         if (vn < 0) {
@@ -218,9 +253,9 @@
       if (this.infant) this.thinkInfant(dt);
       else this.thinkAdult(dt);
       // ease the body between the crook and the straight stabbing pose
-      const straight = this.state === 'windup' || this.state === 'stab' || this.state === 'stuck';
+      const straight = this.state === 'windup' || this.state === 'stab' || this.state === 'stuck' || this.state === 'cling';
       this.curl += ((straight ? 0 : this.holding ? 0.45 : 1) - this.curl) * U.approach(straight ? 14 : 4, dt);
-      const out = straight || this.state === 'stalk' || this.holding;
+      const out = (straight && this.state !== 'cling') || this.state === 'stalk' || this.holding;
       this.needle += ((out ? 1 : 0) - this.needle) * U.approach(out ? 10 : 3, dt);
       this.updateTail(dt);
     }
@@ -287,7 +322,7 @@
       this.vx *= Math.pow(0.4, dt);
       p.x += this.vx * dt;
       p.y += this.vy * dt;
-      const c = this.W.collideCircle(p, 3 * this.L + 1);
+      const c = this.W.collideCircle(p, this.D.rad * this.L);
       if (c) {
         const vn = this.vx * c.nx + this.vy * c.ny;
         if (vn < 0) {
@@ -399,8 +434,8 @@
         p.y += this.vy * dt;
         if (this.stateT > 0.5) {
           this.setState('stab');
-          this.vx = Math.cos(this.aim) * 460;
-          this.vy = Math.sin(this.aim) * 460;
+          this.vx = Math.cos(this.aim) * 480;
+          this.vy = Math.sin(this.aim) * 480;
         }
         return;
       }
@@ -451,9 +486,9 @@
       const dx = p.x - tp.x;
       const dy = p.y - tp.y;
       const d = Math.hypot(dx, dy) || 1;
-      const reach = 70;
+      const reach = (this.D.archN * this.D.archSeg + this.D.needleOut) * this.L * 0.75;
       const sx = tp.x + (dx / d) * reach;
-      const sy = tp.y + (dy / d) * reach * 0.6 - 28;
+      const sy = tp.y + (dy / d) * reach * 0.6 - reach * 0.3;
       this.facing = tp.x >= p.x ? 1 : -1;
       this.fly(dt, sx, sy, this.vengeance ? 170 : 130, 3);
       const clear = this.W.lineClear(p.x, p.y, tp.x, tp.y);
@@ -483,7 +518,7 @@
           const taken = new Set(this.family.infants.map((i) => i.cling));
           const n = a.tail.pts.length;
           const spots = [];
-          for (let i = Math.floor(n * 0.45); i < n; i += 2) if (!taken.has(i)) spots.push(i);
+          for (let i = Math.floor(n * 0.6); i < n; i += 2) if (!taken.has(i)) spots.push(i);
           if (spots.length) this.cling = U.pick(spots);
         }
       }
@@ -499,22 +534,33 @@
         return;
       }
       if (this.cling >= 0) {
-        // hanging off the adult's tail, swinging with it
-        const tp = a.tail.pts[Math.min(this.cling, a.tail.pts.length - 1)];
-        p.x += (tp.x - p.x) * U.approach(12, dt);
-        p.y += (tp.y + 2 - p.y) * U.approach(12, dt);
+        // clinging to the adult's tail: lying along it, head up toward the
+        // adult, swinging with it
+        const T = a.tail.pts;
+        const i = Math.min(this.cling, T.length - 1);
+        const tp = T[i];
+        const up = T[i - 1];
+        const ang = Math.atan2(up.y - tp.y, up.x - tp.x);
+        const side = (this.id % 3) - 1;
+        const ox = -Math.sin(ang) * (side || 1) * 3;
+        const oy = Math.cos(ang) * (side || 1) * 3;
+        p.x += (tp.x + ox - p.x) * U.approach(12, dt);
+        p.y += (tp.y + oy - p.y) * U.approach(12, dt);
         this.vx = a.vx;
         this.vy = a.vy;
-        this.facing = this.id % 2 ? 1 : -1;
+        this.aim = ang;
         this.setState('cling');
         return;
       }
       this.setState('drift');
       if (withParent) {
         // circling the adult loosely
-        const ang = this.age * 0.9 + this.id * 2.1;
-        const r = 30 + (this.id % 3) * 9;
-        this.fly(dt, a.pos.x + Math.cos(ang) * r, a.pos.y + Math.sin(ang) * r * 0.6 + 10, 120, 3);
+        // circling the adult's arch loosely
+        const ang = this.age * 0.7 + this.id * 2.1;
+        const r = 55 + (this.id % 3) * 18;
+        const cx = a.pos.x + a.facing * a.D.archSeg * a.D.archN * 0.3;
+        const cy = a.pos.y - a.D.archSeg * a.D.archN * 0.15;
+        this.fly(dt, cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.6, 140, 3);
       } else {
         this.goalT -= dt;
         if (!this.goal || this.goalT <= 0) {
@@ -530,96 +576,124 @@
       const A = this.archPts();
       const T = this.tail.pts;
       const L = this.L;
+      const D = this.D;
       const col = this.col;
       const ap = this.eco.artPx || 1;
       const flying = !this.corpse && !(this.stunT > 0) && !this.grabbedBy;
       ctx.save();
       ctx.globalAlpha = this.alpha;
-      if (flying && this.state !== 'cling') this.drawWings(ctx, A, 0);
+      if (flying && this.state !== 'cling') this.drawWings(ctx, A);
 
-      // one tapering line: tail end -> shoulder -> head
-      const pts = T.slice().reverse().concat(A.slice(1));
-      const nT = T.length;
+      // one tapering line: tail end -> shoulder -> head. The tail is a
+      // hairline thickening toward the shoulder; the arch is thickest over
+      // its top and thins to the head.
+      const Ts = chaikin(T);
+      const pts = Ts.slice().reverse().concat(A.slice(1));
+      const nT = Ts.length;
+      const nA = A.length - 1;
       const w = pts.map((q, i) => {
-        if (i < nT) return Math.max(0.55 * ap, U.lerp(0.5, 1.7, i / (nT - 1)) * L);
-        const k = (i - nT + 1) / (A.length - 1);
-        return Math.max(0.6 * ap, U.lerp(2.1, 1.3, k) * L);
+        if (i < nT) return Math.max(0.55 * ap, U.lerp(0.25, 1, Math.pow(i / (nT - 1), 1.5)) * D.tailW * L);
+        const k = (i - nT + 1) / nA;
+        const wa = k < 0.45 ? U.lerp(D.archW[0], D.archW[1], U.smooth(k / 0.45)) : U.lerp(D.archW[1], D.archW[2], U.smooth((k - 0.45) / 0.55));
+        return Math.max(0.6 * ap, wa * L);
       });
-      ctx.fillStyle = col.body;
-      U.taperPath(ctx, pts, w);
-      ctx.fill();
-      // the tail darkens toward its end
-      const endN = Math.ceil(nT * 0.55);
-      ctx.fillStyle = col.end;
-      U.taperPath(ctx, pts.slice(0, endN + 1), w.slice(0, endN + 1).map((x) => x + 0.05));
-      ctx.fill();
-      // a pale stripe along the top of the arch
-      ctx.strokeStyle = col.stripe;
-      ctx.lineWidth = Math.max(ap * 0.75, 0.9 * L);
-      ctx.beginPath();
-      for (let i = 0; i < A.length - 1; i++) {
-        const a = A[i];
-        const b = A[i + 1];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const d = Math.hypot(dx, dy) || 1;
-        // offset to the outside of the curl
-        const s = this.facing * (this.curl > 0.3 ? 1 : 0) || 1;
-        const ox = (dy / d) * 0.8 * L * s;
-        const oy = (-dx / d) * 0.8 * L * s;
-        if (i === 0) ctx.moveTo(a.x + ox, a.y + oy);
-        ctx.lineTo(b.x + ox, b.y + oy);
+      // the tail fades body -> end in three bands; the arch is body colour
+      const bands = [
+        [0, Math.ceil(nT * 0.3), col.end],
+        [Math.ceil(nT * 0.3) - 1, Math.ceil(nT * 0.65), U.rgba(U.mix(col.body, col.end, 0.5))],
+        [Math.ceil(nT * 0.65) - 1, pts.length, col.body],
+      ];
+      for (const [a, b, c] of bands) {
+        ctx.fillStyle = c;
+        U.taperPath(ctx, pts.slice(a, b), w.slice(a, b));
+        ctx.fill();
       }
-      ctx.stroke();
+      // shading along the arch: a pale rim on the outside of the curl, a
+      // dark line along the belly
+      const s = this.facing * (this.curl > 0.3 ? 1 : 0) || 1;
+      const edge = (off, color, from, to) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(ap, 0.8 * L);
+        ctx.beginPath();
+        for (let i = from; i < to; i++) {
+          const a = A[i];
+          const b = A[i + 1];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const wi = w[nT + i - 1 + 1] || w[w.length - 1];
+          const o = (wi - Math.max(ap, 0.8 * L) * 0.6) * off;
+          const ox = (dy / d) * o * s;
+          const oy = (-dx / d) * o * s;
+          if (i === from) ctx.moveTo(a.x + ox, a.y + oy);
+          ctx.lineTo(b.x + ox, b.y + oy);
+        }
+        ctx.stroke();
+      };
+      if (D.archW[1] * L > 1.4 * ap) {
+        edge(1, col.stripe, 1, A.length - 2);
+        edge(-1, col.belly, 2, A.length - 2);
+      } else if (this.state !== 'cling') {
+        edge(0.6, col.stripe, 1, A.length - 2);
+      }
 
       const h = A[A.length - 1];
       const hx = Math.cos(this.headAng);
       const hy = Math.sin(this.headAng);
-      // short dangling legs under the front of the arch
-      if (!this.infant || L > 0.3) {
-        ctx.strokeStyle = col.end;
-        ctx.lineWidth = Math.max(ap * 0.7, 0.7 * L);
+      // adults: five little claws hanging under the top and front of the arch
+      if (!this.infant) {
+        ctx.strokeStyle = col.belly;
+        ctx.lineWidth = Math.max(ap, 0.9 * L);
         ctx.beginPath();
-        for (const k of [A.length - 3, A.length - 2]) {
-          const q = A[k];
-          for (const s of [-1, 1]) {
-            const sw = Math.sin(this.age * 6 + k + s) * 0.6 * L;
-            ctx.moveTo(q.x, q.y + 1.2 * L);
-            ctx.lineTo(q.x + s * 1.2 * L + sw, q.y + 3.6 * L);
-            ctx.lineTo(q.x + s * 2.2 * L + sw, q.y + 4.4 * L);
-          }
+        for (let j = 0; j < 5; j++) {
+          const q = A[Math.min(A.length - 2, 4 + j)];
+          const sw = Math.sin(this.age * 5 + j * 1.3) * 0.8 * L;
+          const kx = q.x + this.facing * 1.2 * L;
+          const ky = q.y + D.archW[1] * L * 0.6;
+          ctx.moveTo(kx, ky);
+          ctx.lineTo(kx + sw, ky + 3.5 * L);
+          ctx.lineTo(kx + sw + this.facing * 1.4 * L, ky + 5 * L);
         }
         ctx.stroke();
       }
-      // the needle: black, a pale red base and a white tip when it's fresh out
-      const nl = (2 + this.needle * 24) * L;
-      ctx.lineWidth = Math.max(ap * 0.75, 0.8 * L);
-      ctx.strokeStyle = '#1b1216';
-      ctx.beginPath();
-      ctx.moveTo(h.x, h.y);
-      ctx.lineTo(h.x + hx * nl, h.y + hy * nl);
-      ctx.stroke();
+      // the needle: black, with a pale red base and a white tip, the parts
+      // that read against a dark room
+      const nl = (D.needleIn + this.needle * (D.needleOut - D.needleIn)) * L;
+      const lw = Math.max(1.15 * ap, (this.infant ? 0.7 : 1.2) * L);
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = lw;
+      const seg = (from, to, color) => {
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(h.x + hx * from, h.y + hy * from);
+        ctx.lineTo(h.x + hx * to, h.y + hy * to);
+        ctx.stroke();
+      };
+      seg(0, nl, '#1b1216');
       if (this.needle > 0.3) {
-        ctx.strokeStyle = '#d98e96';
-        ctx.beginPath();
-        ctx.moveTo(h.x, h.y);
-        ctx.lineTo(h.x + hx * 3 * L, h.y + hy * 3 * L);
-        ctx.stroke();
-        ctx.strokeStyle = '#f4f0ee';
-        ctx.beginPath();
-        ctx.moveTo(h.x + hx * (nl - 2.5 * L), h.y + hy * (nl - 2.5 * L));
-        ctx.lineTo(h.x + hx * nl, h.y + hy * nl);
-        ctx.stroke();
+        seg(0, Math.min(nl, 6 * L), '#d98e96');
+        seg(Math.max(0, nl - 4 * L), nl, '#f4f0ee');
       }
-      // small oval eyes either side of the head
-      const ex = h.x - hx * 1.6 * L;
-      const ey = h.y - hy * 1.6 * L;
-      const px = -hy;
-      const py = hx;
-      ctx.fillStyle = this.corpse ? '#111' : col.eye;
-      const es = Math.max(ap, 1.1 * L);
-      for (const s of [-1, 1]) ctx.fillRect(ex + px * s * 1.3 * L - es / 2, ey + py * s * 1.3 * L - es / 2, es, es);
-      if (flying && this.state === 'cling') this.drawWings(ctx, A, 1);
+      // adults: a small eye on the dorsal side, just behind the snout
+      if (!this.infant) {
+        const ex = h.x - hx * 3 * L + -hy * s * 1.4 * L;
+        const ey = h.y - hy * 3 * L + hx * s * 1.4 * L;
+        const es = Math.max(2 * ap, 2 * L);
+        if (this.corpse) {
+          ctx.strokeStyle = '#111';
+          ctx.lineWidth = ap * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(ex - es, ey - es);
+          ctx.lineTo(ex + es, ey + es);
+          ctx.moveTo(ex + es, ey - es);
+          ctx.lineTo(ex - es, ey + es);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = col.eye;
+          ctx.fillRect(ex - es / 2, ey - es / 2, es, es);
+        }
+      }
+
       // an infant's cry: a few pale rings
       if (this.cryT > 0) {
         this.cryT -= 1 / 60;
@@ -632,28 +706,37 @@
       ctx.restore();
       this.drawDebug(ctx);
     }
-    // Four long thin blades from the shoulder, a blur of beats (folded back
-    // while clinging).
-    drawWings(ctx, A, folded) {
+    // Four long slim wings from the top of the arch, asymmetric (two
+    // sweeping up and back, two down across the head), each a solid blade
+    // (thin lines break up under the pixel filter); a vivid root band on
+    // some variants.
+    drawWings(ctx, A) {
       const L = this.L;
       const ap = this.eco.artPx || 1;
-      const root = A[1];
-      const len = (this.infant ? 9 : 21) * L;
-      ctx.fillStyle = this.col.wing;
-      const base = folded ? [-2.3, -2.0] : [-1.05, -0.6, 0.6, 1.05];
-      for (let i = 0; i < base.length; i++) {
-        const beat = folded ? 0 : Math.sin(this.flap + i * 1.7) * 0.5;
-        const a = -Math.PI / 2 + (base[i] + beat) * (folded ? this.facing : 1);
-        const tx = root.x + Math.cos(a) * len;
-        const ty = root.y + Math.sin(a) * len;
-        const nx = -Math.sin(a) * Math.max(ap * 0.6, 0.9 * L);
-        const ny = Math.cos(a) * Math.max(ap * 0.6, 0.9 * L);
+      const root = A[Math.min(A.length - 1, Math.floor(A.length * 0.3))];
+      const f = this.facing;
+      const angs = [-2.2, -1.85, 0.35, 0.7];
+      const lens = [this.D.wing[0], this.D.wing[0] * 0.92, this.D.wing[1], this.D.wing[1] * 0.92];
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = Math.max(1.6 * ap, (this.infant ? 1 : 2) * L);
+      for (let i = 0; i < 4; i++) {
+        let a = angs[i] + Math.sin(this.flap + i * 1.9) * 0.3;
+        if (f < 0) a = Math.PI - a;
+        const len = lens[i] * L;
+        const cx = Math.cos(a);
+        const cy = Math.sin(a);
+        ctx.strokeStyle = this.col.wing;
         ctx.beginPath();
-        ctx.moveTo(root.x - nx, root.y - ny);
-        ctx.lineTo(root.x + nx, root.y + ny);
-        ctx.lineTo(tx, ty);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(root.x + cx * 2 * L, root.y + cy * 2 * L);
+        ctx.lineTo(root.x + cx * len, root.y + cy * len);
+        ctx.stroke();
+        if (this.col.wingBase) {
+          ctx.strokeStyle = this.col.wingBase;
+          ctx.beginPath();
+          ctx.moveTo(root.x + cx * len * 0.1, root.y + cy * len * 0.1);
+          ctx.lineTo(root.x + cx * len * 0.3, root.y + cy * len * 0.3);
+          ctx.stroke();
+        }
       }
     }
   }

@@ -10,11 +10,14 @@
   const RW = window.RW;
   const U = RW.U;
   const AIR = { fly: true, key: 'air' };
-  const N_ARMS = 6;
+  const N_ARMS = 7;
 
+  // White ones: pale body, black eye sockets with bright cyan pupils; black
+  // ones: blue-black body, luminous cyan eyes with black pupils. Both have a
+  // ragged teal patch where the head meets the body.
   const LOOKS = {
-    white: { body: '#ecebe5', shade: '#c4c4bd', teal: '#3db3ab', eye: '#121418', pupil: '#4aa8e0', arm: '#d9d8d1', wing: '#c3d6df' },
-    black: { body: '#1d1d2b', shade: '#363650', teal: '#2f9f9a', eye: '#5cbbe8', pupil: '#0b0b10', arm: '#2a2a3c', wing: '#9eb3c4' },
+    white: { body: '#d6e0e2', gloss: '#f4f7f8', rim: '#c4d0d4', teal: '#4f9aa8', eye: '#0e1216', pupil: '#19c6ff', arm: '#dfe6e8', wing: '#cfd8d6' },
+    black: { body: '#1a1a2c', gloss: '#3a3a58', rim: '#2e3a5a', teal: '#1b5560', eye: '#19d0ff', pupil: '#05050a', arm: '#22223a', wing: '#3f86a8' },
   };
 
   class Squidcada extends RW.Creature {
@@ -39,7 +42,7 @@
       this.diet = p.diet || ['batfly', 'centipede'];
       this.threats = ['daddy', 'lizard_*', 'dropwig', 'centipede_medium', 'centipede_large', 'noodlefly'];
       this.arms = [];
-      for (let i = 0; i < N_ARMS; i++) this.arms.push(new RW.Chain(x, y, 4, 2.4 * this.L, 0, 1));
+      for (let i = 0; i < N_ARMS; i++) this.arms.push(new RW.Chain(x, y, i % 2 ? 5 : 3, (i % 2 ? 4 : 3.4) * this.L, 0, 1));
       this.goal = null;
       this.goalT = 0;
       this.perceiveT = 0;
@@ -62,7 +65,7 @@
       for (const a of this.arms) a.shift(dx, dy);
     }
     face() {
-      return { x: this.pos.x + Math.cos(this.ang) * 7 * this.L, y: this.pos.y + Math.sin(this.ang) * 7 * this.L };
+      return { x: this.pos.x + Math.cos(this.ang) * 9.6 * this.L, y: this.pos.y + Math.sin(this.ang) * 9.6 * this.L };
     }
     holdPoint() {
       const f = this.face();
@@ -107,10 +110,12 @@
       const py = Math.cos(this.ang);
       for (let i = 0; i < this.arms.length; i++) {
         const P = this.arms[i].pts;
-        const s = (i / (this.arms.length - 1) - 0.5) * 5 * this.L;
+        const s = (i / (this.arms.length - 1) - 0.5) * 6.4 * this.L;
         P[0].x = P[0].px = f.x + px * s;
         P[0].y = P[0].py = f.y + py * s;
-        const wig = Math.sin(this.age * 7 + i * 1.3) * 18;
+        // splayed out a little to either side, wriggling, trailing behind
+        const splay = (i / (this.arms.length - 1) - 0.5) * 2 * 120;
+        const wig = Math.sin(this.age * 7 + i * 1.3) * 18 + splay;
         this.arms[i].verlet(1, 0.86, Math.cos(this.ang) * 60 + px * wig, 260 + Math.sin(this.ang) * 60 + py * wig, dt);
         this.arms[i].follow(1);
       }
@@ -423,9 +428,9 @@
       const flying = !this.corpse && !(this.stunT > 0) && this.state !== 'rest' && !(this.grabbedBy && this.grabbedBy.isHand);
       ctx.save();
       ctx.globalAlpha = this.alpha;
-      // squid arms
+      // squid arms, body-coloured, hanging from the face
       ctx.strokeStyle = col.arm;
-      ctx.lineWidth = Math.max(ap * 0.7, 0.8 * L);
+      ctx.lineWidth = Math.max(1.3 * ap, 1.3 * L);
       ctx.beginPath();
       for (const a of this.arms) {
         const P = a.pts;
@@ -435,37 +440,46 @@
       ctx.stroke();
       ctx.translate(p.x, p.y);
       ctx.rotate(this.ang);
-      // body: x runs from the tail (-) to the face (+)
+      // x runs from the tail point (-) to the face (+)
       if (flying) this.drawWings(ctx, false);
+      // a pointed, bullet-shaped shiny body
       ctx.fillStyle = col.body;
       ctx.beginPath();
-      ctx.ellipse(-1 * L, 0, 8.5 * L, 5.6 * L, 0, 0, U.TAU);
+      ctx.moveTo(-12 * L, 0);
+      ctx.quadraticCurveTo(-8 * L, -4.6 * L, -1 * L, -4.8 * L);
+      ctx.quadraticCurveTo(4 * L, -4.6 * L, 5.2 * L, -2.6 * L);
+      ctx.lineTo(5.2 * L, 2.6 * L);
+      ctx.quadraticCurveTo(4 * L, 4.6 * L, -1 * L, 4.8 * L);
+      ctx.quadraticCurveTo(-8 * L, 4.6 * L, -12 * L, 0);
       ctx.fill();
-      // a darker underside and a sheen on the back
-      ctx.fillStyle = col.shade;
-      ctx.beginPath();
-      ctx.ellipse(-2 * L, 2.6 * L, 6.5 * L, 2.4 * L, 0, 0, U.TAU);
-      ctx.fill();
-      ctx.fillStyle = this.variant === 'black' ? '#55557a' : '#ffffff';
-      ctx.fillRect(-5 * L, -4.2 * L, 5 * L, Math.max(ap, 1.2 * L));
-      // the teal band where the head meets the body
+      // a subtle lower rim and one gloss patch up top
+      ctx.fillStyle = col.rim;
+      ctx.fillRect(-7 * L, 3.2 * L, 9 * L, Math.max(ap, 1.2 * L));
+      ctx.fillStyle = col.gloss;
+      ctx.fillRect(-6 * L, -3.6 * L, 7 * L, Math.max(ap, 2 * L));
+      // the ragged teal patch where the head meets the body
       ctx.fillStyle = col.teal;
-      ctx.beginPath();
-      ctx.ellipse(5.2 * L, 0, 2.2 * L, 5 * L, 0, 0, U.TAU);
-      ctx.fill();
-      // head
+      const st = Math.max(ap, 1.2 * L);
+      ctx.fillRect(2.4 * L, -3.6 * L, 2.6 * L, 7.2 * L);
+      ctx.fillRect(1.2 * L, -2.2 * L, st, 3.6 * L);
+      ctx.fillRect(0.2 * L, -0.6 * L, st, 2.2 * L);
+      ctx.fillRect(4.6 * L, -4 * L, st, 2 * L);
+      // a small rounded head
       ctx.fillStyle = col.body;
       ctx.beginPath();
-      ctx.ellipse(7.6 * L, 0, 2.6 * L, 3.8 * L, 0, 0, U.TAU);
+      ctx.ellipse(7.4 * L, 0, 2.6 * L, 3 * L, 0, 0, U.TAU);
       ctx.fill();
-      // eyes (X'd out when dead)
-      const es = Math.max(ap * 1.4, 2 * L);
-      for (const s of [-1, 1]) {
-        const ex = 7.8 * L;
-        const ey = s * 2.2 * L;
+      // eyes, wide-set at the front of the head, framed in teal (X'd out
+      // when dead)
+      const es = Math.max(2 * ap, 2 * L);
+      ctx.fillStyle = col.teal;
+      for (const sd of [-1, 1]) ctx.fillRect(8.2 * L - es / 2 - ap, sd * 1.9 * L - es / 2 - ap, es + 2 * ap, es + 2 * ap);
+      for (const sd of [-1, 1]) {
+        const ex = 8.2 * L;
+        const ey = sd * 1.9 * L;
         if (this.corpse) {
-          ctx.strokeStyle = col.eye;
-          ctx.lineWidth = ap * 0.7;
+          ctx.strokeStyle = this.variant === 'white' ? col.eye : col.pupil;
+          ctx.lineWidth = ap * 0.8;
           ctx.beginPath();
           ctx.moveTo(ex - es / 2, ey - es / 2);
           ctx.lineTo(ex + es / 2, ey + es / 2);
@@ -477,8 +491,8 @@
         ctx.fillStyle = col.eye;
         ctx.fillRect(ex - es / 2, ey - es / 2, es, es);
         ctx.fillStyle = col.pupil;
-        const ps = Math.max(ap * 0.7, es * 0.45);
-        ctx.fillRect(ex - ps / 2 + 0.3 * L, ey - ps / 2, ps, ps);
+        const ps = Math.max(ap, es * 0.5);
+        ctx.fillRect(ex - ps / 2 + 0.4 * L, ey - ps / 2, ps, ps);
       }
       if (!flying && !this.corpse) this.drawWings(ctx, true);
       ctx.restore();
@@ -489,25 +503,35 @@
     drawWings(ctx, folded) {
       const L = this.L;
       const ap = this.eco.artPx || 1;
-      ctx.fillStyle = this.col.wing;
-      const root = { x: 1.5 * L, y: -3.5 * L };
-      const len = 14 * L;
-      const angles = folded ? [Math.PI + 0.12, Math.PI + 0.3] : [-2.0, -1.55, -1.15, -0.75];
-      for (let i = 0; i < angles.length; i++) {
-        const a = angles[i] + (folded ? 0 : Math.sin(this.flap + i * 2.1) * 0.55);
-        const tx = root.x + Math.cos(a) * len;
-        const ty = root.y + Math.sin(a) * len;
-        const w = Math.max(ap * 0.7, 1.3 * L);
-        const nx = -Math.sin(a) * w;
-        const ny = Math.cos(a) * w;
+      // two pairs on the flanks, each a single solid blade swept back from
+      // the body (white ones' tips tinted teal); folded flat along the back
+      // at rest
+      const back = Math.PI - 0.87;
+      const wings = folded
+        ? [[1, -3.6, Math.PI + 0.08], [-3, -3.6, Math.PI + 0.2]]
+        : [[1, -3.6, -back], [1, 3.6, back], [-3, -3.6, -(back + 0.35)], [-3, 3.6, back + 0.35]];
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = Math.max(1.5 * ap, 1.6 * L);
+      wings.forEach(([rx, ry, base], i) => {
+        const a = base + (folded ? 0 : Math.sin(this.flap + i * 1.7) * 0.4 * Math.sign(ry));
+        const len = (folded ? 15 : 21) * L;
+        const x0 = rx * L;
+        const y0 = ry * L;
+        const x1 = x0 + Math.cos(a) * len;
+        const y1 = y0 + Math.sin(a) * len;
+        ctx.strokeStyle = this.col.wing;
         ctx.beginPath();
-        ctx.moveTo(root.x - nx, root.y - ny);
-        ctx.lineTo(root.x + nx, root.y + ny);
-        ctx.lineTo(tx + nx * 0.6, ty + ny * 0.6);
-        ctx.lineTo(tx - nx * 0.6, ty - ny * 0.6);
-        ctx.closePath();
-        ctx.fill();
-      }
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        if (this.variant === 'white' && !folded) {
+          ctx.strokeStyle = '#5aa8b4';
+          ctx.beginPath();
+          ctx.moveTo(x0 + (x1 - x0) * 0.72, y0 + (y1 - y0) * 0.72);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+        }
+      });
     }
   }
 

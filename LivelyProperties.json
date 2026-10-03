@@ -9,7 +9,7 @@
     "type": "dropdown",
     "value": 1,
     "text": "Wildlife preset (Custom = use the spawn weights below)",
-    "items": ["Custom","Balanced","Lizard turf wars","Slugcat hunters","Centipede hunt","Ambushers","Daddy's buffet","Fliers","Peaceful"]
+    "items": ["Custom","Balanced","Lizard turf wars","Slugcat hunters","Centipede hunt","Ambushers","Daddy's buffet","Flyers","Peaceful"]
   },
   "mapSize": {
     "type": "slider",

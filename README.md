@@ -52,7 +52,7 @@ titles.
     maps get more rows of ledges and proportionally more poles, fruit plants
     and batfly nests, so there's no empty space. Compact is the old default.
   - **Wildlife**: Balanced (the default), Lizard turf wars, Slugcat hunters,
-    Centipede hunt, Ambushers, Daddy's buffet, Fliers, Peaceful. Sets the spawn
+    Centipede hunt, Ambushers, Daddy's buffet, Flyers, Peaceful. Sets the spawn
     weights to show off a set of behaviours; creatures that aren't in the new
     mix walk off to a den.
   - Changing a setting a preset governs by hand switches that preset to
