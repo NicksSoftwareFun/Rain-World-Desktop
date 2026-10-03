@@ -345,15 +345,15 @@
       const whips = (end, nb) => {
         const e = P[end];
         const ea = Math.atan2(P[end].y - P[nb].y, P[end].x - P[nb].x);
-        const len = Math.max(3.4 * seg, 0.3 * n * seg); // about a third of the body
+        const len = 4.2 * seg; // a fixed reach per plate, so it scales with the body
         ctx.beginPath();
         // seen side on, both arch up off the surface, one a little higher
         const up = Math.cos(ea) * -this.uy - Math.sin(ea) * -this.ux > 0 ? -1 : 1;
         for (const s of [-1, 1]) {
           const sw = this.corpse ? 0.5 * s : Math.sin(this.age * (end ? 2.1 : 2.6) + s * 1.3 + end) * 0.18;
-          const lift = up * (s > 0 ? 0.55 : 0.2);
+          const lift = up * (s > 0 ? 0.26 : 0.08); // long and flat, barely raised
           const a1 = ea + lift + sw * 0.5;
-          const a2 = ea + lift * 1.6 + up * 0.35 + sw;
+          const a2 = ea + lift * 1.3 + up * 0.1 + sw;
           const cx = e.x + Math.cos(a1) * len * 0.55;
           const cy = e.y + Math.sin(a1) * len * 0.55;
           ctx.moveTo(e.x, e.y);
@@ -365,7 +365,7 @@
         ctx.lineWidth *= 1.8;
         ctx.beginPath();
         for (const s of [-1, 1]) {
-          const lift = up * (s > 0 ? 0.55 : 0.2);
+          const lift = up * (s > 0 ? 0.26 : 0.08);
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(e.x + Math.cos(ea + lift) * len * 0.22, e.y + Math.sin(ea + lift) * len * 0.22);
         }
@@ -392,7 +392,7 @@
         // a touch fuller at the head, ~15% slimmer by the tail; a dark cap
         // at each end (the head a bit bigger)
         const endTaper = i === 0 ? 1.08 : i === n - 1 ? 0.78 : 1.02 - 0.17 * k;
-        const hh = 3.3 * S * endTaper; // half height
+        const hh = 2.5 * S * endTaper; // half height: long, flat plates
         const hl = seg * 0.5 * (i === 0 ? 1.05 : i === n - 1 ? 0.85 : 1); // half length
         // which local side faces the surface: the belly band goes there
         const belly = -Math.sin(ang) * -this.ux + Math.cos(ang) * -this.uy > 0 ? 1 : -1;
@@ -405,22 +405,17 @@
         ctx.beginPath();
         roundRect(-hl - 0.6 * S, -hh - 0.6 * S, hl * 2 + 1.2 * S, hh * 2 + 1.2 * S, hh * 0.55);
         ctx.fill();
-        ctx.fillStyle = U.rgba(U.scale(col, 0.5));
+        // flat colours, as in the game: a dark brown shell with the orange
+        // plate across its back, the underside left dark
+        ctx.fillStyle = '#2a1610';
         ctx.beginPath();
         roundRect(-hl + 0.4 * S, -hh, hl * 2 - 0.8 * S, hh * 2, hh * 0.45);
         ctx.fill();
-        // the lit plate: everything but the belly band
-        ctx.fillStyle = U.rgba(col);
-        ctx.beginPath();
-        roundRect(-hl + 0.4 * S, belly > 0 ? -hh : -hh * 0.35, hl * 2 - 0.8 * S, hh * 1.35, hh * 0.45);
-        ctx.fill();
-        if (cap) {
-          ctx.fillStyle = '#4a2418'; // a dull sheen on the dark cap
-          ctx.fillRect(-hl * 0.4, belly > 0 ? -hh * 0.7 : hh * 0.4, hl * 0.8, Math.max(ap, 0.7 * S));
-        } else {
-          // a pale glint along the top edge
-          ctx.fillStyle = U.rgba(U.mix(col, '#ffd9a0', 0.4));
-          ctx.fillRect(-hl * 0.45, belly > 0 ? -hh * 0.75 : hh * 0.45, hl * 0.9, Math.max(ap, 0.7 * S));
+        if (!cap) {
+          ctx.fillStyle = U.rgba(col);
+          ctx.beginPath();
+          roundRect(-hl + 0.8 * S, belly > 0 ? -hh + 0.5 * S : -hh * 0.25, hl * 2 - 1.6 * S, hh * 1.25 - 0.5 * S, hh * 0.3);
+          ctx.fill();
         }
         if (i === 0) {
           // mandibles: two hooks reaching forward and curling down
