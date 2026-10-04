@@ -120,3 +120,11 @@ Creatures should read as Rain World creatures. Specific asks, roughly in order:
   original default), Wildlife presets to show off behaviours, collapsible
   panel sections, changing wildlife restarts creatures and the rain.
   Rocks plentiful, spears a little less so.
+
+- **A "hairpin" metric spike isn't always the code you just touched.** The
+  lizard `bodies` check failed at 14% one run; the culprits turned out to be
+  stunned lizards lying limp with the body folded flat (the ragdoll had no
+  bend limit) and lunges launched at prey directly behind. Break the metric
+  down by state before blaming the latest change, and run the same check on
+  the last commit to see whether it's new.
+

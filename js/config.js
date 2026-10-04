@@ -208,8 +208,13 @@
           biteDelay: 2, // wiki biteDelay (frames at 40fps): windup before a bite
           biteRange: 90, // wiki attemptBiteRadius x 0.75
           biteDamage: 4, // wiki biteDamage (lizard fights)
-          toughness: 3, // wiki toughness
-          stunImmune: true, // wiki: red lizards can't be stunned or flipped by rocks
+          toughness: 6, // wiki says 3; doubled: reds feud and need the staying power
+          stunImmune: true,
+          // red creatures can't stand each other (see Creature.redFoe), and
+          // armoured: no one grabs one alive, every attack just wears it down
+          red: true,
+          armored: true,
+          spits: true, // a volley of red spines, then in for the kill // wiki: red lizards can't be stunned or flipped by rocks
           spines: 18,
           pattern: 'dots',
         },
@@ -345,7 +350,9 @@
           segments: [10, 13],
           speed: 72, // 30% quicker than the small and medium ones (55)
           huntSpeed: 111, // ...and on the hunt (85): runs down any lizard
-          toughness: 3,
+          toughness: 6,
+          red: true, // feuds with red lizards (and they with it)
+          armored: true,
           diet: ['lizard_*', 'slugcat', 'centipede_medium', 'dropwig', 'squidcada', 'noodlefly'], // hunts lizards
           threats: ['daddy'],
           colors: ['#f02a24', '#ff3c2a', '#b81c1c', '#a01818'], // red, the shade of a red lizard
@@ -513,7 +520,7 @@
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
-  const STORAGE_KEY = 'rw-desktop-config-v15'; // bumped when defaults change shape
+  const STORAGE_KEY = 'rw-desktop-config-v16'; // bumped when defaults change shape
 
   RW.loadConfig = function () {
     const cfg = RW.U.clone(RW.DEFAULT_CONFIG);

@@ -799,6 +799,14 @@
           if (c !== t && !this.diet.some((s) => (s.endsWith('*') ? c.species.startsWith(s.slice(0, -1)) : s === c.species))) continue;
           const parts = c.hitParts ? c.hitParts() : [{ x: c.x, y: c.y, r: 8 }];
           if (!parts.some((q) => U.dist(q.x, q.y, tip.x, tip.y) < q.r + 3)) continue;
+          if (c.p && c.p.armored && !c.corpse) {
+            // armoured (a red lizard, a large centipede): the needle wounds,
+            // it doesn't kill outright
+            if (!c.takeHit(0.5, this)) {
+              this.startRecover();
+              return;
+            }
+          }
           if (this.eco.cfg.ecosystem.predation && this.grab(c)) {
             if (!c.corpse) c.kill();
             this.eco.burst(tip.x, tip.y, c.bloodColor || '#2a1418', 6);

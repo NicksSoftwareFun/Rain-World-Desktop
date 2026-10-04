@@ -548,6 +548,128 @@ const checks = [
     ],
   },
   {
+    name: 'reds',
+    about: 'red lizards and large centipedes fight on sight and wear each other down; red lizards spit spine volleys that stun',
+    run: (page) =>
+      page.evaluate(() => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        RW.applyWildlifePreset(e.cfg, 'peaceful');
+        e.cfg.ecosystem.spawnPerMinute = 0;
+        e.restartWildlife();
+        const out = { duels: 0, decided: 0, hits: 0, liveArmouredGrabs: 0, volleys: 0, spines: 0, spineHits: 0 };
+        const C = RW.Creature.prototype;
+        const th = C.takeHit;
+        C.takeHit = function () {
+          out.hits++;
+          return th.apply(this, arguments);
+        };
+        const gr = C.grab;
+        C.grab = function (prey) {
+          const ok = gr.call(this, prey);
+          if (ok && prey.p && prey.p.armored && !prey.corpse) out.liveArmouredGrabs++;
+          return ok;
+        };
+        const S = RW.Spine.prototype;
+        const st = S.strike;
+        S.strike = function () {
+          out.spineHits++;
+          return st.apply(this, arguments);
+        };
+        const L = RW.Creatures.Lizard.prototype;
+        const sp = L.spit;
+        L.spit = function () {
+          out.spines++;
+          return sp.apply(this, arguments);
+        };
+        // measured when written: 3 of 4 duels decided within 2 min, ~20 hits each
+        for (let k = 0; k < 3; k++) {
+          e.eco.creatures.length = 0;
+          const a = e.eco.spawn('lizard_red');
+          const b = e.eco.spawn('centipede_large');
+          out.duels++;
+          for (let i = 0; i < 60 * 120; i++) {
+            e.tick(1 / 60);
+            if (a.corpse || b.corpse) {
+              out.decided++;
+              break;
+            }
+            if (a.dead || b.dead) break; // one left
+          }
+        }
+        // spines: ~1 volley per 20 s of hunting, about half the spines land
+        for (let k = 0; k < 3; k++) {
+          e.eco.creatures.length = 0;
+          const a = e.eco.spawn('lizard_red');
+          e.eco.spawn('slugcat');
+          let was = 0;
+          for (let i = 0; i < 60 * 60; i++) {
+            e.tick(1 / 60);
+            if (a.spitN > 0 && !was) out.volleys++;
+            was = a.spitN || 0;
+          }
+        }
+        C.takeHit = th;
+        C.grab = gr;
+        S.strike = st;
+        L.spit = sp;
+        return out;
+      }),
+    judge: (m) => [
+      m.hits < 5 && `red rivals barely touched each other (${m.hits} hits in ${m.duels} duels)`,
+      m.liveArmouredGrabs > 0 && `${m.liveArmouredGrabs} armoured creatures were grabbed alive`,
+    ],
+    warn: (m) => (!m.decided && 'no feud was fought to the death this run') || (!m.spines && 'no red lizard got anything in range for a volley this run'),
+  },
+  {
+    name: 'corpses',
+    about: 'lizards contest a scavenged corpse (challenge, display, maybe fight); the winner gets it',
+    run: (page) =>
+      page.evaluate(() => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        RW.applyWildlifePreset(e.cfg, 'peaceful');
+        e.cfg.ecosystem.spawnPerMinute = 0;
+        e.restartWildlife();
+        // (the compact map, so the two are within sight of each other)
+        RW.applySizePreset(e.cfg, 'compact');
+        e.regenerate(false);
+        const out = { trials: 0, contested: 0, fights: 0, eaten: 0 };
+        const kinds = ['lizard_pink', 'lizard_green', 'lizard_blue'];
+        // measured when written: 3-4 of 8 contested, nearly all taken
+        for (let k = 0; k < 8; k++) {
+          e.eco.creatures.length = 0;
+          // b has just picked up a corpse, a hungry a close by
+          const a = e.eco.spawn(kinds[k % 3]);
+          const b = e.eco.spawn(kinds[(k + 1) % 3], a.x + 90, a.y);
+          for (let i = 0; i < 60 * 3; i++) e.tick(1 / 60);
+          const c = e.eco.spawn('centipede', b.x, b.y);
+          c.die(4);
+          b.grab(c);
+          a.fullT = b.fullT = 0;
+          a.rivalCd = b.rivalCd = 0; // (new arrivals hold off a while)
+          out.trials++;
+          let contested = false;
+          let fought = false;
+          for (let i = 0; i < 60 * 45; i++) {
+            e.tick(1 / 60);
+            for (const l of [a, b]) {
+              if (l.rivalWhy === 'food' && ['challenge', 'display', 'fight'].includes(l.state) && l.prize === c) contested = true;
+              if (l.state === 'fight' && l.prize === c) fought = true;
+            }
+          }
+          if (contested) out.contested++;
+          if (fought) out.fights++;
+          if (c.grabbedBy || c.dead) out.eaten++;
+        }
+        return out;
+      }),
+    judge: (m) => [
+      m.contested < 1 && `no corpse was contested in ${m.trials} tries`,
+      m.eaten < 1 && `none of ${m.trials} corpses was taken`,
+    ],
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>
@@ -563,8 +685,9 @@ const checks = [
             e.regenerate(false);
             const d = e.decor;
             rows.push({
-              tiers: new Set(d.ledges.map((l) => l.tier)).size,
-              ledges: d.ledges.length,
+              // (floor terrain shares the list but isn't a row)
+              tiers: new Set(d.ledges.filter((l) => l.kind === 'ledge').map((l) => l.tier)).size,
+              ledges: d.ledges.filter((l) => l.kind === 'ledge').length,
               nests: d.nests.length,
               ms: Math.round(performance.now() - t0),
               ps: e.ps,

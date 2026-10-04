@@ -74,9 +74,9 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 
 | File | Creature |
 | --- | --- |
-| `lizard.js` | All lizard colours (per-colour params in config, personality rolled per the wiki). Spine + 4 IK legs; hunting, lunges with a whole-body jolt, territory and rivalry fights, carrying kills home (shaking them), scavenging, pole leaps, turning round (in-plane on poles). White lizards camouflage only while stalking. |
+| `lizard.js` | All lizard colours (per-colour params in config, personality rolled per the wiki). Spine + 4 IK legs; hunting, lunges with a whole-body jolt, territory, rivalry and corpse fights, the red spine volley, carrying kills home (shaking them), scavenging, pole leaps, turning round (in-plane on poles). White lizards camouflage only while stalking. |
 | `slugcat.js` | Platformer physics, pole climbing, planned jumps (long leaps lie down and wind up first), arms and hands, rocks and spears (pick up, throw, two different items max), transit (eat one fruit + one meat, leave by the farthest den). |
-| `centipede.js` | Small/medium/large; segmented chain over any surface; small ones eat batflies, big ones hunt lizards and shock. Never jump. |
+| `centipede.js` | Small/medium/large; segmented chain over any surface; small ones eat batflies, big ones hunt lizards and shock; large ones feud with red lizards. Never jump. |
 | `daddy.js` | Daddy Long Legs: tentacles grope for anchors and grab prey; transit (two meat meals). |
 | `dropwig.js` | Ceiling ambushers: crawl to a ceiling, wait, drop on prey. Long-legged grip across corners. |
 | `batfly.js` | Flocking prey; hatch from and roost on the batfly nest. |
@@ -85,6 +85,31 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 
 Fliers have `isFlier`; ground predators only target one that `nearGround()`
 (within reach of a surface).
+
+**The red feud.** Species with `red: true` (red lizards, large centipedes)
+hunt the nearest other red creature anywhere on the map (`redFoe()`), with
+no give-up timer. `armored: true` means nothing can `grab()` one alive:
+bites, shocks, needles and spines go through `takeHit(power, from)`, which
+takes `power / toughness` off `hp`, knocks it back and kills it at zero
+(toughness 6 for both, so a duel runs 20-60 s and either can win). Once
+dead it's an ordinary corpse.
+
+**Spines.** Red lizards (`spits: true`) open a hunt from 110-400 px with a
+volley of 2-3 `RW.Spine`s (`weapons.js`, kept in `eco.items`): 24 px
+barbs (a spear is 30), fast, slightly arcing, aimed high for the drop. A
+hit acts like a rock (`onRockHit`, or a flipped stun) on anything but an
+armoured creature, which takes a small `takeHit`, and the spine stays
+`embedded` in that body part (corpse included) until its host leaves or is
+eaten; a miss lodges `stuck` in the terrain (carried with a moving window).
+Either way it's removed 40 s after it lands. Then the lizard closes in; the
+next volley waits 7-11 s.
+
+**Corpse fights.** `findFoe` also gives lizards a `'food'` rival in another
+lizard carrying, eating or walking to a corpse it would eat (`prizeOf`):
+far likelier, from further off, and even when not hungry if the corpse is
+within 1.5 territory radii of its hangout (`onOwnGround`), which also adds
+to its `resolve`. The corpse is the rivals' `prize`: dropped to fight, and
+the loser's `submitTo` sends the winner to `scavenge` it.
 
 ## Ecosystem (`js/ecosystem.js`)
 

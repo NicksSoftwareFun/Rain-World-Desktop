@@ -160,6 +160,16 @@
           break;
         }
       }
+      // the red feud: any red lizard is to be dealt with, now
+      if (this.p.red && perceive && !this.holding) {
+        const foe = this.redFoe();
+        if (foe) {
+          if (this.state !== 'hunt' || this.prey !== foe) this.setState('hunt');
+          this.prey = foe;
+          this.stateT = 0;
+        }
+      }
+      this.shockCd = (this.shockCd || 0) - dt;
       if (perceive && this.diet.length && this.fullT <= 0 && this.state !== 'hunt' && this.state !== 'flee') {
         const v = this.p.vision || 200 * this.size;
         const prey = this.nearestOf(this.diet, v, (c) => c.canBeGrabbed() && c.nearGround(32 * this.size) && this.canSee(c.x, c.y, v)) || this.nearestCorpse(this.diet, v * 0.7);
@@ -182,6 +192,15 @@
           const hp = prey.hitParts()[0];
           if (U.dist(h.x, h.y, hp.x, hp.y) < 9 * this.size + hp.r * 0.5) {
             // the shock: a crackle of sparks and the prey goes stiff
+            if (prey.p.armored && !prey.corpse) {
+              // armoured (a red feud): it wears it down, shock by shock
+              if (this.shockCd <= 0) {
+                this.shockCd = 1.4;
+                this.eco.burst(hp.x, hp.y, '#fff2a0', 10);
+                prey.takeHit(0.6 * U.rand(0.8, 1.2), this);
+              }
+              return;
+            }
             this.eco.burst(hp.x, hp.y, '#fff2a0', 8);
             if (!prey.corpse) prey.stun(1.5);
             if (this.eco.cfg.ecosystem.predation && this.grab(prey)) {
@@ -251,6 +270,7 @@
         return;
       }
       this.coil = null;
+      this.hp = Math.min(1, (this.hp === undefined ? 1 : this.hp) + dt * 0.015); // wounds mend slowly
       this.pather.update(dt, h.x, h.y);
       // (a path node counts as reached within the body's own grip offset
       // too: held off a surface by its size, a big one could otherwise sit a

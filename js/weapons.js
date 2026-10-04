@@ -315,6 +315,148 @@
     }
   }
 
+  // A red lizard's spine, spat from the open mouth: a long needle of red
+  // bone, nearly spear length. Whatever it hits is knocked over and stunned
+  // briefly, like a rock (an armoured creature only takes a wound), and it
+  // lodges there, riding along in the body; a miss sticks in the terrain.
+  // Either way it's gone after 40 s (or when its host leaves).
+  const SPINE_LEN = 24;
+  const SPINE_LIFE = 40;
+  class Spine {
+    constructor(eco, x, y, vx, vy, shooter) {
+      this.eco = eco;
+      this.kind = 'spine';
+      this.x = x;
+      this.y = y;
+      this.vx = vx;
+      this.vy = vy;
+      this.ang = Math.atan2(vy, vx);
+      this.thrower = shooter;
+      this.state = 'flying'; // flying | stuck (terrain) | embedded (creature)
+      this.flyT = 0;
+      this.stuckT = 0;
+      this.dead = false;
+      this.r = 2;
+      this.contactId = null;
+      this.host = null;
+      this.col = (shooter && shooter.p && shooter.p.headColor) || '#ff1e2a';
+    }
+    update(dt) {
+      if (this.state === 'flying') {
+        // sub-steps so a fast spine can't skip through a thin body
+        const n = 4;
+        for (let i = 0; i < n && this.state === 'flying' && !this.dead; i++) this.step(dt / n);
+        this.flyT += dt;
+        if (this.flyT > 3 || this.x < -40 || this.x > this.eco.world.w + 40 || this.y > this.eco.world.h + 40) this.dead = true;
+        return;
+      }
+      this.stuckT += dt;
+      if (this.stuckT > SPINE_LIFE) this.dead = true;
+      if (this.state === 'embedded') {
+        const c = this.host;
+        if (!c || c.dead || c.leaving || c.piping) {
+          this.dead = true;
+          return;
+        }
+        // the point stays buried in the same part, the shaft sticking out
+        // at the angle it went in
+        const parts = c.hitParts();
+        const p = parts[Math.min(this.hostIdx, parts.length - 1)];
+        this.x = p.x - Math.cos(this.ang) * (SPINE_LEN * 0.5 - p.r * 0.6);
+        this.y = p.y - Math.sin(this.ang) * (SPINE_LEN * 0.5 - p.r * 0.6);
+        return;
+      }
+      // stuck in terrain: gone if what it's in moves away (a dragged window)
+      const t = this.tip();
+      if (!this.eco.world.isSolidPt(t.x + Math.cos(this.ang) * 2, t.y + Math.sin(this.ang) * 2)) this.dead = true;
+    }
+    // carried along with the window or ledge it's lodged in
+    carry(dx, dy) {
+      if (this.state !== 'stuck') return;
+      this.x += dx;
+      this.y += dy;
+    }
+    tip() {
+      return { x: this.x + Math.cos(this.ang) * SPINE_LEN * 0.5, y: this.y + Math.sin(this.ang) * SPINE_LEN * 0.5 };
+    }
+    step(h) {
+      const W = this.eco.world;
+      this.vy += 260 * h;
+      this.x += this.vx * h;
+      this.y += this.vy * h;
+      this.ang = Math.atan2(this.vy, this.vx);
+      const t = this.tip();
+      for (const c of this.eco.creatures) {
+        if (c === this.thrower || c.dead || c.corpse || c.leaving || c.alpha < 0.5 || c.piping || c.unpiping || c.burrow) continue;
+        const parts = c.hitParts();
+        const k = parts.findIndex((q) => U.dist(t.x, t.y, q.x, q.y) < q.r + this.r);
+        if (k < 0) continue;
+        this.strike(c, k, parts[k].part);
+        return;
+      }
+      if (W.isSolidPt(t.x, t.y)) {
+        // lodge point first: back out to the surface, then sink in a little
+        const ux = Math.cos(this.ang);
+        const uy = Math.sin(this.ang);
+        for (let k = 0; k < 12 && W.isSolidPt(this.tip().x, this.tip().y); k++) {
+          this.x -= ux;
+          this.y -= uy;
+        }
+        this.x += ux * 5;
+        this.y += uy * 5;
+        const c = W.collideCircle({ x: this.tip().x, y: this.tip().y }, 0.1);
+        this.contactId = c ? c.id : null;
+        this.state = 'stuck';
+      }
+    }
+    strike(c, k, part) {
+      if (c.p && c.p.armored) {
+        c.takeHit(0.35, this.thrower);
+      } else {
+        // knocked over and briefly stunned, like a rock
+        if (c.onRockHit) c.onRockHit(this, part);
+        else c.stun(U.rand(0.9, 1.3), true);
+        if (c.holding) c.release();
+        if ('vx' in c) {
+          c.vx += this.vx * 0.3;
+          c.vy -= 90;
+        }
+      }
+      this.eco.burst(this.tip().x, this.tip().y, c.bloodColor || '#2a1418', 4);
+      // and it stays in
+      this.state = 'embedded';
+      this.host = c;
+      this.hostIdx = k;
+    }
+    bounds() {
+      const h = SPINE_LEN / 2 + 3;
+      return [this.x - h, this.y - h, this.x + h, this.y + h];
+    }
+    draw(ctx) {
+      const c = Math.cos(this.ang);
+      const s = Math.sin(this.ang);
+      const h = SPINE_LEN / 2;
+      ctx.save();
+      if (this.stuckT > SPINE_LIFE - 1) ctx.globalAlpha = Math.max(0, SPINE_LIFE - this.stuckT);
+      ctx.fillStyle = this.col;
+      // a long red barb: widest a third of the way back, needle-sharp at
+      // the point, tapering to a thin root
+      const w = 1.8;
+      const bx = this.x - c * h * 0.35;
+      const by = this.y - s * h * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(this.x + c * h, this.y + s * h);
+      ctx.lineTo(bx - s * w, by + c * w);
+      ctx.lineTo(this.x - c * h - s * 0.6, this.y - s * h + c * 0.6);
+      ctx.lineTo(this.x - c * h + s * 0.6, this.y - s * h - c * 0.6);
+      ctx.lineTo(bx + s * w, by - c * w);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   RW.Weapon = Weapon;
+  RW.Spine = Spine;
   RW.SPEAR_LEN = SPEAR_LEN;
 })();

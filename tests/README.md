@@ -33,6 +33,8 @@ without page errors, populate, and react to geometry changes.
 | `fliers` | noodlefly families hunting, feeding and leaving together, revenge for a grabbed infant, squidcadas feeding and resting, fliers leaving the screen |
 | `rain` | the rain curve, waterfalls in light rain, rain blocked by horizontal poles |
 | `shelter` | creatures caught out in the downpour, fading instead of using pipes, or not coming back out after the rain |
+| `reds` | red lizards and large centipedes not fighting on sight, armoured reds grabbed alive, red lizards not spitting spines |
+| `corpses` | lizards never contesting a scavenged corpse, corpses left untaken |
 | `presets` | defaults, ledge rows growing with map size, nests, pixel scales, wildlife restart |
 
 The simulation isn't seeded, so numbers vary between runs. Each check's

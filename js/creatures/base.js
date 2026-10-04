@@ -859,10 +859,52 @@
     }
     grab(prey) {
       if (!prey.canBeGrabbed()) return false;
+      if (prey.p && prey.p.armored && !prey.corpse) return false; // only once it's dead
       prey.grabbedBy = this;
       this.holding = prey;
       prey.onGrabbed(this);
       return true;
+    }
+    // ---- the red feud ----
+    // Red creatures (red lizards, large centipedes) can't abide one another:
+    // the nearest other one, anywhere on the map.
+    redFoe() {
+      if (!this.p.red) return null;
+      const m = this.mainPoint();
+      let best = null;
+      let bd = Infinity;
+      for (const c of this.eco.creatures) {
+        if (c === this || !c.p || !c.p.red || c.dead || c.corpse || c.leaving || c.piping || c.unpiping || c.alpha < 0.5) continue;
+        const d = Math.hypot(c.x - m.x, c.y - m.y);
+        if (d < bd) {
+          bd = d;
+          best = c;
+        }
+      }
+      return best;
+    }
+    // A blow that wears an armoured creature down instead of taking it:
+    // health off (by its toughness), a jolt, dead at zero. True if it died.
+    takeHit(power, from) {
+      if (this.dead || this.corpse) return false;
+      if (this.hp === undefined) this.hp = 1;
+      this.hp -= power / (this.p.toughness || 1);
+      const m = this.mainPoint();
+      this.eco.burst(m.x, m.y, this.bloodColor || '#2a1418', 5);
+      if (from && 'vx' in this) {
+        const dx = m.x - from.x;
+        const dy = m.y - from.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        this.vx += (dx / dl) * 160;
+        this.vy += (dy / dl) * 160 - 60;
+      }
+      if (this.hp <= 0) {
+        if (this.holding) this.release();
+        this.kill();
+        return true;
+      }
+      this.stun(0.3);
+      return false;
     }
     release() {
       const prey = this.holding;

@@ -94,7 +94,7 @@
       this.threats = ['daddy'];
       // large centipedes hunt lizards: every lizard backs away from one
       // (how close it lets one come depends on its bravery)
-      this.threats.push('centipede_large');
+      if (!p.red) this.threats.push('centipede_large'); // (a red lizard goes for it instead)
       this.camo = 1;
       this.mass = p.mass || 2 * L;
       // Rain World personality: energy, bravery, sympathy, dominance,
@@ -296,6 +296,7 @@
         if (f) {
           this.rival = f.c;
           this.rivalWhy = f.why;
+          this.prize = f.prize || null;
           this.setState('challenge');
           return;
         }
@@ -342,10 +343,21 @@
           this.setState('wander');
         }
       }
+      // The red feud: another red creature anywhere in sight of the map is
+      // the only thing that matters.
+      if (this.p.red && perceive && !this.holding) {
+        const foe = this.redFoe();
+        if (foe) {
+          if (this.prey !== foe) this.noticeT = 0.3;
+          this.prey = foe;
+          this.setState('hunt');
+        }
+      }
       if (this.state === 'hunt' && this.prey) {
         const prey = this.prey;
         const persist = 0.6 + pe.aggression;
-        const hopeless = this.stateT > 25 * persist || (this.stateT > 8 * persist && !this.pather.complete);
+        const feud = this.p.red && prey.p && prey.p.red;
+        const hopeless = !feud && (this.stateT > 25 * persist || (this.stateT > 8 * persist && !this.pather.complete));
         if (hopeless) {
           this.gaveUpOn = prey;
           this.giveUpT = 20;
@@ -368,6 +380,28 @@
             return;
           }
           if (d < 140) this.jawTarget = 0.35;
+          // Red lizards open up with a volley of 2 or 3 spines first, then
+          // move in for the kill.
+          if (this.p.spits) {
+            this.spitCd = (this.spitCd || 0) - dt;
+            if (this.spitN > 0 && d > 45 * this.L) {
+              this.speed = 0;
+              this.raise = 0.55;
+              this.jawTarget = 1;
+              this.spitT -= dt;
+              if (this.spitT <= 0) {
+                this.spit(prey);
+                this.spitT = 0.42;
+                if (--this.spitN <= 0) this.spitCd = U.rand(7, 11);
+              }
+              return;
+            }
+            this.spitN = 0;
+            if (this.spitCd <= 0 && this.grip && this.lungeT <= 0 && !(prey.stunT > 0) && d > 110 * this.L && d < 400 && this.W.lineClear(head.x, head.y, prey.x, prey.y)) {
+              this.spitN = U.randInt(2, 3);
+              this.spitT = 0.3; // a beat with the mouth open before the first
+            }
+          }
           const canStrike = this.lungeCd <= 0 && this.grip && this.W.lineClear(head.x, head.y, prey.x, prey.y);
           if (canStrike && d < (this.p.biteRange || 60) * this.L) {
             this.lunge(prey.x, prey.y, prey, false);
@@ -490,6 +524,8 @@
       head.py = head.y;
       this.spine.verlet(1, 0.9, 0, GRAV, dt);
       this.spine.follow(1);
+      // floppy, but a body has a spine: it never folds flat back on itself
+      this.spine.limitBend(1.6, 2, this.bodyN + 2, 0.3);
       this.spine.collide(W, 3, 1);
       this.grip = null;
       // on its back: belly up, so the legs kick at the sky
@@ -667,9 +703,18 @@
         if (RIVALRY.includes(c.state) || c.state === 'flee' || c.state === 'leave') continue;
         const ch = c.spine.pts[0];
         const d = U.dist(head.x, head.y, ch.x, ch.y);
-        if (d > 200 * L || !this.canSee(ch.x, ch.y, 220 * L)) continue;
+        // A scavenged corpse it's carrying, eating or heading for, that we'd
+        // eat too: worth a fight, and far more so on our own patch (claimed
+        // from further off, even when we're not that hungry).
+        const prize = this.holding ? null : this.prizeOf(c);
+        const ours = prize && this.onOwnGround(prize);
+        if (d > (prize ? (ours ? 300 : 240) : 200) * L) continue;
+        // (on its own patch it knows what's going on even without a clear view)
+        if (!this.canSee(ch.x, ch.y, 320 * L) && !(ours && d < 220 * L)) continue;
         let why = null;
-        if (home && hp && U.dist(ch.x, ch.y, hp.x, hp.y) < TERR_R * 0.9) {
+        if (prize && (this.fullT <= 0 || ours)) {
+          if (Math.random() < (ours ? 0.55 : 0.2) + 0.5 * pe.aggression) why = 'food';
+        } else if (home && hp && U.dist(ch.x, ch.y, hp.x, hp.y) < TERR_R * 0.9) {
           // trespasser on our hangout
           if (Math.random() < 0.3 + 0.7 * Math.max(pe.aggression, pe.dominance)) why = 'territory';
         } else if (c.holding && this.fullT <= 0 && !this.holding) {
@@ -680,10 +725,27 @@
         }
         if (why && d < bd) {
           bd = d;
-          best = { c, why };
+          best = { c, why, prize: why === 'food' ? prize || c.holding : null };
         }
       }
       return best;
+    }
+    // The corpse c has scavenged (or is going for), if it's one we eat.
+    prizeOf(c) {
+      const f = c.holding && c.holding.corpse ? c.holding : c.state === 'scavenge' && c.prey && c.prey.corpse && !c.prey.grabbedBy ? c.prey : null;
+      if (!f || f.dead || !this.diet.some((s) => (s.endsWith('*') ? f.species.startsWith(s.slice(0, -1)) : s === f.species))) return null;
+      return f;
+    }
+    // In or close by our own territory?
+    onOwnGround(pt) {
+      const hp = this.homePos();
+      return !!(this.home && hp && U.dist(pt.x, pt.y, hp.x, hp.y) < TERR_R * 1.5);
+    }
+    // Is the food we're squabbling over still there to be had?
+    prizeLive(r) {
+      const f = this.prize;
+      if (!f || f.dead || !f.corpse) return !!r.holding;
+      return !f.grabbedBy || f.grabbedBy === r || f.grabbedBy === this;
     }
     // How determined we are to win against c.
     resolve(c) {
@@ -692,11 +754,13 @@
       if (this.rivalWhy === 'territory' && this.atHome()) r += 0.25; // defending our own patch
       if (this.holding) r += 0.15; // possession
       if (this.rivalWhy === 'food' && this.fullT <= 0) r += 0.1;
+      if (this.rivalWhy === 'food' && this.prize && this.onOwnGround(this.prize)) r += 0.25; // our patch, our meal
       return r;
     }
     endRivalry(cd) {
       this.cancelStrike();
       this.rival = null;
+      this.prize = null;
       this.rivalCd = cd;
       if (RIVALRY.includes(this.state)) this.setState('wander');
     }
@@ -733,7 +797,7 @@
         this.pather.setGoal(rh.x, rh.y);
         const hp = this.homePos();
         const left = this.rivalWhy === 'territory' && hp && U.dist(rh.x, rh.y, hp.x, hp.y) > TERR_R * 1.3;
-        if (left || this.stateT > 9 || (this.rivalWhy === 'food' && !r.holding)) {
+        if (left || this.stateT > 9 || (this.rivalWhy === 'food' && !this.prizeLive(r))) {
           // it moved on (or the food's gone): good enough
           this.truce(r, 20);
           this.endRivalry(U.rand(3, 6));
@@ -744,6 +808,7 @@
           for (const [a, b] of [[this, r], [r, this]]) {
             a.rival = b;
             a.rivalWhy = this.rivalWhy;
+            a.prize = this.prize || r.holding || null;
             a.displayFor = t;
             a.setState('display');
             a.pather.clear();
@@ -806,7 +871,12 @@
         return;
       }
       for (const a of [this, r]) {
-        if (a.holding) a.release(); // drop the food to fight for it
+        if (a.holding) {
+          // drop the food to fight for it: it's what the winner gets
+          const f = a.holding;
+          a.release();
+          this.prize = r.prize = f;
+        }
         a.setState('fight');
       }
     }
@@ -816,6 +886,7 @@
       const eco = this.eco;
       const why = this.rivalWhy;
       const food = this.holding;
+      const prize = this.prize;
       if (food) {
         this.release();
         if (eco.cfg.ecosystem.predation && w.diet.includes(food.species) && !w.holding) w.grab(food);
@@ -830,7 +901,14 @@
       this.truce(w, 40);
       w.truce(this, 40);
       w.endRivalry(U.rand(8, 15));
+      // the spoils: the corpse dropped (or never reached) goes to the winner
+      const spoils = food && !food.grabbedBy ? food : prize;
+      if (spoils && spoils.corpse && !spoils.dead && !spoils.grabbedBy && !w.holding && eco.cfg.ecosystem.predation) {
+        w.prey = spoils;
+        w.setState('scavenge');
+      }
       this.rival = null;
+      this.prize = null;
       this.rivalCd = U.rand(20, 40);
       const g = this.fleeGoal(this.caps, w.x, w.y, 300);
       if (g) this.pather.setGoal(g.x, g.y, true);
@@ -865,7 +943,37 @@
     // Lunges have a short windup (stop, rear, gape) before the strike.
     // A bite is a short snap once in range; a pounce is a long leap from
     // further off. The windup follows the species' bite delay.
+    // One spine from the open mouth, aimed a little high to allow for its
+    // drop (and a little wild).
+    spit(prey) {
+      const m = this.holdPoint();
+      const t = prey.mainPoint();
+      const v = 520;
+      const d = Math.hypot(t.x - m.x, t.y - m.y);
+      const ft = d / v;
+      const tx = t.x + (prey.vx || 0) * ft * 0.5;
+      const ty = t.y - 0.5 * 260 * ft * ft;
+      const a = Math.atan2(ty - m.y, tx - m.x) + U.rand(-0.07, 0.07);
+      this.eco.items.push(new RW.Spine(this.eco, m.x + Math.cos(a) * 6, m.y + Math.sin(a) * 6, Math.cos(a) * v, Math.sin(a) * v, this));
+      this.thrashT = 0.12; // the head jerks with each one
+    }
+    // How squarely the head points at (tx, ty): 1 dead ahead, -1 behind.
+    facing(tx, ty) {
+      const P = this.spine.pts;
+      const fx = P[0].x - P[2].x;
+      const fy = P[0].y - P[2].y;
+      const dx = tx - P[0].x;
+      const dy = ty - P[0].y;
+      return (fx * dx + fy * dy) / (Math.hypot(fx, fy) * Math.hypot(dx, dy) || 1);
+    }
     lunge(tx, ty, prey, pounce) {
+      // Only at something in front: snapping at what's behind whips the head
+      // back over the body. Turn round (head first) instead, then strike.
+      if (this.facing(tx, ty) < -0.15) {
+        this.faceToward({ x: tx, y: ty });
+        this.lungeCd = Math.max(this.lungeCd || 0, 0.25);
+        return;
+      }
       this.windT = 0.08 + ((this.p.biteDelay === undefined ? 12 : this.p.biteDelay) / 40) * 0.5;
       this.lungeTarget = { x: tx, y: ty };
       this.lungeCd = U.rand(1.3, 2.4);
@@ -878,6 +986,12 @@
       const prey = this.lungePrey;
       const tx = prey && !prey.dead ? prey.x : this.lungeTarget.x;
       const ty = prey && !prey.dead ? prey.y : this.lungeTarget.y;
+      if (this.facing(tx, ty) < -0.3) {
+        // it got round behind us during the windup: no strike, turn to face it
+        this.lungePrey = null;
+        this.faceToward({ x: tx, y: ty });
+        return;
+      }
       const dx = tx - head.x;
       const dy = ty - head.y;
       const d = Math.hypot(dx, dy) || 1;
@@ -997,9 +1111,16 @@
           this.lungePrey = null;
           this.biteRival(prey);
         } else if (prey && !prey.dead && U.dist(head.x, head.y, prey.x, prey.y) < 18 * L) {
-          if (isLizard(prey) && !this.diet.includes(prey.species)) {
+          if (isLizard(prey) && !this.diet.includes(prey.species) && !(prey.p.red && this.p.red)) {
             // a rival, not a meal (the scrap ended mid-lunge): just snap shut
             this.lungeT = 0;
+          } else if (prey.p.armored && !prey.corpse) {
+            // armoured (a red feud): the bite wounds it, it doesn't take it
+            this.lungeT = 0;
+            this.lungePrey = null;
+            this.lungeCd = Math.max(this.lungeCd || 0, 0.7);
+            this.thrashT = 0.3;
+            prey.takeHit(((this.p.biteDamage || 1) * 0.16) * U.rand(0.8, 1.2), this);
           } else if (this.eco.cfg.ecosystem.predation && this.grab(prey)) {
             this.eatT = 0;
             this.lungeT = 0;
