@@ -82,6 +82,29 @@ session is set up on another branch, merge it into `main` once it's
 verified so the site updates (say so to the owner). `.nojekyll` keeps Pages
 from running Jekyll over the files.
 
+## Next session: owner's requests (not started)
+
+From the owner at the end of the 2026-10-04 session, in their words where it
+matters:
+
+1. Finish the WIP ground terrain (commit ff49c9b): brighten the rubble tops,
+   document in docs/ARCHITECTURE.md, full suite, republish the artifact.
+2. **Centipede snapping**: they "glitchily snap to nearby objects and between
+   them" moving from ledges to poles etc. Likely the surface pull (head and
+   every body point jump to whichever surface is nearest, 34 px reach since
+   the expert-navigation change). Ease the pull / commit to one surface.
+3. **Centipede on a pole**: draw the legs on both sides, as if climbing up
+   the centre of the pole, not hugging one side.
+4. **Lizards fight over scavenged corpses** to eat, especially in and near
+   their own territory.
+5. **Red creatures hate each other** and refuse to coexist (red lizards,
+   large red centipedes): they fight on sight; give them far more health
+   and resistance to attacks to make up for it.
+6. **Red lizards spit red spines** from the open mouth: they knock creatures
+   over and briefly stun them like a rock; it fires 2 or 3, then moves in
+   for the kill.
+7. **Large centipedes move 30% faster** than normal and than medium ones.
+
 ## Open items
 
 - **Real-desktop test** pending: the owner runs
