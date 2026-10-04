@@ -82,7 +82,7 @@
       this.bloodColor = '#3a0c18';
       this.threats = ['daddy', 'centipede_large'];
       // adults stab and eat lizards and anything smaller
-      this.diet = this.infant ? [] : this.p.diet || ['lizard_*', 'slugcat', 'centipede', 'centipede_medium', 'batfly', 'squidcada', 'dropwig'];
+      this.diet = this.infant ? [] : this.p.diet || ['lizard_*', 'slugcat', 'centipede', 'centipede_medium', 'squidcada', 'dropwig'] // (not batflies: beneath its notice);
       this.meals = 0;
       this.huntCd = U.rand(5, 15);
       this.clingT = U.rand(2, 8);
