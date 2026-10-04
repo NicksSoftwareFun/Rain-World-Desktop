@@ -887,6 +887,7 @@
     // health off (by its toughness), a jolt, dead at zero. True if it died.
     takeHit(power, from) {
       if (this.dead || this.corpse) return false;
+      if (from) this.lastHit = { by: from, t: this.eco.t };
       if (this.hp === undefined) this.hp = 1;
       this.hp -= power / (this.p.toughness || 1);
       const m = this.mainPoint();
@@ -1117,6 +1118,9 @@
     }
     kill() {
       if (this.corpse || this.dead) return;
+      // who did it: whatever has hold of it, else whatever hit it just now
+      const lh = this.lastHit;
+      this.killedBy = this.grabbedBy || (lh && this.eco.t - lh.t < 8 ? lh.by : null);
       this.corpse = true;
       this.corpseT = 0;
       this.stunT = 0;

@@ -241,6 +241,7 @@
     // Hit creature c on part index k.
     strike(c, k, part) {
       const eco = this.eco;
+      if (this.thrower) c.lastHit = { by: this.thrower, t: eco.t };
       if (this.kind === 'rock') {
         if (c.onRockHit) c.onRockHit(this, part);
         else c.stun(1);
@@ -410,6 +411,7 @@
       }
     }
     strike(c, k, part) {
+      if (this.thrower) c.lastHit = { by: this.thrower, t: this.eco.t };
       if (c.p && c.p.armored) {
         c.takeHit(0.35, this.thrower);
       } else {

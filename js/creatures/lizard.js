@@ -384,7 +384,7 @@
           // move in for the kill.
           if (this.p.spits) {
             this.spitCd = (this.spitCd || 0) - dt;
-            if (this.spitN > 0 && d > 45 * this.L) {
+            if (this.spitN > 0 && d > 45 * this.L && Math.abs(Math.atan2(prey.y - head.y, Math.abs(prey.x - head.x))) < Math.PI / 5) {
               this.speed = 0;
               this.raise = 0.55;
               this.jawTarget = 1;
@@ -397,7 +397,9 @@
               return;
             }
             this.spitN = 0;
-            if (this.spitCd <= 0 && this.grip && this.lungeT <= 0 && !(prey.stunT > 0) && d > 110 * this.L && d < 400 && this.W.lineClear(head.x, head.y, prey.x, prey.y)) {
+            // (only level-ish: within 30 degrees of straight ahead, left or right)
+            const level = Math.abs(Math.atan2(prey.y - head.y, Math.abs(prey.x - head.x))) < Math.PI / 6;
+            if (this.spitCd <= 0 && this.grip && this.lungeT <= 0 && level && !(prey.stunT > 0) && d > 110 * this.L && d < 450 && this.W.lineClear(head.x, head.y, prey.x, prey.y)) {
               this.spitN = U.randInt(2, 3);
               this.spitT = 0.3; // a beat with the mouth open before the first
             }
@@ -948,12 +950,15 @@
     spit(prey) {
       const m = this.holdPoint();
       const t = prey.mainPoint();
-      const v = 520;
+      const v = 800;
       const d = Math.hypot(t.x - m.x, t.y - m.y);
       const ft = d / v;
       const tx = t.x + (prey.vx || 0) * ft * 0.5;
       const ty = t.y - 0.5 * 260 * ft * ft;
-      const a = Math.atan2(ty - m.y, tx - m.x) + U.rand(-0.07, 0.07);
+      // never more than 30 degrees off level
+      const dir = tx >= m.x ? 1 : -1;
+      const e = U.clamp(Math.atan2(ty - m.y, Math.abs(tx - m.x)) + U.rand(-0.05, 0.05), -Math.PI / 6, Math.PI / 6);
+      const a = dir > 0 ? e : Math.PI - e;
       this.eco.items.push(new RW.Spine(this.eco, m.x + Math.cos(a) * 6, m.y + Math.sin(a) * 6, Math.cos(a) * v, Math.sin(a) * v, this));
       this.thrashT = 0.12; // the head jerks with each one
     }

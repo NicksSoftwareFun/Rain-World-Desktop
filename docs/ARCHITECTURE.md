@@ -75,7 +75,7 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 | File | Creature |
 | --- | --- |
 | `lizard.js` | All lizard colours (per-colour params in config, personality rolled per the wiki). Spine + 4 IK legs; hunting, lunges with a whole-body jolt, territory, rivalry and corpse fights, the red spine volley, carrying kills home (shaking them), scavenging, pole leaps, turning round (in-plane on poles). White lizards camouflage only while stalking. |
-| `slugcat.js` | Platformer physics, pole climbing, planned jumps (long leaps lie down and wind up first), arms and hands, rocks and spears (pick up, throw, two different items max), transit (eat one fruit + one meat, leave by the farthest den). |
+| `slugcat.js` | Platformer physics, pole climbing, planned jumps (long leaps lie down and wind up first), arms and hands, rocks and spears (pick up, throw, two different items max), transit (eat one fruit + one meat, leave by the farthest den). Eats only what it killed itself (`killedBy`, set by `kill()` from the holder or the last hit). Spears fly fast (860 px/s) and only within 30 degrees of level (`spearShot`); for a target steeply below, `startBackflip` springs up and back over and throws straight down from the top of the jump (straight down at once if already airborne). The same `backflip()` reverses direction at a run when the path doubles back (always when fleeing, otherwise for 60% of slugcats) and dodges a lizard's bite wind-up at close range; an escape flip can catch a pole on the way down. Rocks are still lobbed at any angle. |
 | `centipede.js` | Small/medium/large; segmented chain over any surface; small ones eat batflies, big ones hunt lizards and shock; large ones feud with red lizards. Never jump. |
 | `daddy.js` | Daddy Long Legs: tentacles grope for anchors and grab prey; transit (two meat meals). |
 | `dropwig.js` | Ceiling ambushers: crawl to a ceiling, wait, drop on prey. Long-legged grip across corners. |
@@ -96,7 +96,8 @@ dead it's an ordinary corpse.
 
 **Spines.** Red lizards (`spits: true`) open a hunt from 110-400 px with a
 volley of 2-3 `RW.Spine`s (`weapons.js`, kept in `eco.items`): 24 px
-barbs (a spear is 30), fast, slightly arcing, aimed high for the drop. A
+barbs (a spear is 30), fast (800 px/s), only spat within 30 degrees of
+level (prey steeply above or below is out of reach), aimed a touch high for the drop. A
 hit acts like a rock (`onRockHit`, or a flipped stun) on anything but an
 armoured creature, which takes a small `takeHit`, and the spine stays
 `embedded` in that body part (corpse included) until its host leaves or is

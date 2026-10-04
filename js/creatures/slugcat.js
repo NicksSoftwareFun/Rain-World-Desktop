@@ -10,6 +10,14 @@
   const GRAV = 1100;
   const R = 6.5;
   const ARM = 4.8; // upper arm and forearm length
+  // Spears fly fast and only go out level-ish: within 30 degrees of
+  // straight left or right. For something steeply below, a backflip out
+  // over the drop gives a straight-down throw from the top of the flip.
+  const SPEAR_V = 860;
+  const ARC = Math.PI / 6;
+  const DOWN = 0.36; // (tan 20 degrees: how far off vertical a down-throw goes)
+  const FLIP_VY = -390;
+  const FLIP_T = 0.6; // seconds for the full turn
   const LEG = 5.6;
 
   class Slugcat extends RW.Creature {
@@ -382,9 +390,15 @@
         const t = this.threatNear(p.vision || 260);
         if (t) {
           this.threat = t;
+          // a bite winding up right next to us: backflip up and away over it
+          const tdd = U.dist(t.x, t.y, hip.x, hip.y);
+          if ((t.windT > 0 || t.lungeT > 0) && tdd < 110 && (this.grounded || this.pole) && !this.flip && this.flipCd <= 0) {
+            const dir = Math.sign(hip.x - t.x) || -this.facing;
+            if (this.flipRoom(dir)) this.backflip(dir, dir * 150, -430);
+          }
           // armed and brave enough: throw at it first, then run
           const td = U.dist(t.x, t.y, hip.x, hip.y);
-          if (this.weapon && td < 230 && Math.random() < 0.35 + 0.6 * this.pers.bravery && this.W.lineClear(hip.x, hip.y - 6, t.x, t.y)) {
+          if (this.weapon && td < 230 && Math.random() < 0.35 + 0.6 * this.pers.bravery) {
             this.startThrow(t);
           }
           if (this.state !== 'flee' || this.stateT > 1.5) {
@@ -419,8 +433,9 @@
       if (perceive && this.hunger > 0.3 && this.state !== 'forage' && this.wants('meat')) {
         let downed = this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1);
         if (!downed) {
+          // (a corpse only if we killed it: no scavenging)
           const c = this.nearestCorpse(['batfly', 'centipede', 'noodlefly_infant'], 320);
-          if (c && (c.size || 1) <= 1) downed = c;
+          if (c && (c.size || 1) <= 1 && c.killedBy === this) downed = c;
         }
         if (downed) {
           this.food = downed;
@@ -429,7 +444,7 @@
       }
       if (this.state === 'forage' && this.food instanceof RW.Creature) {
         const f = this.food;
-        if (f.dead || f.leaving || f.grabbedBy || !(f.stunT > 0 || f.corpse) || this.stateT > 12) {
+        if (f.dead || f.leaving || f.grabbedBy || !(f.stunT > 0 || f.corpse) || (f.corpse && f.killedBy !== this) || this.stateT > 12) {
           this.food = null;
           this.setState('wander');
         } else {
@@ -500,7 +515,9 @@
 
       // Armed and hungry: knock prey out of the air, or fruit off its vine.
       if (perceive && this.weapon && this.hunger > 0.35 && this.throwCd <= 0 && !this.item && Math.random() < 0.35) {
-        const bf = this.wants('meat') && this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 240, (c) => !c.grabbedBy && !(c.stunT > 0) && (c.size || 1) <= 1 && U.dist(c.x, c.y, hip.x, hip.y) > 40 && this.canSee(c.x, c.y, 240));
+        // (a spear can reach prey below the ledge we're on: a backflip)
+        const spear = this.weapon.kind === 'spear';
+        const bf = this.wants('meat') && this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 240, (c) => !c.grabbedBy && !(c.stunT > 0) && (c.size || 1) <= 1 && U.dist(c.x, c.y, hip.x, hip.y) > 40 && (this.canSee(c.x, c.y, 240) || (spear && c.y > hip.y + 40)));
         if (bf) this.startThrow(bf);
         else if (this.wants('fruit') && !this.findFruit(500)) {
           // ripe fruit only comes down when something hits it (a rock's
@@ -631,7 +648,7 @@
         if (!(it instanceof RW.Weapon) || !this.canTake(it)) continue;
         if (it.claimedBy && it.claimedBy !== this) continue;
         if (it === this.ignoreWeapon && this.ignoreWeaponT > 0) continue;
-        const d = U.dist(it.x, it.y, hip.x, hip.y) - (it.kind === 'spear' ? 120 : 0) - (it.skewer && this.hunger > 0.3 ? 150 : 0);
+        const d = U.dist(it.x, it.y, hip.x, hip.y) - (it.kind === 'spear' ? 120 : 0) - (it.skewer && it.thrower === this && this.hunger > 0.3 ? 150 : 0);
         if (d < bs) {
           bs = d;
           best = it;
@@ -641,8 +658,11 @@
     }
     pickUpWeapon(w) {
       if (w.skewer) {
-        this.snackT = 1.4;
-        this.snackVal = w.skewer === 'centipede' ? 0.5 : 0.35;
+        // our own catch is a snack; someone else's falls off the spear
+        if (w.thrower === this) {
+          this.snackT = 1.4;
+          this.snackVal = w.skewer === 'centipede' ? 0.5 : 0.35;
+        }
         w.skewer = null;
       }
       w.pickUp(this);
@@ -694,11 +714,72 @@
         this.offhand = w;
       }
       const tp = this.aimPoint(t);
+      this.throwMode = null;
+      if (t !== this.grabbedBy) {
+        if (this.weapon.kind === 'spear') {
+          const mode = this.spearShot(tp);
+          if (!mode) return false;
+          if (mode === 'flip') return this.startBackflip(t);
+          this.throwMode = mode;
+        } else if (!this.W.lineClear(this.hip.x, this.hip.y - 6, tp.x, tp.y)) {
+          return false;
+        }
+      }
       this.throwAt = t;
       this.throwT = 0.16;
       this.facing = Math.sign(tp.x - this.hip.x) || this.facing;
-      this.aimAng = Math.atan2(tp.y - this.hip.y, tp.x - this.hip.x);
+      this.aimAng = this.throwMode === 'down' ? Math.PI / 2 : Math.atan2(tp.y - this.hip.y, tp.x - this.hip.x);
       return true;
+    }
+    // Can a spear reach tp from here? 'level' (within the 30 degree arc,
+    // in clear sight), 'down' (in the air, it's right below), 'flip' (it's
+    // steeply below: backflip out over the drop and throw from the top),
+    // or null (out of the arc: get level with it, or above it).
+    spearShot(tp) {
+      const hip = this.hip;
+      const from = this.shoulder();
+      const dx = tp.x - from.x;
+      const dy = tp.y - from.y;
+      if (Math.abs(Math.atan2(dy, Math.abs(dx))) <= ARC) return this.W.lineClear(from.x, from.y, tp.x, tp.y) ? 'level' : null;
+      if (dy < 40 || this.flip) return null; // (above: no throwing upward)
+      if (!this.grounded && !this.pole) return Math.abs(dx) < dy * DOWN && this.W.lineClear(from.x, from.y, tp.x, tp.y) ? 'down' : null;
+      const ax = hip.x + U.clamp(dx, -70, 70);
+      const ay = hip.y - (FLIP_VY * FLIP_VY) / (2 * GRAV);
+      if (Math.abs(tp.x - ax) > (tp.y - ay) * DOWN) return null;
+      if (!this.W.lineClear(hip.x, hip.y - 10, ax, ay) || !this.W.lineClear(ax, ay, tp.x, tp.y)) return null;
+      return 'flip';
+    }
+    // Spring up and back over, heading out above the target, and throw
+    // straight down at the top of the jump (see update).
+    startBackflip(t) {
+      const dx = U.clamp(this.aimPoint(t).x - this.hip.x, -70, 70);
+      this.backflip(Math.sign(dx) || this.facing, dx / (-FLIP_VY / GRAV), FLIP_VY, t);
+      this.throwCd = 0.6; // (nothing else thrown meanwhile)
+      return true;
+    }
+    // A backflip: a high jump back the other way, turning over once, head
+    // first in the direction of travel. Faster than skidding to a stop and
+    // turning round, so it's also how a slugcat doubles back at a run or
+    // dodges a lunge (the strike passes underneath). With a target, a
+    // spear goes straight down from the top of it.
+    backflip(dir, vx, vy, target) {
+      this.flip = { t: 0, target: target || null, thrown: !target, dir, ang: 0 };
+      this.flipCd = 1.2;
+      this.pole = null;
+      this.grounded = false;
+      this.jumping = true;
+      this.jumpTarget = null;
+      this.crouchT = 0;
+      this.pendingJump = null;
+      this.vy = vy;
+      this.vx = vx;
+      this.facing = -dir; // still facing the way we were going, flipping back over
+      this.faceS = -dir;
+    }
+    // Room overhead (and behind) for a backflip toward dir?
+    flipRoom(dir) {
+      const hip = this.hip;
+      return this.W.lineClear(hip.x, hip.y - 8, hip.x + dir * 30, hip.y - 85) && this.W.lineClear(hip.x + dir * 30, hip.y - 85, hip.x + dir * 70, hip.y - 40);
     }
     releaseThrow() {
       const w = this.weapon;
@@ -724,14 +805,32 @@
         return;
       }
       let tp = this.aimPoint(t);
-      const speed = w.kind === 'spear' ? 560 : 470;
+      if (w.kind === 'spear') {
+        let tt = U.dist(from.x, from.y, tp.x, tp.y) / SPEAR_V;
+        if (typeof t.vx === 'number' && typeof t.vy === 'number') tp = { x: tp.x + t.vx * tt * 0.7, y: tp.y + t.vy * tt * 0.7 };
+        tt = U.dist(from.x, from.y, tp.x, tp.y) / SPEAR_V;
+        let a;
+        if (this.throwMode === 'down') {
+          // straight down, give or take a little
+          a = U.clamp(Math.atan2(tp.y - from.y, tp.x - from.x), Math.PI / 2 - Math.atan(DOWN), Math.PI / 2 + Math.atan(DOWN));
+        } else {
+          // level-ish only, allowing for the spear's slight drop
+          const dir = Math.sign(tp.x - from.x) || this.facing;
+          const e = U.clamp(Math.atan2(tp.y - 0.5 * 260 * tt * tt - from.y, Math.abs(tp.x - from.x)), -ARC, ARC);
+          a = dir > 0 ? e : Math.PI - e;
+        }
+        this.throwMode = null;
+        w.throwAt(Math.cos(a) * SPEAR_V, Math.sin(a) * SPEAR_V, this);
+        return;
+      }
+      const speed = 470;
       let tt = U.dist(from.x, from.y, tp.x, tp.y) / speed;
       if (typeof t.vx === 'number' && typeof t.vy === 'number') {
         tp = { x: tp.x + t.vx * tt * 0.7, y: tp.y + t.vy * tt * 0.7 }; // lead a moving target
         tt = U.dist(from.x, from.y, tp.x, tp.y) / speed;
       }
       tt = Math.max(0.05, tt);
-      const g = w.kind === 'spear' ? (tt < 0.45 ? 260 : 600) : 900;
+      const g = 900;
       w.throwAt((tp.x - from.x) / tt, (tp.y - from.y) / tt - 0.5 * g * tt, this);
     }
 
@@ -787,6 +886,7 @@
       const hip = this.hip;
 
       this.throwCd -= dt;
+      this.flipCd = (this.flipCd || 0) - dt;
       if (this.throwT > 0) {
         this.throwT -= dt;
         if (this.throwT <= 0) this.releaseThrow();
@@ -930,6 +1030,12 @@
               }
             }
           }
+          // Running one way and the path turns back: a backflip beats
+          // skidding round (always when fleeing; some slugcats just like to)
+          if (this.flipper === undefined) this.flipper = Math.random() < 0.6;
+          if (want && !this.flip && !this.jumping && this.flipCd <= 0 && Math.sign(want) !== Math.sign(this.vx) && Math.abs(this.vx) > 80 && node && node.type === Nav.WALK && Math.abs(node.y - hip.y) < cell && Math.abs(node.x - hip.x) > 50 && (this.state === 'flee' || this.flipper) && this.flipRoom(Math.sign(want))) {
+            this.backflip(Math.sign(want), Math.sign(want) * 150, -430);
+          }
           if (!this.jumping && this.grounded) this.vx += (want - this.vx) * U.approach(12, dt);
           if (Math.abs(this.vx) > 5) this.facing = Math.sign(this.vx);
           this.walkPhase += Math.abs(this.vx) * dt * 0.22;
@@ -938,7 +1044,7 @@
           this.vx += (U.clamp(dx * 3, -speed, speed) - this.vx) * U.approach(2, dt);
         }
         // Catch a pole on the way past if the path wants one.
-        if (!this.grounded && node && W.pole(node.cx, node.cy) && this.vy > -150) {
+        if (!this.grounded && !(this.flip && this.flip.target) && node && W.pole(node.cx, node.cy) && this.vy > -150) {
           const pole = this.findPole(hip.x, hip.y);
           if (pole && Math.abs(node.x - pole.x) < cell) {
             this.pole = pole;
@@ -981,6 +1087,27 @@
         }
       }
       if (this.pole) this.grounded = false;
+
+      // The backflip: the body turns over once; at the top of the jump the
+      // spear goes straight down.
+      if (this.flip) {
+        const F = this.flip;
+        F.t += dt;
+        const k = U.clamp(F.t / FLIP_T, 0, 1);
+        F.ang = F.dir * U.TAU * k * k * (3 - 2 * k); // head goes back (the way we're flying) first
+        if (!F.thrown && this.vy > -40) {
+          F.thrown = true;
+          this.throwMode = 'down';
+          this.throwAt = F.target;
+          this.aimAng = Math.PI / 2;
+          this.releaseThrow();
+        }
+        if ((F.t > 0.15 && (this.grounded || this.pole)) || F.t > 1.5) {
+          this.flip = null;
+          this.jumping = false;
+          this.facing = F.dir; // landed facing the new way
+        }
+      }
 
       // Stuck detection
       if (U.dist(hip.x, hip.y, this.lastX, this.lastY) < 0.4 && this.pather.current()) this.stuckT += dt;
@@ -1029,6 +1156,9 @@
         // dangling: a predator's catch wriggles, the player's just hangs
         tx = hip.x + (this.grabbedBy && this.grabbedBy.isHand ? 0 : Math.sin(this.age * 9) * 4);
         ty = hip.y + 9;
+      } else if (this.flip && this.flip.t < FLIP_T) {
+        tx = hip.x + Math.sin(this.flip.ang) * 18;
+        ty = hip.y - Math.cos(this.flip.ang) * 18;
       } else if (this.crouchT > 0) {
         tx = hip.x + this.facing * 6;
         ty = hip.y - 10;
@@ -1053,7 +1183,7 @@
         tx = U.lerp(tx, hip.x + this.facing * 16, this.lie);
         ty = U.lerp(ty, hip.y + 1.5, this.lie);
       }
-      const k = U.approach(held ? 6 : 22, dt);
+      const k = U.approach(held ? 6 : this.flip ? 60 : 22, dt);
       h.x += (tx - h.x) * k;
       h.y += (ty - h.y) * k;
       const dx = h.x - hip.x;

@@ -670,6 +670,73 @@ const checks = [
     ],
   },
   {
+    name: 'throws',
+    about: 'spears and spines only fly within 30 degrees of level; slugcats backflip to throw down; slugcats eat only their own kills',
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        const S = e.cfg.species;
+        S.slugcat.weight = 4;
+        S.slugcat.loadout = { spear: 0.8, rock: 0, both: 0.2 };
+        for (const k of ['lizard_green', 'lizard_pink', 'lizard_red', 'centipede']) S[k].weight = 2;
+        e.restartWildlife();
+        const out = { flips: 0, downThrows: 0, levelThrows: 0, steepestLevel: 0, spines: 0, steepestSpine: 0, ownCorpses: 0, othersCorpses: 0 };
+        const deg = (vx, vy) => Math.round((Math.abs(Math.atan2(vy, Math.abs(vx))) * 180) / Math.PI);
+        const SC = RW.Creatures.Slugcat.prototype;
+        const sb = SC.startBackflip;
+        SC.startBackflip = function () {
+          out.flips++;
+          return sb.apply(this, arguments);
+        };
+        const C = RW.Creature.prototype;
+        const gr = C.grab;
+        C.grab = function (prey) {
+          const ok = gr.call(this, prey);
+          if (ok && this.species === 'slugcat' && prey.corpse) out[prey.killedBy === this ? 'ownCorpses' : 'othersCorpses']++;
+          return ok;
+        };
+        const Wp = RW.Weapon.prototype;
+        const ta = Wp.throwAt;
+        Wp.throwAt = function (vx, vy, by) {
+          if (this.kind === 'spear' && by && by.species === 'slugcat') {
+            const a = deg(vx, vy);
+            if (a > 60) out.downThrows++;
+            else {
+              out.levelThrows++;
+              out.steepestLevel = Math.max(out.steepestLevel, a);
+            }
+          }
+          return ta.apply(this, arguments);
+        };
+        const L = RW.Creatures.Lizard.prototype;
+        const sp = L.spit;
+        L.spit = function () {
+          const r = sp.apply(this, arguments);
+          const s2 = this.eco.items[this.eco.items.length - 1];
+          if (s2 && s2.kind === 'spine') {
+            out.spines++;
+            out.steepestSpine = Math.max(out.steepestSpine, deg(s2.vx, s2.vy));
+          }
+          return r;
+        };
+        // measured when written (6 min): 3 flips, all ending in a down-throw
+        for (let i = 0; i < mins * 3600; i++) e.tick(1 / 60);
+        SC.startBackflip = sb;
+        C.grab = gr;
+        Wp.throwAt = ta;
+        L.spit = sp;
+        return out;
+      }, T(6)),
+    judge: (m) => [
+      m.steepestLevel > 30 && `a spear went out at ${m.steepestLevel} degrees (limit 30)`,
+      m.steepestSpine > 30 && `a spine went out at ${m.steepestSpine} degrees (limit 30)`,
+      m.othersCorpses > 0 && `slugcats took ${m.othersCorpses} corpses they didn't kill`,
+      m.flips > 0 && m.downThrows < 1 && 'backflips but no down-throws',
+    ],
+    warn: (m) => !m.flips && 'no backflip this run',
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>
