@@ -158,7 +158,41 @@
       this.spriteCanvas.height = this.canvas.height;
       this.eco.artPx = this.ps / this.zoom; // world units per art pixel
       this.weather.artPx = this.eco.artPx;
-      RW.Background.paint(this.bgCanvas, this.W, this.H, this.ps / this.zoom, this.pal, this.decor, this.seed % 100000);
+      this.light = this.currentLight();
+      this.lightKey = RW.Background.Light.key(this.light);
+      this.paintBackground();
+    }
+    paintBackground() {
+      RW.Background.paint(this.bgCanvas, this.W, this.H, this.ps / this.zoom, this.pal, this.decor, this.seed % 100000, this.light);
+    }
+    // The light for now: the rain cycle's clock (or the preview hour); null
+    // when the day-night light is off.
+    currentLight() {
+      const w = this.cfg.world;
+      if (!w.realTimeLight) return null;
+      return RW.Background.Light.at(+w.timeOfDay >= 0 ? +w.timeOfDay : this.cycleHour());
+    }
+    // The rain cycle is the day: 6:00 as it starts, 19:30 as the downpour
+    // hits, and the downpour is the night, running round to dawn again.
+    cycleHour() {
+      const R = this.cfg.rain;
+      const dp = U.clamp(+R.downpourFraction || 0.12, 0.02, 0.6);
+      const ph = this.weather ? this.weather.phase : 0;
+      const end = 1 - dp;
+      return ph < end ? 6 + (ph / end) * 13.5 : 19.5 + ((ph - end) / dp) * 10.5;
+    }
+    // Every couple of seconds: the wash follows smoothly; the shadows (baked
+    // into the background) only get repainted when they've moved enough.
+    updateLight(dt) {
+      this.lightT = (this.lightT || 0) - dt;
+      if (this.lightT > 0) return;
+      this.lightT = 0.5;
+      this.light = this.currentLight();
+      const key = RW.Background.Light.key(this.light);
+      if (key !== this.lightKey) {
+        this.lightKey = key;
+        RW.Background.compose(this.bgCanvas, this.light); // just the shadows moving
+      }
     }
 
     // New background and decor; keeps the creatures that still fit.
@@ -271,6 +305,7 @@
     }
 
     tick(dt) {
+      this.updateLight(dt);
       const g = this.poll();
       this.paused = !!g.paused;
       if (g.paused) return; // wallpaper hidden behind a fullscreen app
@@ -324,6 +359,16 @@
       ctx.drawImage(this.spriteCanvas, 0, 0);
       ctx.setTransform(k, 0, 0, k, 0, 0);
       this.weather.drawRain(ctx, this.pal);
+      // the time of day over everything: warm at dawn and dusk, dim at night
+      const L = this.light;
+      if (L && L.washA > 0.005) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = U.rgba(U.mix('#ffffff', L.washCol, L.washA));
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.restore();
+      }
       if (cfg.rain.enabled && cfg.rain.showCycleHud) this.weather.drawHud(ctx, this.W, this.H, this.pal);
       if (cfg.debug.showGrid) this.drawGrid(ctx);
       if (cfg.debug.showFps) {

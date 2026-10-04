@@ -101,6 +101,15 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   (horizontal poles), vertical poles, then a **reachability pass** that adds
   poles or removes ledges until every surface is reachable from the floor.
   Then fruit plants, batfly grass, the nest, chains, dens.
+- `paint` keeps the backdrop and the play layer (poles, ledges, dens) as
+  separate canvases on `canvas._bg`; `compose` stacks backdrop, shadows,
+  play layer and vignette, cheaply, whenever the light moves.
+- `Light.at(hour)`: the day-night light. The hour is an accelerated clock run
+  by the rain cycle (`Engine.cycleHour`: 6:00 as a cycle starts, 19:30 as
+  the downpour hits, the downpour is the night) unless `world.timeOfDay`
+  holds it. It gives the sun's side and height (the shadow offset `dx, dy`,
+  thrown by ledges, poles and beams only, never creatures) and a colour
+  wash the engine multiplies over the whole frame.
 - `Weather`: the rain cycle (light rain, an exponential build-up, the
   downpour, an exponential ease-off), rain drops with a slanted rain shadow
   under ledges/windows (not beams), curtains, fog, the cycle HUD.

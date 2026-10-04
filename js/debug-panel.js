@@ -309,6 +309,9 @@
             this.mapT = setTimeout(() => eng.regenerate(false), 250);
           }),
           this.slider('time scale', Wc, 'timeScale', 0, 3, 0.05),
+          // light: the rain cycle's clock, or held at an hour (-1 = follow the cycle)
+          this.toggleCtl('day-night light', Wc, 'realTimeLight', () => (eng.lightT = 0)),
+          this.slider('time of day (-1 = rain cycle)', Wc, 'timeOfDay', -1, 24, 0.25, () => (eng.lightT = 0)),
           this.select('max fps', Wc, 'maxFps', [60, 30]),
           this.select('layout', Wc, 'layout', ['tiers', 'scatter'], () => eng.regenerate(false)),
           this.slider('ledges', Wc, 'decorLedges', 0, 14, 1),

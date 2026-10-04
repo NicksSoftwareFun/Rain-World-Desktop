@@ -376,7 +376,58 @@
   }
 
   // ---- static painting ----------------------------------------------------
-  function paint(canvas, W, H, ps, pal, decor, seed) {
+  // ---- light ------------------------------------------------------------
+  // The time of day (an accelerated clock run by the rain cycle: dawn as a
+  // cycle begins, dusk as the rain builds, the downpour is the night) sets
+  // the light: the sun's side and height (which way
+  // and how far ledges and poles throw their shadows onto the back wall)
+  // and a colour wash over the whole scene (none by day, warm at dawn and
+  // dusk, a dim blue at night, when a faint moon casts weaker shadows).
+  const WASH = [
+    // hour, colour, strength
+    [0, '#46507e', 0.52],
+    [4.5, '#46507e', 0.52],
+    [6, '#e89a86', 0.26],
+    [8, '#ffffff', 0],
+    [16.5, '#ffffff', 0],
+    [18.5, '#f0904c', 0.28],
+    [20, '#46507e', 0.52],
+    [24, '#46507e', 0.52],
+  ];
+  const Light = {
+    at(hour) {
+      const h = ((hour % 24) + 24) % 24;
+      let i = 0;
+      while (i < WASH.length - 2 && WASH[i + 1][0] <= h) i++;
+      const [h0, c0, a0] = WASH[i];
+      const [h1, c1, a1] = WASH[i + 1];
+      const t = U.smooth(U.clamp((h - h0) / (h1 - h0 || 1), 0, 1));
+      const washCol = U.mix(c0, c1, t);
+      const washA = a0 + (a1 - a0) * t;
+      // the sun's arc, 6:00 to 18:00; the moon's, the rest of the night
+      const day = h >= 6 && h <= 18;
+      const arc = day ? (h - 6) / 12 : ((h + 6) % 24) / 12; // 0 rising .. 1 setting
+      const elev = Math.max(0.12, Math.sin(Math.PI * arc));
+      const side = -Math.cos(Math.PI * arc); // -1: low on the left .. +1: on the right
+      // shadows fall away from the light: across, and further when it's low
+      const reach = U.clamp(1 / elev, 1, 3.2);
+      return {
+        hour: h,
+        washCol,
+        washA,
+        // world units: how far a shadow lands from what casts it
+        dx: Math.round(-side * 9 * reach),
+        dy: Math.round(6 + 6 * elev),
+        alpha: day ? 0.4 + 0.18 * (1 - elev) : 0.2,
+      };
+    },
+    // Coarse enough that the background only gets repainted now and then.
+    key(L) {
+      return L ? `${L.dx},${L.dy},${Math.round(L.alpha * 40)}` : '';
+    },
+  };
+
+  function paint(canvas, W, H, ps, pal, decor, seed, light) {
     const rnd = U.mulberry32(seed * 7919 + 13);
     const R = (a, b) => a + rnd() * (b - a);
     canvas.width = Math.ceil(W / ps);
@@ -415,7 +466,7 @@
 
     // Each silhouette layer is painted separately and snapped to hard pixel
     // edges before compositing, so shapes read as pixel art, not vectors.
-    const layer = (fn) => {
+    const layer = (fn, alpha, target) => {
       const c = document.createElement('canvas');
       c.width = canvas.width;
       c.height = canvas.height;
@@ -423,10 +474,12 @@
       l.setTransform(1 / ps, 0, 0, 1 / ps, 0, 0);
       fn(l);
       U.crisp(c, 128);
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(c, 0, 0);
-      ctx.restore();
+      const t = target || ctx;
+      t.save();
+      t.setTransform(1, 0, 0, 1, 0, 0);
+      if (alpha !== undefined) t.globalAlpha = alpha; // (crisp shapes, then see-through)
+      t.drawImage(c, 0, 0);
+      t.restore();
     };
     // Far superstructure
     layer((l) => farLayer(l, W, H, pal, R, rnd, 0.62));
@@ -437,25 +490,30 @@
     // Near layer
     layer((l) => nearLayer(l, W, H, pal, R, rnd, 0.12));
 
-    // Play layer: poles then ledges
+    // The backdrop is kept as it is; the play layer (poles, ledges, dens) is
+    // kept apart, so the shadows can go in between them whenever the light
+    // moves without repainting everything (see compose).
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    grain(ctx, canvas.width, canvas.height, rnd);
+    const mk = () => {
+      const c = document.createElement('canvas');
+      c.width = canvas.width;
+      c.height = canvas.height;
+      return c;
+    };
+    const back = mk();
+    back.getContext('2d').drawImage(canvas, 0, 0);
+    const play = mk();
+    const pctx = play.getContext('2d', { willReadFrequently: true });
     layer((l) => {
       for (const p of decor.poles) drawPole(l, p, pal);
       for (const b of decor.beams || []) drawBeam(l, b, pal);
       for (const lg of decor.ledges) drawLedge(l, lg, pal);
       for (const d of decor.dens) drawDenStatic(l, d, pal);
-    });
-
-    // Grain + vignette at native internal resolution.
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    grain(ctx, canvas.width, canvas.height, rnd);
-    const vg = ctx.createRadialGradient(
-      canvas.width / 2, canvas.height * 0.45, Math.min(canvas.width, canvas.height) * 0.35,
-      canvas.width / 2, canvas.height * 0.5, Math.max(canvas.width, canvas.height) * 0.8
-    );
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, U.rgba(pal.dark, 0.55));
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }, undefined, pctx);
+    grain(pctx, play.width, play.height, rnd);
+    canvas._bg = { back, play, shadow: mk(), ps, pal, decor };
+    compose(canvas, light);
     return canvas;
 
     function fogWash(ctx, W, H, pal, a0, a1) {
@@ -1102,5 +1160,50 @@
     }
   }
 
-  RW.Background = { generateDecor, paint, Weather };
+  // Backdrop, then the shadows the ledges and poles (never the creatures)
+  // throw onto the back wall, offset away from the light, then the ledges
+  // and poles themselves, then the vignette. Cheap: done whenever the light
+  // moves.
+  function compose(canvas, light) {
+    const B = canvas._bg;
+    if (!B) return;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(B.back, 0, 0);
+    if (light && light.alpha > 0) {
+      const sh = B.shadow;
+      const sx = sh.getContext('2d');
+      sx.setTransform(1, 0, 0, 1, 0, 0);
+      sx.clearRect(0, 0, sh.width, sh.height);
+      sx.fillStyle = U.rgba(B.pal.dark);
+      const k = 1 / B.ps;
+      // whole art pixels, so the edges stay hard
+      const rect = (x, y, w, h) => {
+        const x0 = Math.round(x * k);
+        const y0 = Math.round(y * k);
+        sx.fillRect(x0, y0, Math.max(1, Math.round((x + w) * k) - x0), Math.max(1, Math.round((y + h) * k) - y0));
+      };
+      const { dx, dy } = light;
+      for (const lg of B.decor.ledges) rect(lg.x + dx, lg.y + dy, lg.w, lg.h + 4);
+      for (const p of B.decor.poles) rect(p.x - 2 + dx * 0.7, p.y1 + dy * 0.7, 4, p.y2 - p.y1);
+      for (const b of B.decor.beams || []) rect(b.x + dx * 0.7, b.y + dy * 0.7, b.w, Math.max(3, b.h));
+      ctx.globalAlpha = light.alpha;
+      ctx.drawImage(sh, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+    ctx.drawImage(B.play, 0, 0);
+    const vg = ctx.createRadialGradient(
+      canvas.width / 2, canvas.height * 0.45, Math.min(canvas.width, canvas.height) * 0.35,
+      canvas.width / 2, canvas.height * 0.5, Math.max(canvas.width, canvas.height) * 0.8
+    );
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, U.rgba(B.pal.dark, 0.55));
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  RW.Background = { generateDecor, paint, compose, Weather, Light };
 })();

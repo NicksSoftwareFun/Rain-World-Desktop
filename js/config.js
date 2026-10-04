@@ -27,6 +27,8 @@
       beams: 0.5, // horizontal poles: bridges between level ledges, perches off vertical poles
       fruitPlants: 5,
       timeScale: 1,
+      realTimeLight: true, // day-night light run by the rain cycle (dawn .. dusk, the downpour is night); ledges and poles cast shadows
+      timeOfDay: -1, // hours (0-24) to hold the light at; -1 = follow the rain cycle
       maxFps: 60, // 30 halves drawing cost; the simulation is unaffected
     },
     rain: {
