@@ -158,6 +158,80 @@
       this.pos.x += dx;
       this.pos.y += dy;
       this.tail.shift(dx, dy);
+      if (this.slack) {
+        for (const q of this.slack) {
+          q.x += dx;
+          q.y += dy;
+          q.px += dx;
+          q.py += dy;
+        }
+      }
+    }
+    // Dead: the arch is no longer held in its crook but goes slack, a floppy
+    // rope that hangs and drapes under its own weight (pinned at the neck
+    // when something carries it off), and the proboscis slides back in.
+    updateSlack(dt, pin) {
+      if (!this.slack) this.slack = this.archPtsLive().map((q) => ({ x: q.x, y: q.y, px: q.x, py: q.y }));
+      const P = this.slack;
+      const n = P.length;
+      const seg = this.D.archSeg * this.L;
+      const g = (this.infant ? 300 : 500) * dt * dt;
+      for (const q of P) {
+        const vx = (q.x - q.px) * 0.9;
+        const vy = (q.y - q.py) * 0.9;
+        q.px = q.x;
+        q.py = q.y;
+        q.x += vx;
+        q.y += vy + g;
+      }
+      const k = n - 2; // the neck
+      for (let it = 0; it < 4; it++) {
+        if (pin) {
+          P[k].x = pin.x;
+          P[k].y = pin.y;
+        }
+        for (let i = 1; i < n; i++) {
+          const a = P[i - 1];
+          const b = P[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.hypot(dx, dy) || 1e-4;
+          const e = (d - seg) / d;
+          if (pin && i - 1 === k) {
+            b.x -= dx * e;
+            b.y -= dy * e;
+          } else if (pin && i === k) {
+            a.x += dx * e;
+            a.y += dy * e;
+          } else {
+            a.x += dx * e * 0.5;
+            a.y += dy * e * 0.5;
+            b.x -= dx * e * 0.5;
+            b.y -= dy * e * 0.5;
+          }
+        }
+      }
+      // nothing stands up on its own: a link balanced straight up topples
+      for (let i = 1; i < n; i++) {
+        const a = P[i - 1];
+        const q = P[i];
+        if (a.y - q.y > seg * 0.7) q.x += (this.facing || 1) * seg * 0.08;
+        if (i < n - 1) {
+          const c = P[i + 1];
+          if (c.y < q.y - seg * 0.7 && (!pin || i + 1 !== k)) c.x += (this.facing || 1) * seg * 0.08;
+        }
+      }
+      for (const q of P) this.W.collideCircle(q, this.infant ? 1 : 2);
+      if (pin) {
+        P[k].x = P[k].px = pin.x;
+        P[k].y = P[k].py = pin.y;
+      }
+      this.pos.x = P[0].x;
+      this.pos.y = P[0].y;
+      const h = P[n - 1];
+      const b = P[n - 2];
+      this.headAng = Math.atan2(h.y - b.y, h.x - b.x);
+      this.needle += (0 - this.needle) * U.approach(10, dt);
     }
     holdPoint() {
       return this.needleTip();
@@ -195,6 +269,9 @@
     // The arch from the shoulder up and over to the head (a crook when
     // resting, straightened along `aim` to stab).
     archPts() {
+      return this.slack || this.archPtsLive();
+    }
+    archPtsLive() {
       const L = this.L;
       const n = this.D.archN;
       const seg = this.D.archSeg * L;
@@ -360,6 +437,13 @@
         // moment)
         const g = this.grabbedBy;
         const hp = g.holdPoint();
+        if (this.corpse) {
+          // dead in the jaws: slack, hanging from the neck
+          this.updateSlack(dt, hp);
+          this.vx = this.vy = 0;
+          this.updateTail(dt);
+          return;
+        }
         // the body goes slack and dangles from the jaws, forward and down
         const gx = g.x !== undefined ? g.x : hp.x;
         const gy = g.y !== undefined ? g.y : hp.y;
@@ -511,6 +595,12 @@
       if (!was && this.infant) this.cry(this.grabbedBy);
     }
     limp(dt) {
+      if (this.corpse) {
+        // dead on the ground: a slack heap, draped over whatever it's on
+        this.updateSlack(dt, null);
+        this.vx = this.vy = 0;
+        return;
+      }
       // knocked out or dead: drops and lies where it lands
       const p = this.pos;
       this.vy += 700 * dt;
