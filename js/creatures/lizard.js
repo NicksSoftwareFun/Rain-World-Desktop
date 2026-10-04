@@ -905,51 +905,90 @@
       for (const l of this.legs) l.leg.planted = false;
     }
 
-    // Turning round: the body swings over through the vertical instead of
-    // the head ploughing back through its own shoulders.
+    // Turning round: the head leads. It rears up and arcs back over its own
+    // shoulders, coming down facing the other way (the head flips over at
+    // the top), and walks off; the body follows the exact path the head
+    // took, flowing up, over and back through itself, until the tail has
+    // been round too.
     startTurn() {
       const P = this.spine.pts;
-      const C = { x: P[3].x, y: P[3].y };
-      const tx = -this.uy;
-      const ty = this.ux;
-      const off = P.map((p) => [(p.x - C.x) * tx + (p.y - C.y) * ty, (p.x - C.x) * this.ux + (p.y - C.y) * this.uy]);
-      // on a pole there's no "over": the body swings round the pole instead
-      const W = this.W;
-      const cx = W.cellX(C.x);
-      const cy = W.cellY(C.y);
-      const pole = W.pole(cx, cy) && !W.solid(cx, cy + 1);
-      this.turn = { t: 0, dur: pole ? 0.55 : 0.42, C, tx, ty, nx: this.ux, ny: this.uy, off, pole, dir: Math.random() < 0.5 ? 1 : -1 };
-      for (const l of this.legs) l.leg.planted = false;
+      const H = P[0];
+      let fx = H.x - P[2].x;
+      let fy = H.y - P[2].y;
+      const fl = Math.hypot(fx, fy) || 1;
+      fx /= fl;
+      fy /= fl;
+      // "up" is away from the surface, on the side the body isn't
+      let ux = this.ux;
+      let uy = this.uy;
+      if (Math.abs(fx * ux + fy * uy) > 0.7) {
+        ux = -fy;
+        uy = fx;
+      }
+      const r = 9 * this.L; // how high it rears
+      const trail = [];
+      for (let i = P.length - 1; i >= 0; i--) trail.push({ x: P[i].x, y: P[i].y });
+      const bodyLen = this.spine.seg.reduce((a, b) => a + b, 0);
+      this.turn = { t: 0, dur: 0.6, phase: 'arch', c: { x: H.x - fx * r, y: H.y - fy * r }, f: { x: fx, y: fy }, up: { x: ux, y: uy }, r, trail, moved: 0, bodyLen };
       this.vx = this.vy = 0;
     }
 
+    // The arch: the head along a half circle up, over and down behind.
     stepTurn(dt) {
       const T = this.turn;
-      const P = this.spine.pts;
       T.t += dt;
       const k = Math.min(1, T.t / T.dur);
-      const f = Math.cos(Math.PI * k); // 1 -> -1 mirrors the body about the pivot
-      const lift = Math.sin(Math.PI * k);
-      const th = Math.PI * U.smooth(k) * T.dir;
-      const cs = Math.cos(th);
-      const sn = Math.sin(th);
-      for (let i = 0; i < P.length; i++) {
-        let a = T.off[i][0];
-        let b = T.off[i][1];
-        if (T.pole) {
-          // swing round in the plane, full length all the way
-          const ra = a * cs - b * sn;
-          b = a * sn + b * cs;
-          a = ra;
-        } else {
-          a *= f;
-          b += lift * Math.min(9 * this.L, Math.abs(T.off[i][0]) * 0.45);
-        }
-        P[i].x = P[i].px = T.C.x + T.tx * a + T.nx * b;
-        P[i].y = P[i].py = T.C.y + T.ty * a + T.ny * b;
-        this.W.collideCircle(P[i], i < this.bodyN ? 3 * this.L : 2);
-      }
+      const th = Math.PI * U.smooth(k);
+      const h = this.spine.pts[0];
+      h.x = h.px = T.c.x + T.f.x * T.r * Math.cos(th) + T.up.x * T.r * Math.sin(th);
+      h.y = h.py = T.c.y + T.f.y * T.r * Math.cos(th) + T.up.y * T.r * Math.sin(th);
+      this.followTrail();
       if (k >= 1) {
+        // down and off the other way
+        T.phase = 'walk';
+        this.vx = -T.f.x * 30;
+        this.vy = -T.f.y * 30;
+      }
+    }
+
+    // Lay the body along the head's own path, link by link behind it.
+    followTrail() {
+      const T = this.turn;
+      const P = this.spine.pts;
+      const h = P[0];
+      const tr = T.trail;
+      const last = tr[tr.length - 1];
+      const d = Math.hypot(h.x - last.x, h.y - last.y);
+      if (d > 0.5) {
+        tr.push({ x: h.x, y: h.y });
+        T.moved += d;
+      }
+      let j = tr.length - 1; // walking back along the trail from the head
+      let ax = h.x;
+      let ay = h.y;
+      let left = 0; // distance still to go to the next body point
+      for (let i = 1; i < P.length; i++) {
+        left += this.spine.seg[i - 1];
+        while (j >= 0) {
+          const bx = tr[j].x;
+          const by = tr[j].y;
+          const sl = Math.hypot(bx - ax, by - ay);
+          if (sl >= left && sl > 0) {
+            ax += ((bx - ax) * left) / sl;
+            ay += ((by - ay) * left) / sl;
+            left = 0;
+            break;
+          }
+          left -= sl;
+          ax = bx;
+          ay = by;
+          j--;
+        }
+        P[i].x = P[i].px = ax;
+        P[i].y = P[i].py = ay;
+      }
+      // all the way round (or held up too long): back to the usual body
+      if ((T.phase === 'walk' && T.moved > T.bodyLen + T.r * 4) || T.t > 6) {
         this.turn = null;
         this.turnCd = 1.2;
         this.look = 0;
@@ -983,12 +1022,13 @@
       this.think(dt);
       this.pather.update(dt, head.x, head.y);
       this.turnCd = (this.turnCd || 0) - dt;
-      if (this.turn) {
+      if (this.turn && this.turn.phase === 'arch') {
         this.stepTurn(dt);
         this.headAng = U.lerpAngle(this.headAng, Math.atan2(P[0].y - P[1].y, P[0].x - P[1].x), U.approach(20, dt));
         this.updateLegs(dt, true);
         return;
       }
+      if (this.turn) this.turn.t += dt;
       if (this.windT > 0) {
         // windup: stop, rear, gape
         this.windT -= dt;
@@ -1190,45 +1230,50 @@
       head.px = head.x;
       head.py = head.y;
 
-      // Body and tail
-      this.spine.verlet(this.bodyN, 0.88, 0, g ? 150 : 700, dt);
-      this.spine.follow(1);
-      // no hairpins: the body and tail bend round, never double back flat
-      this.spine.limitBend(0.8, 2, this.bodyN + 2, 0.5);
-      this.spine.limitBend(0.75, this.bodyN + 2, P.length, 0.5);
-      for (let i = 1; i < P.length; i++) {
-        const pt = P[i];
-        if (g && !this.leavingSurface && i < this.bodyN + 4) {
-          const s = W.nearestSurface(pt.x, pt.y, 22 * L, mask);
-          if (s) {
-            const e = s.d - (i < this.bodyN ? 14 - i * 0.5 + this.raiseS * 12 * (REAR[i] || 0) : 5.5 + (this.bodyN + 4 - i) * 1.4) * L;
-            pt.x -= s.nx * e * 0.3;
-            pt.y -= s.ny * e * 0.3;
+      // Body and tail (coming round a turn, they follow the head's path)
+      if (this.turn && (this.lungeT > 0 || this.leavingSurface || !g)) this.turn = null;
+      if (this.turn) this.followTrail();
+      else {
+        this.spine.verlet(this.bodyN, 0.88, 0, g ? 150 : 700, dt);
+        this.spine.follow(1);
+        // no hairpins: the body and tail bend round, never double back flat
+        this.spine.limitBend(0.8, 2, this.bodyN + 2, 0.5);
+        this.spine.limitBend(0.75, this.bodyN + 2, P.length, 0.5);
+        for (let i = 1; i < P.length; i++) {
+          const pt = P[i];
+          if (g && !this.leavingSurface && i < this.bodyN + 4) {
+            const s = W.nearestSurface(pt.x, pt.y, 22 * L, mask);
+            if (s) {
+              const e = s.d - (i < this.bodyN ? 14 - i * 0.5 + this.raiseS * 12 * (REAR[i] || 0) : 5.5 + (this.bodyN + 4 - i) * 1.4) * L;
+              pt.x -= s.nx * e * 0.3;
+              pt.y -= s.ny * e * 0.3;
+            }
+          }
+          W.collideCircle(pt, i < this.bodyN ? 4 * L : 2.5);
+        }
+        // On a pole the body hangs straight down one side of it (the side the
+        // neck is on) instead of coiling round it.
+        const pole = this.lungeT <= 0 && !this.leavingSurface && this.poleUnder(P[2]) && this.poleUnder(P[Math.min(this.bodyN, P.length - 1)]);
+        if (pole) {
+          const side = Math.sign(P[1].x - pole.x) || 1;
+          const tx = pole.x + side * 6 * L;
+          for (let i = 2; i < this.bodyN + 3; i++) {
+            const pt = P[i];
+            if (pt.y > pole.y1 && pt.y < pole.y2) pt.x += (tx - pt.x) * 0.2;
           }
         }
-        W.collideCircle(pt, i < this.bodyN ? 4 * L : 2.5);
-      }
-      // On a pole the body hangs straight down one side of it (the side the
-      // neck is on) instead of coiling round it.
-      const pole = this.lungeT <= 0 && !this.leavingSurface && this.poleUnder(P[2]) && this.poleUnder(P[Math.min(this.bodyN, P.length - 1)]);
-      if (pole) {
-        const side = Math.sign(P[1].x - pole.x) || 1;
-        const tx = pole.x + side * 6 * L;
-        for (let i = 2; i < this.bodyN + 3; i++) {
-          const pt = P[i];
-          if (pt.y > pole.y1 && pt.y < pole.y2) pt.x += (tx - pt.x) * 0.2;
+        // A little backbone stiffness: the body resists folding into a heap.
+        if (g && !this.leavingSurface) {
+          for (let i = 1; i < this.bodyN + 2; i++) {
+            const a = P[i - 1];
+            const b = P[i + 1];
+            const pt = P[i];
+            pt.x += ((a.x + b.x) / 2 - pt.x) * 0.12;
+            pt.y += ((a.y + b.y) / 2 - pt.y) * 0.12;
+          }
         }
-      }
-      // A little backbone stiffness: the body resists folding into a heap.
-      if (g && !this.leavingSurface) {
-        for (let i = 1; i < this.bodyN + 2; i++) {
-          const a = P[i - 1];
-          const b = P[i + 1];
-          const pt = P[i];
-          pt.x += ((a.x + b.x) / 2 - pt.x) * 0.12;
-          pt.y += ((a.y + b.y) / 2 - pt.y) * 0.12;
-        }
-      }
+
+      } // (end of the usual body; see the turn above)
 
       // Lunge follow-through: shoulders, hips and tail lurch after the head.
       // Each point is dragged along by a share of the head's own movement this
