@@ -527,7 +527,7 @@
       this.spine.verlet(1, 0.9, 0, GRAV, dt);
       this.spine.follow(1);
       // floppy, but a body has a spine: it never folds flat back on itself
-      this.spine.limitBend(1.6, 2, this.bodyN + 2, 0.3);
+      this.spine.limitBend(1.6, 2, this.bodyN + 3, 0.6);
       this.spine.collide(W, 3, 1);
       this.grip = null;
       // on its back: belly up, so the legs kick at the sky

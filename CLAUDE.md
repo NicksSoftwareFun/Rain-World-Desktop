@@ -90,8 +90,8 @@ red feud (red lizards and large centipedes hunt each other on sight, are
 armoured and twice as tough); red lizards spit spine volleys; lizards
 contest scavenged corpses, hardest on their own patch. Since then:
 spines are spear-length and lodge in what they hit (40 s); slugcats eat
-only their own kills; spears and spines fly faster and only within 30
-degrees of level; slugcats backflip to throw spears straight down, to
+only their own kills; spears, rocks and spines fly faster and only
+within 30 degrees of level; slugcats backflip to throw spears straight down, to
 double back at a run and to dodge a lunge.
 Details in docs/ARCHITECTURE.md.
 

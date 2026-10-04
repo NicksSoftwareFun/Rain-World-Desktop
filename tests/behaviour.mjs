@@ -671,7 +671,7 @@ const checks = [
   },
   {
     name: 'throws',
-    about: 'spears and spines only fly within 30 degrees of level; slugcats backflip to throw down; slugcats eat only their own kills',
+    about: 'spears, rocks and spines only fly within 30 degrees of level; slugcats backflip to throw down; slugcats eat only their own kills',
     run: (page) =>
       page.evaluate((mins) => {
         const e = RW_APP.engine;
@@ -699,7 +699,7 @@ const checks = [
         const Wp = RW.Weapon.prototype;
         const ta = Wp.throwAt;
         Wp.throwAt = function (vx, vy, by) {
-          if (this.kind === 'spear' && by && by.species === 'slugcat') {
+          if (by && by.species === 'slugcat') {
             const a = deg(vx, vy);
             if (a > 60) out.downThrows++;
             else {
@@ -729,7 +729,7 @@ const checks = [
         return out;
       }, T(6)),
     judge: (m) => [
-      m.steepestLevel > 30 && `a spear went out at ${m.steepestLevel} degrees (limit 30)`,
+      m.steepestLevel > 30 && `a spear or rock went out at ${m.steepestLevel} degrees (limit 30)`,
       m.steepestSpine > 30 && `a spine went out at ${m.steepestSpine} degrees (limit 30)`,
       m.othersCorpses > 0 && `slugcats took ${m.othersCorpses} corpses they didn't kill`,
       m.flips > 0 && m.downThrows < 1 && 'backflips but no down-throws',

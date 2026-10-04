@@ -10,10 +10,12 @@
   const GRAV = 1100;
   const R = 6.5;
   const ARM = 4.8; // upper arm and forearm length
-  // Spears fly fast and only go out level-ish: within 30 degrees of
-  // straight left or right. For something steeply below, a backflip out
-  // over the drop gives a straight-down throw from the top of the flip.
+  // Spears and rocks fly fast and only go out level-ish: within 30 degrees
+  // of straight left or right. For something steeply below, a backflip out
+  // over the drop gives a straight-down throw from the top of the flip;
+  // for something above, get level with it first (climb, or back off).
   const SPEAR_V = 860;
+  const ROCK_V = 700;
   const ARC = Math.PI / 6;
   const DOWN = 0.36; // (tan 20 degrees: how far off vertical a down-throw goes)
   const FLIP_VY = -390;
@@ -515,15 +517,47 @@
 
       // Armed and hungry: knock prey out of the air, or fruit off its vine.
       if (perceive && this.weapon && this.hunger > 0.35 && this.throwCd <= 0 && !this.item && Math.random() < 0.35) {
-        // (a spear can reach prey below the ledge we're on: a backflip)
-        const spear = this.weapon.kind === 'spear';
-        const bf = this.wants('meat') && this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 240, (c) => !c.grabbedBy && !(c.stunT > 0) && (c.size || 1) <= 1 && U.dist(c.x, c.y, hip.x, hip.y) > 40 && (this.canSee(c.x, c.y, 240) || (spear && c.y > hip.y + 40)));
+        // (prey below the ledge we're on can be had from a backflip)
+        const bf = this.wants('meat') && this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 240, (c) => !c.grabbedBy && !(c.stunT > 0) && (c.size || 1) <= 1 && U.dist(c.x, c.y, hip.x, hip.y) > 40 && (this.canSee(c.x, c.y, 240) || c.y > hip.y + 40));
         if (bf) this.startThrow(bf);
-        else if (this.wants('fruit') && !this.findFruit(500)) {
+        else if (this.wants('fruit') && !this.findFruit(500) && this.state !== 'aim') {
           // ripe fruit only comes down when something hits it (a rock's
-          // best, but a spear will do)
-          const pl = this.ripePlant(hip, 260, true);
-          if (pl) this.startThrow(pl);
+          // best, but a spear will do); throws only go out level-ish, so
+          // fruit hanging overhead means finding a spot level with it first
+          const pl = this.ripePlant(hip, 300, false);
+          if (this.ignorePlantT > 0) this.ignorePlantT -= 0.25;
+          else this.ignorePlant = null;
+          if (pl && pl !== this.ignorePlant && !this.startThrow(pl)) {
+            const spot = this.throwSpot(this.aimPoint(pl));
+            if (spot) {
+              this.aimFor = { plant: pl, spot };
+              this.setState('aim');
+            } else {
+              this.ignorePlant = pl; // nowhere to throw from: forget it a while
+              this.ignorePlantT = 30;
+            }
+          }
+        }
+      }
+      // Walking to a spot level with some fruit, to knock it down from there.
+      if (this.state === 'aim') {
+        const A = this.aimFor;
+        const unreachable = this.pather.nodes && !this.pather.complete && this.pather.remaining() === 0 && this.stateT > 1.5;
+        if (!A || !A.plant.ripe() || !this.weapon || this.stateT > 14 || unreachable) {
+          if (A && (unreachable || this.stateT > 14)) {
+            this.ignorePlant = A.plant;
+            this.ignorePlantT = 30;
+          }
+          this.aimFor = null;
+          this.setState('wander');
+        } else {
+          this.pather.interval = 0.7;
+          this.pather.setGoal(A.spot.x, A.spot.y);
+          if (perceive && this.throwCd <= 0 && (this.grounded || this.pole) && this.startThrow(A.plant)) {
+            this.aimFor = null;
+            this.setState('wander');
+          }
+          return;
         }
       }
 
@@ -716,14 +750,10 @@
       const tp = this.aimPoint(t);
       this.throwMode = null;
       if (t !== this.grabbedBy) {
-        if (this.weapon.kind === 'spear') {
-          const mode = this.spearShot(tp);
-          if (!mode) return false;
-          if (mode === 'flip') return this.startBackflip(t);
-          this.throwMode = mode;
-        } else if (!this.W.lineClear(this.hip.x, this.hip.y - 6, tp.x, tp.y)) {
-          return false;
-        }
+        const mode = this.shot(tp);
+        if (!mode) return false;
+        if (mode === 'flip') return this.startBackflip(t);
+        this.throwMode = mode;
       }
       this.throwAt = t;
       this.throwT = 0.16;
@@ -731,11 +761,11 @@
       this.aimAng = this.throwMode === 'down' ? Math.PI / 2 : Math.atan2(tp.y - this.hip.y, tp.x - this.hip.x);
       return true;
     }
-    // Can a spear reach tp from here? 'level' (within the 30 degree arc,
+    // Can a throw reach tp from here? 'level' (within the 30 degree arc,
     // in clear sight), 'down' (in the air, it's right below), 'flip' (it's
     // steeply below: backflip out over the drop and throw from the top),
     // or null (out of the arc: get level with it, or above it).
-    spearShot(tp) {
+    shot(tp) {
       const hip = this.hip;
       const from = this.shoulder();
       const dx = tp.x - from.x;
@@ -805,33 +835,51 @@
         return;
       }
       let tp = this.aimPoint(t);
-      if (w.kind === 'spear') {
-        let tt = U.dist(from.x, from.y, tp.x, tp.y) / SPEAR_V;
-        if (typeof t.vx === 'number' && typeof t.vy === 'number') tp = { x: tp.x + t.vx * tt * 0.7, y: tp.y + t.vy * tt * 0.7 };
-        tt = U.dist(from.x, from.y, tp.x, tp.y) / SPEAR_V;
-        let a;
-        if (this.throwMode === 'down') {
-          // straight down, give or take a little
-          a = U.clamp(Math.atan2(tp.y - from.y, tp.x - from.x), Math.PI / 2 - Math.atan(DOWN), Math.PI / 2 + Math.atan(DOWN));
-        } else {
-          // level-ish only, allowing for the spear's slight drop
-          const dir = Math.sign(tp.x - from.x) || this.facing;
-          const e = U.clamp(Math.atan2(tp.y - 0.5 * 260 * tt * tt - from.y, Math.abs(tp.x - from.x)), -ARC, ARC);
-          a = dir > 0 ? e : Math.PI - e;
+      const V = w.kind === 'spear' ? SPEAR_V : ROCK_V;
+      const g = w.kind === 'spear' ? 260 : 900;
+      let tt = U.dist(from.x, from.y, tp.x, tp.y) / V;
+      if (typeof t.vx === 'number' && typeof t.vy === 'number') tp = { x: tp.x + t.vx * tt * 0.7, y: tp.y + t.vy * tt * 0.7 };
+      tt = U.dist(from.x, from.y, tp.x, tp.y) / V;
+      let a;
+      if (this.throwMode === 'down') {
+        // straight down, give or take a little
+        a = U.clamp(Math.atan2(tp.y - from.y, tp.x - from.x), Math.PI / 2 - Math.atan(DOWN), Math.PI / 2 + Math.atan(DOWN));
+      } else {
+        // level-ish only, aimed a touch high for the drop
+        const dir = Math.sign(tp.x - from.x) || this.facing;
+        const e = U.clamp(Math.atan2(tp.y - 0.5 * g * tt * tt - from.y, Math.abs(tp.x - from.x)), -ARC, ARC);
+        a = dir > 0 ? e : Math.PI - e;
+      }
+      this.throwMode = null;
+      w.throwAt(Math.cos(a) * V, Math.sin(a) * V, this);
+  }
+    // Somewhere to throw at tp from: a spot we can stand (or cling to a
+    // pole) level enough with it to be in the arc, in clear sight, not too
+    // close or far. The nearest to us, or null.
+    throwSpot(tp) {
+      const W = this.W;
+      const hip = this.hip;
+      const cx0 = W.cellX(tp.x);
+      const cy0 = W.cellY(tp.y);
+      const reach = Math.ceil(240 / W.cell);
+      let best = null;
+      let bd = Infinity;
+      for (let cy = cy0 - 2; cy <= cy0 + Math.ceil(130 / W.cell); cy++) {
+        for (let cx = cx0 - reach; cx <= cx0 + reach; cx++) {
+          if (!W.inBounds(cx, cy) || !Nav.valid(W, cx, cy, this.caps)) continue;
+          if (!Nav.standable(W, cx, cy, this.caps) && !W.pole(cx, cy)) continue;
+          const x = W.centerX(cx);
+          const y = W.centerY(cy) - 8; // (about shoulder height)
+          const dx = Math.abs(tp.x - x);
+          if (dx < 70 || dx > 240) continue;
+          if (Math.abs(Math.atan2(tp.y - y, dx)) > ARC * 0.85) continue;
+          const d = U.dist2(x, y, hip.x, hip.y);
+          if (d >= bd || !W.lineClear(x, y, tp.x, tp.y)) continue;
+          bd = d;
+          best = { x, y: y + 8 };
         }
-        this.throwMode = null;
-        w.throwAt(Math.cos(a) * SPEAR_V, Math.sin(a) * SPEAR_V, this);
-        return;
       }
-      const speed = 470;
-      let tt = U.dist(from.x, from.y, tp.x, tp.y) / speed;
-      if (typeof t.vx === 'number' && typeof t.vy === 'number') {
-        tp = { x: tp.x + t.vx * tt * 0.7, y: tp.y + t.vy * tt * 0.7 }; // lead a moving target
-        tt = U.dist(from.x, from.y, tp.x, tp.y) / speed;
-      }
-      tt = Math.max(0.05, tt);
-      const g = 900;
-      w.throwAt((tp.x - from.x) / tt, (tp.y - from.y) / tt - 0.5 * g * tt, this);
+      return best;
     }
 
     findFruit(range) {
