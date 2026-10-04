@@ -127,6 +127,28 @@ Details in docs/ARCHITECTURE.md.
   9. Pole rhythm.
   10. Accent clumps.
   11. Maybe a 1 px rim on creatures for readability.
+- **Owner's bug reports after the WIP save** (with screenshots):
+  1. **Narrow shafts jam creatures.** Lizards pile up in one-cell-wide
+     vertical shafts and get stuck there, a whole stack of them in one shaft.
+     These are probably narrow gaps left by the generator (wall notches,
+     pillars beside walls), not real passages, which carve none yet. Two
+     fixes:
+     - The generator never leaves an accidental one-cell vertical gap: fill
+       it, or widen it to three or more cells.
+     - Real passages need a crawl that never jams: one creature at a time,
+       the rest wait at the door, or nav treats an occupied passage as
+       blocked.
+  2. **Dragging is one-way.** The owner can drag a creature into a passage
+     but can't drag it back out. Probably `tryTunnel` grabs anything whose
+     lead is in a passage cell, and the hand's hold is then fighting
+     `tunnelStep`. A hand hold (`grabbedBy.isHand`) should always win:
+     clear `tunnel`, and don't re-enter while held or for a moment after
+     release.
+  3. **Long leaps pass through terrain.** Slugcat long leaps go straight
+     through rock, likely on the new experimental maps: the jump arc check
+     (`arcClear`) or the leap physics don't collide during `longLeap`.
+     Reproduce it on an experimental seed and check the collision during
+     the flight.
 - `bodies` check is noisy, sometimes failing lizard hairpins, and it was
   already like that before this work.
 
