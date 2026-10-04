@@ -100,7 +100,11 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   densities scaled by map area), passages with poles through them, beams
   (horizontal poles), vertical poles, then a **reachability pass** that adds
   poles or removes ledges until every surface is reachable from the floor.
-  Then fruit plants, batfly grass, the nest, chains, dens.
+  Then ground pieces on the floor (the taskbar's top on a real desktop, see
+  `Engine.floorOf`): low blocks and stepped rubble mounds (`kind: 'ground'`
+  / `'rubble'`, a cell per step so anything walks up them, added after the
+  reachability pass) and non-solid `debris` (rebar, stones, pipes). Then
+  fruit plants, batfly grass, the nest, chains, dens.
 - `paint` keeps the backdrop and the play layer (poles, ledges, dens) as
   separate canvases on `canvas._bg`; `compose` stacks backdrop, shadows,
   play layer and vignette, cheaply, whenever the light moves.

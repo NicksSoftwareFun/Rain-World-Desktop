@@ -26,6 +26,7 @@
       passages: 0.4, // chance a wide ledge has a gap with a pole running up through it
       beams: 0.5, // horizontal poles: bridges between level ledges, perches off vertical poles
       fruitPlants: 5,
+      groundDecor: 1, // blocks, rubble mounds and debris on the floor (0 = bare floor, 2 = cluttered)
       timeScale: 1,
       realTimeLight: true, // day-night light run by the rain cycle (dawn .. dusk, the downpour is night); ledges and poles cast shadows
       timeOfDay: -1, // hours (0-24) to hold the light at; -1 = follow the rain cycle

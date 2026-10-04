@@ -36,7 +36,9 @@
   };
 
   // ---- decor generation (static geometry) ----------------------------------
-  function generateDecor(W, H, cfg, rnd) {
+  function generateDecor(W, H, cfg, rnd, opts) {
+    // where the walkable floor is: the taskbar's top on a real desktop
+    const floor = Math.min(H, (opts && opts.floor) || H);
     const R = (a, b) => a + rnd() * (b - a);
     const ledges = [];
     // Counts are densities for the default world (960x540 world units, a
@@ -319,6 +321,49 @@
       if (!lost.length) break; // removing things can strand others: go again
     }
 
+    // Ground: the floor gets lumps of its own instead of a bare strip, low
+    // blocks to clamber over and stepped rubble mounds (a step a cell high,
+    // which anything can walk up), with rebar, stones and pipes about them.
+    // Added after the reachability pass: they're optional obstacles, all
+    // walkable, and the floor stays one connected walk.
+    const debris = [];
+    const ground = [];
+    const floorY = Math.floor(floor / cell) * cell; // (tops on the grid; bottoms reach the floor)
+    const nGround = cfg.world.groundDecor === undefined ? 1 : +cfg.world.groundDecor;
+    for (let gx = R(40, 180); gx < W - 140 && nGround > 0; ) {
+      const pick = rnd();
+      const x0 = Math.round(gx / cell) * cell;
+      if (pick < 0.45 * nGround) {
+        // a rubble mound: stepped levels, each inset a cell or two
+        const id = 'mound-' + ground.length;
+        let a = x0;
+        let b = x0 + Math.round(R(5, 10)) * cell;
+        const levels = b - a >= 8 * cell ? Math.round(R(2, 3)) : 2;
+        for (let k = 0; k < levels && b - a >= 2 * cell; k++) {
+          const y = floorY - (k + 1) * cell;
+          ground.push({ id: id + '-' + k, kind: 'rubble', mound: id, level: k, x: a, y, w: b - a, h: floor - y, seed: rnd() * 1000 });
+          a += Math.round(R(1, 2)) * cell;
+          b -= Math.round(R(1, 2)) * cell;
+        }
+        gx = x0 + (b - a) + R(160, 320) + 4 * cell;
+      } else if (pick < 0.8 * nGround) {
+        // a low block (a fallen slab, a buried machine housing)
+        const w = Math.round(R(2, 5)) * cell;
+        ground.push({ id: 'block-' + ground.length, kind: 'ground', x: x0, y: floorY - cell, w, h: floor - floorY + cell, seed: rnd() * 1000 });
+        gx = x0 + w + R(120, 280);
+      } else gx += R(100, 220);
+    }
+    // scenery on the floor (not solid): rebar, stones, half-buried pipes
+    for (let x = R(10, 60); x < W - 10; x += R(26, 90)) {
+      const on = ground.filter((g) => x > g.x + 3 && x < g.x + g.w - 3).sort((p, q) => p.y - q.y)[0];
+      const y = on ? on.y : floor;
+      const r = rnd();
+      if (r < 0.3) debris.push({ kind: 'rebar', x, y, h: R(8, 26), lean: R(-0.5, 0.5), bend: R(-6, 6) });
+      else if (r < 0.75) debris.push({ kind: 'stone', x, y, w: R(3, 9), h: R(2, 6) });
+      else if (r < 0.85 && !on) debris.push({ kind: 'pipe', x, y, w: R(24, 60), h: R(6, 14) });
+    }
+    for (const g of ground) ledges.push(g);
+
     // Dens ("shortcut" pipe mouths) in the screen walls and on ledges.
     const dens = [];
     for (const side of [0, 1]) {
@@ -329,6 +374,7 @@
       }
     }
     for (const l of ledges) {
+      if (l.kind !== 'ledge') continue; // (not in the rubble)
       if (rnd() < 0.5) dens.push({ x: Math.round(l.x + R(20, l.w - 20)), y: l.y, dir: 0, wall: false, depth: l.h });
     }
 
@@ -336,8 +382,9 @@
     const fruitPlants = [];
     const nF = Math.round((cfg.world.fruitPlants | 0) * area);
     for (let i = 0; i < nF; i++) {
-      if (ledges.length && rnd() < 0.7) {
-        const l = ledges[Math.floor(rnd() * ledges.length)];
+      const hangers = ledges.filter((q) => q.kind === 'ledge');
+      if (hangers.length && rnd() < 0.7) {
+        const l = hangers[Math.floor(rnd() * hangers.length)];
         fruitPlants.push({ x: Math.round(l.x + R(15, l.w - 15)), y: l.y + l.h, len: R(28, 55) });
       } else {
         fruitPlants.push({ x: Math.round(R(W * 0.1, W * 0.9)), y: 0, len: R(40, 90) });
@@ -372,7 +419,7 @@
       chains.push({ x: R(W * 0.05, W * 0.95), len: R(60, H * 0.35), phase: rnd() * 10, depth: R(0.25, 0.6) });
     }
 
-    return { ledges, beams, poles, dens, fruitPlants, grass, nests, chains, removed };
+    return { ledges, beams, poles, dens, fruitPlants, grass, nests, chains, debris, removed, floor };
   }
 
   // ---- static painting ----------------------------------------------------
@@ -509,6 +556,7 @@
       for (const p of decor.poles) drawPole(l, p, pal);
       for (const b of decor.beams || []) drawBeam(l, b, pal);
       for (const lg of decor.ledges) drawLedge(l, lg, pal);
+      for (const d of decor.debris || []) drawDebris(l, d, pal);
       for (const d of decor.dens) drawDenStatic(l, d, pal);
     }, undefined, pctx);
     grain(pctx, play.width, play.height, rnd);
@@ -789,7 +837,96 @@
     for (let x = b.x + 30; x < b.x + b.w - 10; x += 55) ctx.fillRect(x, b.y - 2, 4, b.h + 4);
   }
 
+  // Ground pieces: sitting on the floor, so no crumbling underside or moss;
+  // a broken top edge instead. Rubble mounds get debris heaped into the
+  // corners where each level steps up, so they read as a slope of rubble
+  // rather than a staircase, and the odd bit of rebar sticking out.
+  function drawGround(ctx, l, pal) {
+    const rnd = U.mulberry32((l.seed * 1000) | 0);
+    const R = (a, b) => a + rnd() * (b - a);
+    const base = U.mix(pal.dark, pal.near, l.kind === 'rubble' ? 0.56 : 0.62);
+    const lit = U.mix(base, pal.light, 0.36); // a lit top so it stands off the backdrop
+    ctx.fillStyle = U.rgba(base);
+    ctx.fillRect(l.x, l.y + 2, l.w, l.h + 2);
+    // a broken top: uneven chunks along it
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.y + 3);
+    for (let x = l.x; x < l.x + l.w; x += R(5, 12)) ctx.lineTo(x, l.y + R(-1.5, 2.5));
+    ctx.lineTo(l.x + l.w, l.y + 3);
+    ctx.fill();
+    ctx.fillStyle = U.rgba(lit);
+    for (let x = l.x + R(0, 6); x < l.x + l.w - 4; x += R(8, 18)) ctx.fillRect(x, l.y, R(3, 9), 1.5);
+    // cracks and seams
+    ctx.fillStyle = U.rgba(pal.dark, 0.55);
+    for (let x = l.x + R(8, 24); x < l.x + l.w - 6; x += R(18, 40)) ctx.fillRect(x, l.y + R(4, 8), 1.2, l.h - R(4, 8));
+    if (l.kind === 'rubble' && l.level > 0) {
+      // rubble heaped into the corners at either end of this level
+      ctx.fillStyle = U.rgba(U.mix(base, pal.dark, 0.15));
+      const foot = l.y + l.h;
+      for (const s of [-1, 1]) {
+        const ex = s < 0 ? l.x : l.x + l.w;
+        const run = l.h * R(0.9, 1.5);
+        ctx.beginPath();
+        ctx.moveTo(ex, l.y + 2);
+        for (let k = 1; k <= 4; k++) {
+          const t = k / 4;
+          ctx.lineTo(ex + s * run * t + R(-1.5, 1.5), l.y + 2 + (foot - l.y - 2) * t + R(-1.5, 1.5));
+        }
+        ctx.lineTo(ex, foot);
+        ctx.fill();
+      }
+    }
+    if (l.kind === 'rubble' && rnd() < 0.5) {
+      // rebar out of the rubble
+      ctx.strokeStyle = U.rgba(U.mix(pal.dark, pal.light, 0.1));
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      const x = R(l.x + 6, l.x + l.w - 6);
+      ctx.moveTo(x, l.y + 2);
+      ctx.quadraticCurveTo(x + R(-4, 4), l.y - 8, x + R(-10, 10), l.y - R(10, 20));
+      ctx.stroke();
+    }
+  }
+
+  // Scenery on the floor: rebar, stones, a half-buried pipe.
+  function drawDebris(ctx, d, pal) {
+    const col = U.mix(pal.dark, pal.near, 0.55);
+    if (d.kind === 'stone') {
+      ctx.fillStyle = U.rgba(col);
+      ctx.beginPath();
+      ctx.moveTo(d.x - d.w / 2, d.y + 1);
+      ctx.lineTo(d.x - d.w / 3, d.y - d.h);
+      ctx.lineTo(d.x + d.w / 3, d.y - d.h * 0.8);
+      ctx.lineTo(d.x + d.w / 2, d.y + 1);
+      ctx.fill();
+      ctx.fillStyle = U.rgba(U.mix(col, pal.light, 0.25));
+      ctx.fillRect(d.x - d.w / 3, d.y - d.h, d.w / 2, 1);
+    } else if (d.kind === 'rebar') {
+      ctx.strokeStyle = U.rgba(U.mix(pal.dark, pal.light, 0.1));
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y + 1);
+      ctx.quadraticCurveTo(d.x + d.lean * d.h * 0.5, d.y - d.h * 0.6, d.x + d.lean * d.h + d.bend, d.y - d.h);
+      ctx.stroke();
+    } else if (d.kind === 'pipe') {
+      // an arc of old pipe surfacing from the floor and going back under
+      ctx.strokeStyle = U.rgba(U.mix(col, pal.dark, 0.2));
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y + 3);
+      ctx.bezierCurveTo(d.x + d.w * 0.15, d.y - d.h, d.x + d.w * 0.85, d.y - d.h, d.x + d.w, d.y + 3);
+      ctx.stroke();
+      ctx.strokeStyle = U.rgba(U.mix(col, pal.light, 0.2));
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(d.x + d.w * 0.2, d.y - d.h * 0.62);
+      ctx.bezierCurveTo(d.x + d.w * 0.35, d.y - d.h * 0.78, d.x + d.w * 0.65, d.y - d.h * 0.78, d.x + d.w * 0.8, d.y - d.h * 0.62);
+      ctx.stroke();
+    }
+  }
+
   function drawLedge(ctx, l, pal) {
+    if (l.kind === 'ground' || l.kind === 'rubble') return drawGround(ctx, l, pal);
     const rnd = U.mulberry32((l.seed * 1000) | 0);
     const R = (a, b) => a + rnd() * (b - a);
     const base = U.mix(pal.dark, pal.near, 0.6);

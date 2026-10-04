@@ -134,9 +134,9 @@
       this.world.resize(this.W, this.H);
       if (!keepSeed || !this.seed) this.seed = cfg.world.seed || Math.floor(Math.random() * 1e9);
       const rnd = U.mulberry32(this.seed);
-      this.decor = RW.Background.generateDecor(this.W, this.H, cfg, rnd);
-      this.world.setStatic(this.decor.ledges.concat(this.decor.beams || []), this.decor.poles);
       const g = this.poll();
+      this.decor = RW.Background.generateDecor(this.W, this.H, cfg, rnd, { floor: this.floorOf(g.rects) });
+      this.world.setStatic(this.decor.ledges.concat(this.decor.beams || []), this.decor.poles);
       this.world.setDynamic(g.rects);
       this.world.rebuild();
       this.eco = new RW.Ecosystem(cfg, this.world);
@@ -304,9 +304,25 @@
       this.render();
     }
 
+    // The walkable floor: the top of a taskbar spanning the bottom of the
+    // screen, else the screen's bottom edge.
+    floorOf(rects) {
+      let f = this.H;
+      for (const r of rects || []) if (r.kind === 'taskbar' && r.w > this.W * 0.5 && r.y > this.H * 0.6) f = Math.min(f, r.y);
+      return f;
+    }
     tick(dt) {
       this.updateLight(dt);
       const g = this.poll();
+      // (on a real desktop the taskbar is reported a moment after start: once
+      // it is, the ground gets rebuilt to sit on it)
+      if (this.decor && Math.abs(this.floorOf(g.rects) - this.decor.floor) > 4 && !this.refloorT) {
+        this.refloorT = 1;
+        setTimeout(() => {
+          this.regenerate(false);
+          this.refloorT = 0;
+        }, 0);
+      }
       this.paused = !!g.paused;
       if (g.paused) return; // wallpaper hidden behind a fullscreen app
       const moves = this.world.setDynamic(g.rects);
