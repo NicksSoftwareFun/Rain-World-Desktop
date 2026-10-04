@@ -565,6 +565,26 @@
     return true;
   }
 
+  // No accidental one-cell slits: an air cell with rock either side (or
+  // above and below) in a run of two or more is filled in. Creatures squeeze
+  // into such gaps and jam; the only one-cell routes are real passages.
+  function closeSlits(g) {
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false;
+      const vert = (x, y) => !g.solid(x, y) && g.solid(x - 1, y) && g.solid(x + 1, y);
+      const horz = (x, y) => !g.solid(x, y) && g.solid(x, y - 1) && g.solid(x, y + 1);
+      for (let y = 0; y < g.R; y++) {
+        for (let x = 0; x < g.C; x++) {
+          if ((vert(x, y) && (vert(x, y - 1) || vert(x, y + 1))) || (horz(x, y) && (horz(x - 1, y) || horz(x + 1, y)))) {
+            g.set(x, y, 1);
+            changed = true;
+          }
+        }
+      }
+      if (!changed) break;
+    }
+  }
+
   // ---- passages ------------------------------------------------------------
   // One-cell tunnels through the rock between two doors (open floor cells
   // beside a wall) that are a long way apart through the open, or not
@@ -576,13 +596,16 @@
     const Rows = g.R;
     const wet = (x, y) => f.waterCells && f.waterCells.has(y * C + x);
     const pitCol = (x) => f.pits.some((q) => x >= q.cx0 - 1 && x <= q.cx1 + 1);
+    // doors: an open floor cell, the passage going off sideways into a wall
+    // beside it (then up or down inside the rock as it likes; never a hole
+    // in a floor, which anything walking past would drop into)
     const doors = [];
     for (let y = 2; y < Rows - 2; y++) {
       for (let x = 1; x < C - 1; x++) {
         if (g.solid(x, y) || !g.solid(x, y + 1) || wet(x, y) || g.solid(x, y - 1)) continue;
         for (const sd of [-1, 1]) {
           const wx = x + sd;
-          if (g.solid(wx, y) && g.solid(wx, y - 1) && g.solid(wx, y + 1) && g.solid(wx + sd, y) && wx > 0 && wx < C - 1) doors.push({ x, y, sd, wx });
+          if (g.solid(wx, y) && g.solid(wx + sd, y) && wx > 0 && wx < C - 1) doors.push({ x, y, sx: wx, sy: y });
         }
       }
     }
@@ -609,8 +632,8 @@
     const carved = new Set();
     // A* through solid, 4-way, turns cost extra
     const route = (A, B) => {
-      const start = A.y * C + A.wx;
-      const goal = B.y * C + B.wx;
+      const start = A.sy * C + A.sx;
+      const goal = B.sy * C + B.sx;
       const ok = (x, y, from) => {
         if (x < 1 || y < 1 || x > C - 2 || y > Rows - 2 || !g.solid(x, y) || wet(x, y) || pitCol(x)) return false;
         const i = y * C + x;
@@ -646,7 +669,7 @@
           gs.set(j, ng);
           prev.set(j, i);
           dirOf.set(j, k);
-          open.push([ng + Math.abs(nx - B.wx) + Math.abs(ny - B.y), j]);
+          open.push([ng + Math.abs(nx - B.sx) + Math.abs(ny - B.sy), j]);
         }
       }
       if (!prev.has(goal)) return null;
@@ -660,14 +683,15 @@
     for (let tries = 0; tries < 80 && f.passages.length < want && doors.length > 1; tries++) {
       const A = doors[Math.floor(R() * doors.length)];
       const B = doors[Math.floor(R() * doors.length)];
-      const md = Math.abs(A.wx - B.wx) + Math.abs(A.y - B.y);
-      if (A === B || md < 6 || md > 36) {
+      const md = Math.abs(A.sx - B.sx) + Math.abs(A.sy - B.sy);
+      if (A === B || md < 6 || md > 36 || (A.x === B.x && A.y === B.y)) {
         dbg.near++;
         continue;
       }
       // only where it's a short cut: a long way round through the open
       const ad = airDist(A, B);
-      if (ad >= 0 && ad < md * 1.8) {
+      // (a climb between floors is always worth a passage)
+      if (ad >= 0 && ad < md * 1.3 + 8 && Math.abs(A.y - B.y) < 4) {
         dbg.easy++;
         continue;
       }
@@ -944,6 +968,7 @@
         if (!g.solid(side, q.y) && g.solid(side, q.y + 1)) f.poles.push({ cx: side, y0: q.y - 6 - Math.floor(R() * 4), y1: q.y, ladder: true });
       }
       furnish(g, R, f);
+      closeSlits(g);
       carvePassages(g, R, f);
       let decor = buildDecor(g, f, cell, W, H, region, R);
       let res = check(decor, W, H, cell);

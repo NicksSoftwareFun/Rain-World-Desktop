@@ -906,6 +906,29 @@
       return null;
     }
 
+    // Would a jump to `node` peaking `apex` cells above the higher end pass
+    // clear of the rock all the way (body and head)?
+    arcClear(node, apex) {
+      const W = this.W;
+      const hip = this.hip;
+      const onPoleTarget = W.pole(node.cx, node.cy) && !W.solid(node.cx, node.cy + 1);
+      const tx = node.x;
+      const ty = onPoleTarget ? node.y : node.y + W.cell / 2 - R - 1;
+      const ay = Math.min(hip.y, ty) - W.cell * apex;
+      // a parabola through start, apex and end, sampled
+      const tUp = Math.sqrt((2 * Math.max(4, hip.y - ay)) / GRAV);
+      const tDown = Math.sqrt((2 * Math.max(1, ty - ay)) / GRAV);
+      const T = tUp + tDown;
+      const vy0 = -GRAV * tUp;
+      const vx = (tx - hip.x) / T;
+      for (let i = 1; i < 16; i++) {
+        const t = (i / 16) * T;
+        const x = hip.x + vx * t;
+        const y = hip.y + vy0 * t + 0.5 * GRAV * t * t;
+        if (W.isSolidPt(x, y) || W.isSolidPt(x - 5, y) || W.isSolidPt(x + 5, y) || W.isSolidPt(x + Math.sign(vx) * 12, y - 4) || W.isSolidPt(x, y - 9)) return false;
+      }
+      return true;
+    }
     launch(node) {
       const W = this.W;
       const hip = this.hip;
@@ -1057,7 +1080,9 @@
               if (!(this.crouchT > 0) && !this.jumping) {
                 // a long, flat leap across a gap: lie down, wind up, then
                 // pounce; anything shorter is a quick crouch and spring
-                const long = Math.abs(node.x - hip.x) >= W.cell * 4 && node.y > hip.y - W.cell * 1.5;
+                // (only if the low, flat arc itself is clear: the path was
+                // checked for a hop's higher one)
+                const long = Math.abs(node.x - hip.x) >= W.cell * 4 && node.y > hip.y - W.cell * 1.5 && this.arcClear(node, 0.6);
                 this.longJump = long;
                 this.crouchT = long ? 0.6 : 0.1;
                 this.pendingJump = node;

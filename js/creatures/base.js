@@ -340,7 +340,8 @@
       if (this.tunnel && this.grabbedBy) this.tunnel = null;
       if (this.tunnel) return this.tunnelStep(dt);
       this.tunnelCd = (this.tunnelCd || 0) - dt;
-      if (!this.isFlier && this.W.passages && this.W.passages.length && this.tryTunnel()) return false;
+      // (never while something's holding it: the hand or a jaw wins)
+      if (!this.isFlier && !this.grabbedBy && this.W.passages && this.W.passages.length && this.tryTunnel()) return false;
       // No den reachable from here: slip away quietly rather than wait forever.
       if (this.state === 'leave' && this.stateT > (this.isFlier ? 60 : 30)) this.leave();
       // Arrived at a pipe (nothing left to walk) but not quite close enough
@@ -1132,7 +1133,7 @@
       const W = this.W;
       const lead = this.pipeLead();
       // already in one (fell or was flung in): out by the nearer end
-      const here = W.passage(W.cellX(lead.x), W.cellY(lead.y));
+      const here = this.tunnelCd > 0 ? -1 : W.passage(W.cellX(lead.x), W.cellY(lead.y));
       if (here >= 0) {
         const p = W.passages[here];
         const k = p.cells.findIndex(([cx, cy]) => cx === W.cellX(lead.x) && cy === W.cellY(lead.y));
@@ -1235,7 +1236,7 @@
         if (T.i >= T.route.length) return this.endTunnel();
         return false;
       }
-      const speed = U.clamp((this.p.speed || 60) * 0.55, 30, 70);
+      const speed = U.clamp((this.p.speed || 60) * 0.8, 42, 90);
       const st = Math.min(d, speed * dt);
       const mx = (dx / d) * st;
       const my = (dy / d) * st;
@@ -1296,8 +1297,6 @@
     tunnelReverse() {
       const T = this.tunnel;
       const W = this.W;
-      const back = T.route.slice(0, Math.max(1, T.i)).reverse();
-      back.push({ x: W.centerX(T.doorIn[0]), y: W.centerY(T.doorIn[1]) });
       const sp = this.spine || this.chain;
       if (sp instanceof RW.Chain) {
         if (this.reverse) this.reverse();
@@ -1309,6 +1308,20 @@
       } else if (this.facing !== undefined) {
         this.facing = -this.facing;
       }
+      // back out from where the leading end now is (the old tail): the
+      // route points it has already passed, nearest first, then the door
+      const lead = this.pipeLead();
+      let k = 0;
+      let bd = Infinity;
+      for (let j = 0; j < Math.max(1, T.i); j++) {
+        const d = Math.hypot(T.route[j].x - lead.x, T.route[j].y - lead.y);
+        if (d < bd) {
+          bd = d;
+          k = j;
+        }
+      }
+      const back = T.route.slice(0, k + 1).reverse();
+      back.push({ x: W.centerX(T.doorIn[0]), y: W.centerY(T.doorIn[1]) });
       const din = T.doorIn;
       T.doorIn = T.doorOut;
       T.doorOut = din;
