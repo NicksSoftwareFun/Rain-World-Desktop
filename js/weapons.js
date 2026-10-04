@@ -136,7 +136,12 @@
         if (this.state === 'flying' && (this.flyT > 3 || this.y > W.h + 40)) this.state = 'free';
         return;
       }
-      // free: lying about, or tumbling after a bounce
+      // free: lying about, or tumbling after a bounce (gone if it drops out
+      // through a bottomless pit)
+      if (this.y > W.h + 60) {
+        this.dead = true;
+        return;
+      }
       this.vy += 900 * dt;
       this.vx *= this.grounded ? Math.pow(0.02, dt) : 0.995;
       this.x += this.vx * dt;

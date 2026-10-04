@@ -40,6 +40,7 @@
           return;
         }
       }
+      if (this.y > this.eco.world.h + 60) this.dead = true; // (down a bottomless pit)
       this.vy += 900 * dt;
       this.vx *= this.grounded ? 0.8 : 0.995;
       this.x += this.vx * dt;

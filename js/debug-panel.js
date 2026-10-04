@@ -313,7 +313,16 @@
           this.toggleCtl('day-night light', Wc, 'realTimeLight', () => (eng.lightT = 0)),
           this.slider('time of day (-1 = rain cycle)', Wc, 'timeOfDay', -1, 24, 0.25, () => (eng.lightT = 0)),
           this.select('max fps', Wc, 'maxFps', [60, 30]),
-          this.select('layout', Wc, 'layout', ['tiers', 'scatter'], () => eng.regenerate(false)),
+          // a new layout is a new world: a new map and everyone respawned
+          this.select('layout', Wc, 'layout', ['tiers', 'scatter', 'experimental'], () => {
+            eng.regenerate(false);
+            eng.restartWildlife();
+          }),
+          this.select('region (experimental)', Wc, 'region', ['auto'].concat(Object.keys(RW.Rooms ? RW.Rooms.REGIONS : {})), () => {
+            if (Wc.layout !== 'experimental') return;
+            eng.regenerate(true);
+            eng.restartWildlife();
+          }),
           this.slider('ledges', Wc, 'decorLedges', 0, 14, 1),
           this.slider('poles', Wc, 'decorPoles', 0, 16, 1),
           this.slider('ledge poles', Wc, 'ledgePoles', 0, 1, 0.05),

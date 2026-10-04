@@ -45,7 +45,7 @@
 <div id="desktop"></div>
 <div id="ui"></div>
 <div class="rw-hint" id="rw-hint">
-  Drag the windows: creatures walk on them. Drag a creature to pick it up and move it. Rest the cursor near a lizard.
+  Drag a creature to pick it up and move it. Rest the cursor near a lizard.
   Press <b>`</b> or tap <b>≡</b> for spawn weights.
   <button type="button" id="rw-hint-close">Got it</button>
 </div>
@@ -54,6 +54,7 @@
 <script src="js/config.js"></script>
 <script src="js/world.js"></script>
 <script src="js/nav.js"></script>
+<script src="js/rooms.js"></script>
 <script src="js/background.js"></script>
 <script src="js/drips.js"></script>
 <script src="js/items.js"></script>
@@ -75,7 +76,7 @@
 (function () {
   RW.noFileDownloads = true; // artifact viewers can't save files
   const cfg = RW.loadConfig();
-  const provider = new RW.MockDesktop(document.getElementById('desktop'));
+  const provider = new RW.MockDesktop(document.getElementById('desktop'), { bare: true }); // (no fake desktop: that's the Lively build's job)
   const engine = new RW.Engine(document.getElementById('wallpaper'), cfg, provider);
   const panel = new RW.Panel(engine, document.getElementById('ui'));
 

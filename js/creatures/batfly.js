@@ -122,7 +122,7 @@
 
       // Leaving / sheltering
       if (this.wantsToLeave(dt)) {
-        const den = eco.nearestDen(p.x, p.y);
+        const den = eco.nearestDen(p.x, p.y, { fly: true });
         if (den) {
           this.perched = false;
           this.goal = den;

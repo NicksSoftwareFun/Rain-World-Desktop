@@ -528,6 +528,8 @@
       t.drawImage(c, 0, 0);
       t.restore();
     };
+    // An experimental (Rain World room) map paints its own region's backdrop.
+    if (decor.room && RW.Rooms) return paintRoom();
     // Far superstructure
     layer((l) => farLayer(l, W, H, pal, R, rnd, 0.62));
     fogWash(ctx, W, H, pal, 0.35, 0.45);
@@ -563,6 +565,33 @@
     canvas._bg = { back, play, shadow: mk(), ps, pal, decor };
     compose(canvas, light);
     return canvas;
+
+    function paintRoom() {
+      RW.Rooms.paintBackdrop(ctx, W, H, pal, decor, R, layer);
+      RW.Rooms.paintShade(ctx, decor, pal);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      grain(ctx, canvas.width, canvas.height, rnd);
+      const mkc = () => {
+        const c = document.createElement('canvas');
+        c.width = canvas.width;
+        c.height = canvas.height;
+        return c;
+      };
+      const back2 = mkc();
+      back2.getContext('2d').drawImage(canvas, 0, 0);
+      const play2 = mkc();
+      const p2 = play2.getContext('2d', { willReadFrequently: true });
+      layer((l) => {
+        RW.Rooms.paintMass(l, decor, pal, R);
+        RW.Rooms.paintAccents(l, decor, pal, R);
+        for (const p of decor.poles) drawPole(l, p, pal);
+        for (const b of decor.beams || []) drawBeam(l, b, pal);
+        for (const d of decor.dens) if (!d.sky) drawDenStatic(l, d, pal);
+      }, undefined, p2);
+      canvas._bg = { back: back2, play: play2, shadow: mkc(), ps, pal, decor };
+      compose(canvas, light);
+      return canvas;
+    }
 
     function fogWash(ctx, W, H, pal, a0, a1) {
       const fg = ctx.createLinearGradient(0, 0, 0, H);
@@ -1213,7 +1242,7 @@
         for (let i = 0; i < n; i++) {
           const k = i / n;
           const x = c.x + sway * k * k;
-          const y = i * 7;
+          const y = (c.y0 || 0) + i * 7;
           ctx.beginPath();
           if (i % 2) ctx.ellipse(x, y, 1.2, 3.5, sway * 0.01, 0, U.TAU);
           else ctx.ellipse(x, y, 2.6, 3.5, sway * 0.01, 0, U.TAU);
@@ -1309,7 +1338,8 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     ctx.drawImage(B.back, 0, 0);
-    if (light && light.alpha > 0) {
+    // (a room is lit from its openings: no cast shadows from the sun)
+    if (light && light.alpha > 0 && !B.decor.room) {
       const sh = B.shadow;
       const sx = sh.getContext('2d');
       sx.setTransform(1, 0, 0, 1, 0, 0);

@@ -10,12 +10,11 @@ Everything is plain JavaScript + `<canvas>`, with no build step and no dependenc
 ## Try it
 
 - **Browser prototype**: open `index.html` (or the hosted copy at
-  <https://nickssoftwarefun.github.io/Rain-World-Desktop/>). It shows a mock
-  Windows desktop with draggable, resizable windows and icons over the
-  wallpaper. They are real geometry: drag a window and creatures standing on
-  it ride along. **It's a preview only**: as a wallpaper it would only ever
-  see its own pretend windows. For the real desktop use `wallpaper.html` via
-  the helper (below).
+  <https://nickssoftwarefun.github.io/Rain-World-Desktop/>). It shows the
+  wallpaper on its own. Desktop windows as ledges and walls for the creatures
+  are a feature of the real wallpaper: `wallpaper.html` in Lively, with the
+  helper (below). (`index.html?desktop=1` puts a mock Windows desktop on top
+  for testing that in a browser.)
   - Press **`** (backtick) or the ≡ button for the **ecosystem panel**.
   - **Drag** a creature (living or dead) to pick it up: it hangs limp from
     the cursor and drops where you let go. (Clicking bare wallpaper to drop
@@ -101,7 +100,7 @@ js/
   ecosystem.js     weighted spawner, dens, predation, cursor, food
   engine.js        fixed-timestep loop, rendering, geometry providers
   geometry/
-    mock-desktop.js  fake Windows desktop for the browser prototype
+    mock-desktop.js  pointer input for the browser page (bare); a fake Windows desktop with ?desktop=1
     remote.js        real geometry from the Windows helper
 windows/           Lively Wallpaper port + PowerShell geometry helper
 tests/             fake-helper.mjs (helper stand-in for non-Windows dev)

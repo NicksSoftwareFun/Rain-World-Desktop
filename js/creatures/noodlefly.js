@@ -673,7 +673,7 @@
         if (!a || a.dead || a.corpse) return this.age > 90; // orphans wander off before long
         return false;
       }
-      if (!this.origin) this.origin = this.eco.nearestDen(this.spawnX, this.spawnY) || { x: this.spawnX, y: this.spawnY };
+      if (!this.origin) this.origin = this.eco.nearestDen(this.spawnX, this.spawnY, { fly: true }) || { x: this.spawnX, y: this.spawnY };
       if (!fam.exitDen && (this.meals >= 2 || this.age > 240) && !this.holding && !this.vengeance) {
         fam.exitDen = this.eco.farthestDen(this.origin.x, this.origin.y, this.pos.x, this.pos.y, AIR);
       }
@@ -681,7 +681,7 @@
     }
     headForDen(dt) {
       const p = this.pos;
-      const den = (!this.shelterTime() && this.family.exitDen) || this.eco.nearestDen(p.x, p.y);
+      const den = (!this.shelterTime() && this.family.exitDen) || this.eco.nearestDen(p.x, p.y, { fly: true });
       this.setState('leave');
       if (!den) return;
       // close to the pipe it stops shying off the wall round it and goes in

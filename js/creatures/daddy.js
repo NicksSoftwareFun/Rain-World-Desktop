@@ -157,7 +157,7 @@
 
       if (!holding && this.wantsToLeave(dt)) {
         this.setState('leave');
-        const den = this.exitDen && !this.shelterTime() ? this.exitDen : eco.nearestDen(b.x, b.y);
+        const den = this.exitDen && !this.shelterTime() ? this.exitDen : eco.nearestDen(b.x, b.y, { fly: true });
         if (den) {
           this.pather.setGoal(den.x, den.y);
           if (U.dist(b.x, b.y, den.x, den.y) < 35) this.leave();
@@ -205,7 +205,7 @@
     // farthest from the one it came in by.
     wantsToLeave(dt) {
       if (this.shelterTime()) return true;
-      if (!this.origin) this.origin = this.eco.nearestDen(this.spawnX, this.spawnY) || { x: this.spawnX, y: this.spawnY };
+      if (!this.origin) this.origin = this.eco.nearestDen(this.spawnX, this.spawnY, { fly: true }) || { x: this.spawnX, y: this.spawnY };
       if (!this.exitDen && (this.meals >= 2 || this.age > 300)) {
         this.exitDen = this.eco.farthestDen(this.origin.x, this.origin.y, this.body.x, this.body.y, this.caps);
       }

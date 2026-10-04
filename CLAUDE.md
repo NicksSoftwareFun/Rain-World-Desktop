@@ -95,6 +95,51 @@ within 30 degrees of level; slugcats backflip to throw spears straight down, to
 double back at a run and to dodge a lunge.
 Details in docs/ARCHITECTURE.md.
 
+## Next session: resume here (saved at low usage, 2026-10-04)
+
+- **Not yet done since the last full suite:** run the full suite, then
+  republish the artifact. The artifact needs `artifact.html` copied to its
+  page and `js/rooms.js` added to its files.
+- **Passages (owner's request, WIP):** these are one-cell tunnels through the
+  rock in experimental maps that creatures squeeze through like pipes. They
+  go vertically too, and turning back inside costs squeeze time.
+  - Done: `World.setPassages`/`passage()`, nav `TUNNEL` edges (passage
+    cells are never start or goal cells), and creature crawling in
+    `base.js` (`tryTunnel`, `startTunnel`, `tunnelStep`, `layOnTrail`,
+    `tunnelReverse`, `endTunnel`).
+  - The generator `carvePassages` (rooms.js) currently carves **none**.
+    There are too few doors, and the shortcut test is too strict
+    (`room.debug` shows the counts). The fix was to allow side doors without
+    the above/below rule, add floor doors going straight down, and use the
+    shortcut rule `ad < md * 1.3 + 8`. It wasn't applied: the patch script
+    had a stray `])`.
+  - Then test with scratchpad-style checks: creatures enter, finish and
+    reverse, and none get stuck. Then film one.
+- **Art review 2** (6.5/10, up from 4). Its fixes, in order:
+  1. Step every flat floor span.
+  2. Offset slab rows so they never share a y.
+  3. Make Shaded rooms thicker and less box-like.
+  4. Shaded octagons: no grass or dens on top, 4 cells, add bell capitals.
+  5. Rock texture: std dev about 3.
+  6. Shoreline glow: true red-orange, smooth falloff.
+  7. Water 3-5 cells deep, darker, with a climb-out ledge.
+  8. Pit: a lip, an edge pole and a dark gradient.
+  9. Pole rhythm.
+  10. Accent clumps.
+  11. Maybe a 1 px rim on creatures for readability.
+- `bodies` check is noisy, sometimes failing lizard hairpins, and it was
+  already like that before this work.
+
+## Experimental layout (in progress)
+
+The owner's request: a `World layout` option, `experimental`, that builds
+maps like real Rain World rooms from a dataset of room maps (32 rooms, four
+regions), with bottomless pits, placeholder water and openings to the sky
+that fliers use. The plan, phases and status are in
+docs/EXPERIMENTAL_LAYOUT.md; the code is js/rooms.js. Water physics and
+swimming come next, once the owner has seen the placeholder. The web page
+and the artifact no longer show the fake desktop (only `?desktop=1`).
+
 ## Open items
 
 - **Real-desktop test** pending: the owner runs

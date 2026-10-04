@@ -7,8 +7,8 @@ Plain classic scripts that hang everything off `window.RW`; load order is in
 
 | Page | What it is |
 | --- | --- |
-| `index.html` | Browser prototype on a mock Windows desktop (draggable windows/icons are real geometry). `?paused=1` for tests, `&seed=N` fixes the map. |
-| `artifact.html` | The same, as published to the shared claude.ai Artifact (see `CLAUDE.md`). |
+| `index.html` | The browser version (GitHub Pages): the wallpaper on its own, the pointer only (`MockDesktop` in bare mode). `?desktop=1` adds the mock Windows desktop (draggable windows/icons as geometry; the smoke test uses it). `?paused=1` for tests, `&seed=N` fixes the map. |
+| `artifact.html` | The same as published to the shared claude.ai Artifact (see `CLAUDE.md`), bare. |
 | `wallpaper.html` | The real wallpaper, run by Lively Wallpaper. Gets geometry from the helper; maps Lively's Customise properties (`LivelyProperties.json`) onto the config. `?panel=1` shows the settings panel. |
 | `gallery.html` | A small fixed test room: `?spawn=lizard_pink@200,300;slugcat@400,300`. Good for close-up clips. |
 
@@ -145,6 +145,50 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   under ledges/windows (not beams), curtains, fog, the cycle HUD.
   `drips.js`: drips from undersides and ledge-end waterfalls (only in real
   rain).
+
+## Experimental layout (`js/rooms.js`)
+
+`world.layout: 'experimental'` swaps `generateDecor` for `Rooms.generate`:
+maps built like real Rain World rooms (from a dataset of 32 rooms; the plan
+and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
+
+- **Regions** (`world.region`, `auto` rolls one per map): Outskirts,
+  Shoreline, Industrial, Shaded Citadel. Each brings its own palette (the
+  usual keys plus `mass`, `water`, `accent`, `interior`, `sky`; the palette
+  dropdown doesn't apply) and `STYLE` (block kind, comb ceilings, wall
+  thickness, floor steps), and rolls among its archetypes.
+- **A tile grid on the nav cells**, carved out of solid by an archetype
+  (`skyShaft`, `cruciform`, `stacked`, `citadel`): stair-stepped walls
+  (`relieveWalls`), stair-step chamfers, stepped floors (`roughFloor`, a pole
+  at any step over a cell), comb ceilings, blocks hung on poles
+  (`hangBlocks`), then `furnish` (8-12 vertical poles in bundles, 2-3
+  horizontal bars). Solid cells are merged into rectangles (`kind: 'rock'`)
+  so the world, physics and nav are unchanged.
+- **Pits or water, never both.** `addPit`: 3-5 cells cut down through the
+  floor to the bottom edge, a pole beside it. `World.setPits` splits the
+  bottom border, `solid()` is open below a pit column and `inPit()` marks
+  the shaft so no walker paths into it (lizards don't leap over one; only
+  slugcats do). Anything below the screen in a pit is removed (no corpse);
+  items too. `addWater`: a flat surface 3-4 cells above the lowest floor,
+  flood-filled (rejected if it would spill off the screen). Placeholder
+  physics: drag on creatures in it, a splash in and out, fliers keep out
+  (`Nav.valid`); drawn translucent over the creatures (`Engine.drawWater`).
+- **Dens** sit on floors, away from water; **sky dens** (`sky: true`, not
+  drawn) are the openings along the top edge: only fliers use them, to
+  spawn (mostly) and to leave (`openDens(flier)`, `denMouth` points up).
+- **Checking**: a scratch world and A* for a pole-climbing lizard between
+  every pair of pipe dens; a pit that cuts the map gets a bridge bar, an
+  unreachable platform gets a ladder down to the floor; failing that, up
+  to 12 re-rolls (`decor.ok`).
+- **Painting** (`Background.paint` hands over to `paintRoom`): a light map
+  (the region's dim interior colour, the sky colour only within ~14 cells
+  of an opening, smoothed up from one pixel per cell), backdrop silhouettes
+  that darken what's behind them (towers and fans, gears and conduits, a
+  column lattice, fluted pillars), Shoreline's red and Shaded's warm glows,
+  a hard shade band along faces into the hollow (`paintShade`), then the
+  mass (texture courses, brick dashes, conduits, a lit lip on top faces,
+  roots), blocks (octagons for Shaded), and accents and cables
+  (`paintAccents`). No cast sun shadows in rooms.
 
 ## Settings (`js/config.js`, `js/debug-panel.js`)
 

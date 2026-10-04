@@ -46,7 +46,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(pathToFileURL(path.join(root, 'index.html')).href + '?paused=1&seed=7');
+    await page.goto(pathToFileURL(path.join(root, 'index.html')).href + '?paused=1&seed=7&desktop=1');
     await page.waitForFunction(() => window.RW_APP);
     await simulate(page, 'prototype', 4);
     // drag a window and make sure the world follows

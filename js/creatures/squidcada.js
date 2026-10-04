@@ -220,7 +220,7 @@
 
       if (this.wantsToLeave(dt)) {
         this.setState('leave');
-        const den = eco.nearestDen(p.x, p.y);
+        const den = eco.nearestDen(p.x, p.y, { fly: true });
         if (den) {
           const wp = this.airWaypoint(dt, den.x, den.y);
           this.fly(dt, wp.x, wp.y, 130, 4, 60);

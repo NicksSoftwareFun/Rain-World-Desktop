@@ -19,7 +19,8 @@
       pixelScale: 2, // 1 = full res, 1.5-3 = chunkier Rain World pixels
       cellSize: 20, // navigation grid cell (px). Rain World tiles are 20px.
       seed: 0, // 0 = new background every load
-      layout: 'tiers', // 'tiers': rows of ledges at shared heights, bridged by horizontal poles; 'scatter': anywhere
+      layout: 'tiers', // 'tiers': rows of ledges at shared heights, bridged by horizontal poles; 'scatter': anywhere; 'experimental': carved like real Rain World rooms (js/rooms.js)
+      region: 'auto', // experimental layout: 'auto' (a different one each map) or outskirts / shoreline / industrial / shaded
       decorLedges: 7, // wallpaper ledges creatures can use
       decorPoles: 4, // extra free-standing poles (more are added wherever a ledge needs one)
       ledgePoles: 0.6, // chance a ledge gets a pole standing on it (linking up to a higher ledge if there is one)

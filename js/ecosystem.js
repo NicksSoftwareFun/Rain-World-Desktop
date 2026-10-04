@@ -110,11 +110,11 @@
       const stash = this.shelterStash;
       if (!stash.length || this.shouldShelter()) return;
       for (const s of stash) if (s.backAt === undefined) s.backAt = this.t + U.rand(1.5, 25);
-      const open = this.openDens();
-      if (!open.length) return;
+      if (!this.openDens().length) return;
       for (let i = stash.length - 1; i >= 0; i--) {
         const c = stash[i];
         if (this.t < c.backAt) continue;
+        const open = this.openDens(c.isFlier);
         stash.splice(i, 1);
         const d = c.shelterDen && open.includes(c.shelterDen) ? c.shelterDen : U.pick(open);
         c.dead = c.leaving = c.sheltered = c.migrating = false;
@@ -132,13 +132,17 @@
     }
 
     denSpawnPoint(d) {
+      if (d.sky) return { x: d.x, y: d.y + 30 }; // (just inside the opening)
       if (d.wall) return { x: d.x + d.dir * 16, y: d.y };
       return { x: d.x, y: d.y - 10 };
     }
 
-    openDens() {
+    // Open dens; `flier` includes the openings to the sky at the top of an
+    // experimental room, which only fliers use to come and go.
+    openDens(flier) {
       const W = this.world;
       return this.dens.filter((d) => {
+        if (d.sky) return !!flier;
         const p = this.denSpawnPoint(d);
         return !W.solid(W.cellX(p.x), W.cellY(p.y)) && !W.isSolidPt(p.x, p.y) && !W.isSolidPt(p.x, p.y - 14);
       });
@@ -158,10 +162,10 @@
       this.populate();
     }
 
-    nearestDen(x, y) {
+    nearestDen(x, y, caps) {
       let best = null;
       let bd = Infinity;
-      for (const d of this.openDens()) {
+      for (const d of this.openDens(caps && caps.fly)) {
         const p = this.denSpawnPoint(d);
         const dd = U.dist2(x, y, p.x, p.y);
         if (dd < bd) {
@@ -175,7 +179,7 @@
     // The open den farthest from (ox, oy) that a creature at (x, y) with
     // these caps can actually walk to (falls back to the farthest outright).
     farthestDen(ox, oy, x, y, caps) {
-      const pts = this.openDens().map((d) => this.denSpawnPoint(d));
+      const pts = this.openDens(caps && caps.fly).map((d) => this.denSpawnPoint(d));
       pts.sort((a, b) => U.dist2(b.x, b.y, ox, oy) - U.dist2(a.x, a.y, ox, oy));
       for (const p of pts.slice(0, 4)) {
         const r = Nav.findPath(this.world, x, y, p.x, p.y, caps, 6000);
@@ -277,11 +281,14 @@
     // From a den normally; anywhere sensible when first populating.
     pickSpawnPoint(species, anywhere) {
       const W = this.world;
+      const flier = species === 'batfly' || species === 'daddy' || species.indexOf('noodlefly') === 0 || species === 'squidcada';
       if (!anywhere) {
-        const dens = this.openDens();
+        const dens = this.openDens(flier);
         if (dens.length) {
-          // Wall dens suit everything; ledge dens suit walkers.
-          const d = U.pick(dens);
+          // Wall dens suit everything; ledge dens suit walkers; fliers mostly
+          // come in from the sky where a room is open to it.
+          const sky = dens.filter((d) => d.sky);
+          const d = sky.length && Math.random() < 0.7 ? U.pick(sky) : U.pick(dens);
           return this.denSpawnPoint(d);
         }
       }
@@ -496,8 +503,26 @@
 
       for (const p of this.plants) p.update(dt);
       const Wd = this.world;
+      const wetMap = Wd.water && Wd.water.length;
       for (const c of this.creatures) {
         c.update(dt);
+        // Water (placeholder): wading is slow, sinking is slower; a splash
+        // going in or coming out.
+        if (wetMap && !c.isFlier && !c.dead && 'vx' in c) {
+          const m = c.mainPoint();
+          const wet = Wd.inWater(m.x, m.y);
+          if (wet) {
+            c.vx *= Math.pow(0.2, dt);
+            if (c.vy > 0) c.vy *= Math.pow(0.05, dt);
+          }
+          if (wet !== !!c.wet) {
+            c.wet = wet;
+            if (c.age > 1) {
+              const s = Wd.water.find((r) => r.surface && m.x >= r.x && m.x < r.x + r.w);
+              this.burst(m.x, s ? s.y : m.y, U.rgba(U.mix((this.palette && this.palette.water) || '#6a8aa0', '#ffffff', 0.5)), 6);
+            }
+          }
+        }
         // anything that has fallen or been flung far out of the world is gone
         if (c.y > Wd.h + 500 || c.y < -500 || c.x < -500 || c.x > Wd.w + 500 || !isFinite(c.x) || !isFinite(c.y)) c.remove();
       }
@@ -590,6 +615,7 @@
       // Three short marks on the pipe mouth itself (the game's sign for a
       // pipe that leads out of the room).
       for (const d of this.dens) {
+        if (d.sky) continue; // (an opening, not a pipe)
         if (d.busyT > 0) d.busyT -= 1 / 60;
         const on = d.busyT > 0 || Math.sin(this.t * 3 + d.x * 0.01) > 0.3;
         if (!on) continue;

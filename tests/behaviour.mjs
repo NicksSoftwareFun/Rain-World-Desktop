@@ -737,6 +737,73 @@ const checks = [
     warn: (m) => !m.flips && 'no backflip this run',
   },
   {
+    name: 'experimental',
+    about: 'experimental (Rain World room) maps: every region builds connected rooms with pits or water now and then; creatures live in them without getting stuck or walking into pits',
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = true;
+        e.cfg.world.layout = 'experimental';
+        const out = { maps: 0, failed: 0, slowestMs: 0, solidMin: 100, solidMax: 0, pits: 0, water: 0, sky: 0, fewDens: 0 };
+        for (const region of Object.keys(RW.Rooms.REGIONS)) {
+          e.cfg.world.region = region;
+          for (let k = 0; k < 6; k++) {
+            e.seed = 1000 + k * 37 + region.length;
+            const t0 = performance.now();
+            e.regenerate(false);
+            out.slowestMs = Math.max(out.slowestMs, Math.round(performance.now() - t0));
+            const d = e.decor;
+            out.maps++;
+            if (!d.ok || !d.room) out.failed++;
+            const W = e.world;
+            let solid = 0;
+            for (let i = 0; i < W.grid.length; i++) if (W.grid[i] & 1) solid++;
+            const pct = Math.round((100 * solid) / W.grid.length);
+            out.solidMin = Math.min(out.solidMin, pct);
+            out.solidMax = Math.max(out.solidMax, pct);
+            if (d.pits.length) out.pits++;
+            if (d.water.length) out.water++;
+            if (d.dens.some((q) => q.sky)) out.sky++;
+            if (d.dens.filter((q) => !q.sky).length < 2) out.fewDens++;
+          }
+        }
+        // live in one of each region for a while
+        let stuck = 0;
+        const B = RW.Creature.prototype;
+        const ba = B.burrowAway;
+        B.burrowAway = function () {
+          stuck++;
+          return ba.apply(this, arguments);
+        };
+        let fell = 0;
+        let lived = 0;
+        for (const region of Object.keys(RW.Rooms.REGIONS)) {
+          e.cfg.world.region = region;
+          e.seed = 7 + region.length * 11;
+          e.regenerate(false);
+          e.restartWildlife();
+          for (let i = 0; i < (mins / 4) * 3600; i++) e.tick(1 / 60);
+          fell += e.eco.fellInPit || 0;
+          lived += e.eco.stats.born;
+        }
+        B.burrowAway = ba;
+        e.cfg.world.layout = 'tiers';
+        return Object.assign(out, { stuckBurrows: stuck, fellInPits: fell, born: lived });
+      }, T(4)),
+    // measured when written: 24 maps all pass, solid 30-62%, ~8 with pits and
+    // ~7 with water; in 4 min of living, 0-2 burrows and a few falls
+    judge: (m) => [
+      m.failed > 0 && `${m.failed} maps never passed the reachability check`,
+      m.fewDens > 0 && `${m.fewDens} maps with fewer than two dens`,
+      (m.solidMin < 15 || m.solidMax > 70) && `solid share out of range (${m.solidMin}-${m.solidMax}%)`,
+      m.slowestMs > 3000 && `a map took ${m.slowestMs} ms to build`,
+      m.pits < 2 && 'pits (almost) never generated',
+      m.water < 2 && 'water (almost) never generated',
+      m.stuckBurrows > 8 && `${m.stuckBurrows} creatures stuck long enough to burrow away`,
+      m.fellInPits > m.born * 0.25 && `${m.fellInPits} of ${m.born} creatures fell into pits`,
+    ],
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>

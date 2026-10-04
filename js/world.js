@@ -44,6 +44,67 @@
       this.dirty = true;
     }
 
+    // Bottomless pits: spans of the bottom edge [{x0, x1}] (px) left open.
+    // Anything that falls out through one is gone (see Creature.tick).
+    setPits(list) {
+      this.pits = (list || []).map((p) => ({ x0: p.x0, x1: p.x1, y: p.y === undefined ? this.h : p.y }));
+      this.pitCols = new Uint8Array(this.cols);
+      this.pitTop = new Int16Array(this.cols).fill(32767); // first row of the shaft
+      const keep = this.borders.filter((b) => b.id !== 'edge-bottom' && !b.id.startsWith('edge-bottom-'));
+      const B = 400;
+      const spans = this.pits.slice().sort((a, b) => a.x0 - b.x0);
+      let x = -B;
+      let k = 0;
+      for (const p of spans) {
+        if (p.x0 > x) keep.push({ id: 'edge-bottom-' + k++, kind: 'edge', x, y: this.h, w: p.x0 - x, h: B });
+        x = Math.max(x, p.x1);
+        for (let cx = Math.floor(p.x0 / this.cell); cx < Math.ceil(p.x1 / this.cell); cx++) {
+          if (cx < 0 || cx >= this.cols) continue;
+          this.pitCols[cx] = 1;
+          this.pitTop[cx] = Math.min(this.pitTop[cx], Math.floor(p.y / this.cell));
+        }
+      }
+      keep.push({ id: 'edge-bottom-' + k, kind: 'edge', x, y: this.h, w: this.w + B - x, h: B });
+      this.borders = keep;
+      this.dirty = true;
+    }
+    // Passages: one-cell tunnels through the rock, [{cells: [[cx, cy]...],
+    // a: [cx, cy], b: [cx, cy]}] (a and b: the open cells at each end).
+    // Creatures crawl through them as through a pipe (Creature.tunnelStep).
+    setPassages(list) {
+      this.passages = list || [];
+      this.passageAt = new Int16Array(this.cols * this.rows).fill(-1);
+      this.passages.forEach((p, k) => {
+        for (const [cx, cy] of p.cells) if (this.inBounds(cx, cy)) this.passageAt[cy * this.cols + cx] = k;
+      });
+      this.dirty = true;
+    }
+    passage(cx, cy) {
+      if (!this.passageAt || !this.inBounds(cx, cy)) return -1;
+      return this.passageAt[cy * this.cols + cx];
+    }
+    // Down in a pit's shaft (nowhere a walker should ever choose to be)?
+    inPit(cx, cy) {
+      return !!this.pitCols && cx >= 0 && cx < this.cols && this.pitCols[cx] === 1 && cy >= this.pitTop[cx];
+    }
+    // Water (placeholder): rects [{x, y, w, h}] (y is the surface).
+    setWater(list) {
+      this.water = (list || []).map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
+      this.dirty = true;
+    }
+    inWater(x, y) {
+      const L = this.water;
+      if (!L) return false;
+      for (let i = 0; i < L.length; i++) {
+        const r = L[i];
+        if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return true;
+      }
+      return false;
+    }
+    waterCell(cx, cy) {
+      return !!this.water && this.water.length > 0 && this.inWater((cx + 0.5) * this.cell, (cy + 0.5) * this.cell);
+    }
+
     setStatic(solids, poles) {
       this.staticSolids = solids.map((s) => Object.assign({}, s));
       this.poles = poles.map((p) => Object.assign({}, p));
@@ -195,6 +256,8 @@
       return cx >= 0 && cy >= 0 && cx < this.cols && cy < this.rows;
     }
     solid(cx, cy) {
+      // (below a pit there's nothing at all)
+      if (cy >= this.rows && cx >= 0 && cx < this.cols && this.pitCols && this.pitCols[cx]) return false;
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return true;
       return (this.grid[cy * this.cols + cx] & SOLID) !== 0;
     }

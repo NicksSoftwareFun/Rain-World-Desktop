@@ -135,8 +135,12 @@
       if (!keepSeed || !this.seed) this.seed = cfg.world.seed || Math.floor(Math.random() * 1e9);
       const rnd = U.mulberry32(this.seed);
       const g = this.poll();
-      this.decor = RW.Background.generateDecor(this.W, this.H, cfg, rnd, { floor: this.floorOf(g.rects) });
+      const opts = { floor: this.floorOf(g.rects) };
+      this.decor = cfg.world.layout === 'experimental' && RW.Rooms ? RW.Rooms.generate(this.W, this.H, cfg, rnd, opts) : RW.Background.generateDecor(this.W, this.H, cfg, rnd, opts);
       this.world.setStatic(this.decor.ledges.concat(this.decor.beams || []), this.decor.poles);
+      this.world.setPits(this.decor.pits);
+      this.world.setWater(this.decor.water);
+      this.world.setPassages(this.decor.passages);
       this.world.setDynamic(g.rects);
       this.world.rebuild();
       this.eco = new RW.Ecosystem(cfg, this.world);
@@ -149,7 +153,8 @@
     }
 
     applyPalette() {
-      this.pal = RW.PALETTES[this.cfg.world.palette] || RW.PALETTES.industrial;
+      // (an experimental map brings its region's palette)
+      this.pal = this.decor && this.decor.region && RW.Rooms ? RW.Rooms.palette(this.decor.region) : RW.PALETTES[this.cfg.world.palette] || RW.PALETTES.industrial;
       this.eco.palette = this.pal;
       this.ps = U.clamp(+this.cfg.world.pixelScale || 2, 1, 4);
       this.canvas.width = Math.ceil((this.W * this.zoom) / this.ps);
@@ -374,6 +379,7 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(this.spriteCanvas, 0, 0);
       ctx.setTransform(k, 0, 0, k, 0, 0);
+      this.drawWater(ctx);
       this.weather.drawRain(ctx, this.pal);
       // the time of day over everything: warm at dawn and dusk, dim at night
       const L = this.light;
@@ -391,6 +397,26 @@
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.font = '12px monospace';
         ctx.fillText(`${this.fps.toFixed(0)} fps  ${this.frameMs.toFixed(1)} ms  ${this.eco.creatures.length} creatures`, 10, 16);
+      }
+    }
+
+    // Water (a placeholder for now): a see-through body in front of whatever
+    // is in it, a lighter surface line rippling gently.
+    drawWater(ctx) {
+      const L = this.decor && this.decor.water;
+      if (!L || !L.length) return;
+      const pal = this.pal;
+      const wc = pal.water || '#3d5b70';
+      const t = this.eco.t;
+      ctx.fillStyle = U.rgba(wc, 0.6);
+      for (const r of L) ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = U.rgba(U.mix(wc, pal.light, 0.5), 0.9);
+      for (const r of L) {
+        if (!r.surface) continue;
+        for (let x = r.x; x < r.x + r.w; x += 5) {
+          const dy = Math.round(Math.sin(x * 0.09 + t * 1.7) + Math.sin(x * 0.031 - t * 1.1));
+          ctx.fillRect(x, r.y + dy * 0.5 - 1, Math.min(5, r.x + r.w - x), 2);
+        }
       }
     }
 

@@ -2,6 +2,8 @@
 // windows, movable desktop icons and a taskbar. Every element marked
 // .rw-solid is reported to the engine as geometry, exactly the way the real
 // Windows helper will report window, icon and taskbar rectangles.
+// With { bare: true } (the web page and artifact) there is no desktop at
+// all, only the pointer: hovering, and pressing to pick up a creature.
 (function () {
   'use strict';
   const RW = window.RW;
@@ -32,14 +34,15 @@
   }
 
   class MockDesktop {
-    constructor(root) {
+    constructor(root, opts) {
       this.root = root;
+      this.bare = !!(opts && opts.bare);
       this.cursor = { x: -9999, y: -9999, inside: false };
       this.clicks = [];
       this.releases = [];
       this.z = 10;
       this.windows = [];
-      this.build();
+      if (!this.bare) this.build();
       this.bindPointer();
     }
 

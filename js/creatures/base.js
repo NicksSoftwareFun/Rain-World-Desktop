@@ -307,6 +307,12 @@
         return false;
       }
       this.alpha = Math.min(1, this.alpha + dt * 1.6);
+      // Fell into a bottomless pit: gone for good, corpse and all.
+      if (this.W.pits && this.W.pits.length && !this.grabbedBy && !this.isFlier && this.mainPoint().y > this.W.h + 40) {
+        this.eco.fellInPit = (this.eco.fellInPit || 0) + 1;
+        this.remove();
+        return false;
+      }
       if (this.unburrowStep(dt)) return false;
       // Dead: a limp ragdoll until something eats it (or it rots away). A
       // carried corpse lets its own grabbed-branch hang it from the jaws.
@@ -330,6 +336,11 @@
         }
         return false;
       }
+      // Passages: crawling through one, or about to (the path runs into one)
+      if (this.tunnel && this.grabbedBy) this.tunnel = null;
+      if (this.tunnel) return this.tunnelStep(dt);
+      this.tunnelCd = (this.tunnelCd || 0) - dt;
+      if (!this.isFlier && this.W.passages && this.W.passages.length && this.tryTunnel()) return false;
       // No den reachable from here: slip away quietly rather than wait forever.
       if (this.state === 'leave' && this.stateT > (this.isFlier ? 60 : 30)) this.leave();
       // Arrived at a pipe (nothing left to walk) but not quite close enough
@@ -377,7 +388,7 @@
           } else if (this.state === 'leave') {
             // as close to a den as it can get: in it goes; nowhere near one
             // (no way there): it slips away underground
-            const den = this.eco.nearestDen(m.x, m.y);
+            const den = this.eco.nearestDen(m.x, m.y, this.caps);
             if (den && Math.hypot(den.x - m.x, den.y - m.y) < W.cell * 3) this.leave();
             else this.burrowAway();
           }
@@ -565,6 +576,7 @@
     // A den's mouth: where the opening is, the way into the pipe (a), and
     // the way out of it (n, the side the creature stays visible on).
     static denMouth(d) {
+      if (d.sky) return { x: d.x, y: d.y, ax: 0, ay: -1 }; // up and away
       if (d.wall) return { x: d.x + d.dir * 12, y: d.y, ax: -d.dir, ay: 0 };
       return { x: d.x, y: d.y, ax: 0, ay: 1 };
     }
@@ -575,6 +587,7 @@
       let best = null;
       let bd = range;
       for (const d of dens) {
+        if (d.sky && !this.isFlier) continue;
         const mo = RW.Creature.denMouth(d);
         for (const q of pts) {
           const dd = Math.hypot(q.x - mo.x, q.y - mo.y);
@@ -1109,6 +1122,211 @@
     }
     limp(dt) {}
     onRecovered() {}
+    // ---- passages ----
+    // One-cell tunnels through the rock (experimental maps). A creature goes
+    // through one end to end as through a pipe: head first, the body drawn
+    // along the head's own trail, up and down as easily as along. Meeting
+    // something bigger (or hungry) coming the other way, it has to squeeze
+    // itself round, which takes a moment, and go back.
+    tryTunnel() {
+      const W = this.W;
+      const lead = this.pipeLead();
+      // already in one (fell or was flung in): out by the nearer end
+      const here = W.passage(W.cellX(lead.x), W.cellY(lead.y));
+      if (here >= 0) {
+        const p = W.passages[here];
+        const k = p.cells.findIndex(([cx, cy]) => cx === W.cellX(lead.x) && cy === W.cellY(lead.y));
+        const toB = k >= p.cells.length / 2;
+        this.startTunnel(p, toB, toB ? k : p.cells.length - 1 - k);
+        return true;
+      }
+      if (this.tunnelCd > 0 || !this.pather || !this.pather.nodes) return false;
+      for (let k = 0; k < 3; k++) {
+        const n = this.pather.peek(k);
+        if (!n) break;
+        const pid = W.passage(n.cx, n.cy);
+        if (pid < 0) continue;
+        const p = W.passages[pid];
+        const a = p.cells[0];
+        const b = p.cells[p.cells.length - 1];
+        const da = Math.hypot(lead.x - W.centerX(a[0]), lead.y - W.centerY(a[1]));
+        const db = Math.hypot(lead.x - W.centerX(b[0]), lead.y - W.centerY(b[1]));
+        if (Math.min(da, db) > W.cell * 1.4) return false;
+        this.startTunnel(p, da <= db, 0);
+        return true;
+      }
+      return false;
+    }
+    // In at one end (fromA: the `a` end), from cell index `from` along it.
+    startTunnel(p, fromA, from) {
+      const W = this.W;
+      const cells = fromA ? p.cells : p.cells.slice().reverse();
+      const pt = ([cx, cy]) => ({ x: W.centerX(cx), y: W.centerY(cy) });
+      const doorIn = fromA ? p.a : p.b;
+      const doorOut = fromA ? p.b : p.a;
+      const route = cells.slice(from || 0).map(pt);
+      route.push(pt(doorOut));
+      const sp = this.spine || this.chain;
+      this.tunnel = {
+        p,
+        route,
+        i: 0,
+        doorIn,
+        doorOut,
+        trail: sp instanceof RW.Chain ? sp.pts.slice().reverse().map((q) => ({ x: q.x, y: q.y })) : null,
+        turnT: 0,
+        waitT: 0,
+      };
+      if ('vx' in this) this.vx = this.vy = 0;
+      if (this.turn) this.turn = null;
+      this.label = '';
+    }
+    tunnelBodyLen() {
+      const sp = this.spine || this.chain;
+      return sp instanceof RW.Chain ? sp.seg.reduce((a, b) => a + b, 0) : 16;
+    }
+    tunnelStep(dt) {
+      const T = this.tunnel;
+      const W = this.W;
+      const sp = this.spine || this.chain;
+      const chain = sp instanceof RW.Chain;
+      if (this.stunT > 0) {
+        this.stunT -= dt;
+        return false;
+      }
+      // squeezing round: a wriggle in place, then off back the other way
+      if (T.turnT > 0) {
+        T.turnT -= dt;
+        if (chain) {
+          const P = sp.pts;
+          for (let i = 1; i < P.length; i++) {
+            const w = Math.sin(this.age * 26 + i * 1.3) * 0.6;
+            P[i].x += w;
+            P[i].y -= w;
+          }
+        }
+        if (T.turnT <= 0) this.tunnelReverse();
+        return false;
+      }
+      const lead = this.pipeLead();
+      // something in the way, coming at us down the same passage?
+      for (const c of this.eco.creatures) {
+        if (c === this || !c.tunnel || c.tunnel.p !== T.p || c.dead) continue;
+        const o = c.pipeLead();
+        const tgt = T.route[Math.min(T.i, T.route.length - 1)];
+        const ahead = (o.x - lead.x) * (tgt.x - lead.x) + (o.y - lead.y) * (tgt.y - lead.y) > 0;
+        if (!ahead || Math.hypot(o.x - lead.x, o.y - lead.y) > W.cell * 1.6) continue;
+        const facing = c.tunnel.doorOut === T.doorIn;
+        if (!facing) return false; // (just behind one going the same way: wait)
+        // the smaller (or the one that's prey to the other) backs off
+        const preyToIt = c.diet && c.diet.some((s2) => (s2.endsWith('*') ? this.species.startsWith(s2.slice(0, -1)) : s2 === this.species));
+        const backOff = preyToIt || this.tunnelBodyLen() < c.tunnelBodyLen() || (this.tunnelBodyLen() === c.tunnelBodyLen() && this.id > c.id);
+        T.waitT += dt;
+        if (backOff || T.waitT > 4) T.turnT = 0.5 + this.tunnelBodyLen() / 110; // the longer, the slower round
+        return false;
+      }
+      T.waitT = 0;
+      const tgt = T.route[T.i];
+      const dx = tgt.x - lead.x;
+      const dy = tgt.y - lead.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 1.5) {
+        T.i++;
+        if (T.i >= T.route.length) return this.endTunnel();
+        return false;
+      }
+      const speed = U.clamp((this.p.speed || 60) * 0.55, 30, 70);
+      const st = Math.min(d, speed * dt);
+      const mx = (dx / d) * st;
+      const my = (dy / d) * st;
+      if (chain) {
+        const P = sp.pts;
+        P[0].x += mx;
+        P[0].y += my;
+        T.trail.push({ x: P[0].x, y: P[0].y });
+        this.layOnTrail(sp, T.trail);
+      } else {
+        this.pipeMove(mx, my, dt);
+      }
+      return false;
+    }
+    // Every body point on the head's trail, at its distance back along it.
+    layOnTrail(sp, trail) {
+      const P = sp.pts;
+      let ti = trail.length - 1;
+      let along = 0;
+      let need = 0;
+      for (let i = 1; i < P.length; i++) {
+        need += sp.seg[i - 1];
+        while (ti > 0) {
+          const a = trail[ti];
+          const b = trail[ti - 1];
+          const l = Math.hypot(a.x - b.x, a.y - b.y);
+          if (along + l >= need) {
+            const t = l > 0 ? (need - along) / l : 0;
+            P[i].x = a.x + (b.x - a.x) * t;
+            P[i].y = a.y + (b.y - a.y) * t;
+            break;
+          }
+          along += l;
+          ti--;
+        }
+        if (ti <= 0) {
+          P[i].x = trail[0].x;
+          P[i].y = trail[0].y;
+        }
+        P[i].px = P[i].x;
+        P[i].py = P[i].y;
+      }
+      P[0].px = P[0].x;
+      P[0].py = P[0].y;
+      // (only as much trail as the body needs)
+      if (trail.length > 400) trail.splice(0, trail.length - 300);
+      if (this.legs) {
+        for (const l of this.legs) {
+          const a = P[Math.min(l.at || 0, P.length - 1)];
+          const f = l.leg.foot;
+          if (!f) continue;
+          f.x += (a.x - f.x) * 0.3;
+          f.y += (a.y - f.y) * 0.3;
+        }
+      }
+    }
+    // Squeezed round: the other end leads now, back the way it came.
+    tunnelReverse() {
+      const T = this.tunnel;
+      const W = this.W;
+      const back = T.route.slice(0, Math.max(1, T.i)).reverse();
+      back.push({ x: W.centerX(T.doorIn[0]), y: W.centerY(T.doorIn[1]) });
+      const sp = this.spine || this.chain;
+      if (sp instanceof RW.Chain) {
+        if (this.reverse) this.reverse();
+        else {
+          sp.pts.reverse();
+          sp.seg.reverse();
+        }
+        T.trail = sp.pts.slice().reverse().map((q) => ({ x: q.x, y: q.y }));
+      } else if (this.facing !== undefined) {
+        this.facing = -this.facing;
+      }
+      const din = T.doorIn;
+      T.doorIn = T.doorOut;
+      T.doorOut = din;
+      T.route = back;
+      T.i = 0;
+      T.waitT = 0;
+    }
+    endTunnel() {
+      this.tunnel = null;
+      this.tunnelCd = 1.2;
+      if ('vx' in this) this.vx = this.vy = 0;
+      if (this.pather) {
+        this.pather.nodes = null;
+        this.pather.timer = 0;
+      }
+      return false;
+    }
+
     // Killed: a spray, then a corpse that lies where it falls (X'd-out eyes)
     // until a predator carries it off and swallows it.
     die(n) {
@@ -1118,6 +1336,7 @@
     }
     kill() {
       if (this.corpse || this.dead) return;
+      this.tunnel = null;
       // who did it: whatever has hold of it, else whatever hit it just now
       const lh = this.lastHit;
       this.killedBy = this.grabbedBy || (lh && this.eco.t - lh.t < 8 ? lh.by : null);

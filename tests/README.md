@@ -36,6 +36,7 @@ without page errors, populate, and react to geometry changes.
 | `reds` | red lizards and large centipedes not fighting on sight, armoured reds grabbed alive, red lizards not spitting spines |
 | `corpses` | lizards never contesting a scavenged corpse, corpses left untaken |
 | `throws` | spears, rocks or spines thrown steeper than 30 degrees, slugcats eating corpses they didn't kill, backflips without a down-throw |
+| `experimental` | Rain World room maps that cut dens off, never have pits or water, take too long to build, or that creatures get stuck in or keep falling out of |
 | `presets` | defaults, ledge rows growing with map size, nests, pixel scales, wildlife restart |
 
 The simulation isn't seeded, so numbers vary between runs. Each check's

@@ -46,7 +46,7 @@
         // Static sources: hanging chain/vine tips and seeps along the top edge.
         this.free = [];
         if (decor) {
-          for (const c of decor.chains) this.free.push({ x: c.x, y: c.len, t: Math.random(), speed: U.rand(0.1, 0.35), wob: U.rand(0, 10), chain: c });
+          for (const c of decor.chains) this.free.push({ x: c.x, y: (c.y0 || 0) + c.len, t: Math.random(), speed: U.rand(0.1, 0.35), wob: U.rand(0, 10), chain: c });
           for (const p of decor.fruitPlants) this.free.push({ x: p.x + 2, y: p.y + 6, t: Math.random(), speed: U.rand(0.08, 0.25), wob: U.rand(0, 10) });
         }
         const nTop = Math.round(world.w / 160);

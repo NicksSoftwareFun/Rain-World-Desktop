@@ -19,6 +19,7 @@
 
   const WALK = 0;
   const FALL = 1;
+  const TUNNEL = 3; // through a passage (crawled, as through a pipe)
   const JUMP = 2;
   const MAX_FALL = 80;
 
@@ -88,7 +89,9 @@
 
   function valid(W, cx, cy, c) {
     if (W.solid(cx, cy)) return false;
-    if (c.fly) return true;
+    if (c.fly) return !W.water || !W.waterCell(cx, cy); // (fliers keep out of the water)
+    if (W.pitCols && W.inPit(cx, cy)) return false; // (nor down a pit, for anything else)
+    if (W.passageAt && W.passage(cx, cy) >= 0) return true; // (anything that walks can crawl a passage)
     if (W.solid(cx, cy + 1)) return true;
     if (c.poles && W.pole(cx, cy)) return true;
     if (c.walls) {
@@ -152,6 +155,12 @@
           if (!W.inBounds(tcx, tcy) || !standable(W, tcx, tcy, c)) continue;
           // pole leapers (lizards) only jump to or from a pole
           if (c.leapPoles && !W.pole(cx, cy) && !W.pole(tcx, tcy)) continue;
+          // only a slugcat would risk a leap over a bottomless pit
+          if (c.leapPoles && W.pitCols) {
+            let over = false;
+            for (let k = Math.min(cx, tcx); k <= Math.max(cx, tcx); k++) if (W.pitCols[k]) over = true;
+            if (over) continue;
+          }
           if (ty < 0 && (tx * tx) / (jx * jx) + (ty * ty) / (ju * ju) > 1.05) continue;
           if (ty >= 0) {
             // Only jump across or down when there's actually a gap to clear.
@@ -204,6 +213,7 @@
           const nx = cx + dx;
           const ny = cy + dy;
           if (!W.inBounds(nx, ny) || !valid(W, nx, ny, c)) continue;
+          if (!c.fly && W.passageAt && W.passage(nx, ny) >= 0) continue; // (never start or end inside a passage)
           const d = U.dist2(x, y, W.centerX(nx), W.centerY(ny));
           if (d < bd) {
             bd = d;
@@ -279,12 +289,19 @@
         heapPush(ni, ng + h(ni));
       };
 
+      const inTunnel = !c.fly && W.passageAt && W.passage(cx, cy) >= 0;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (!dx && !dy) continue;
           const nx = cx + dx;
           const ny = cy + dy;
           if (!W.inBounds(nx, ny) || !valid(W, nx, ny, c)) continue;
+          // into, along and out of a passage: straight steps only, crawled
+          if (inTunnel || (!c.fly && W.passageAt && W.passage(nx, ny) >= 0)) {
+            if (dx && dy) continue;
+            relax(ny * cols + nx, 1.5, TUNNEL);
+            continue;
+          }
           if (dx && dy && W.solid(cx + dx, cy) && W.solid(cx, cy + dy)) continue;
           let cost = dx && dy ? 1.414 : 1;
           if (!c.fly) {
@@ -374,6 +391,7 @@
     for (let cy = 0; cy < W.rows; cy++) {
       for (let cx = 0; cx < W.cols; cx++) {
         if (!valid(W, cx, cy, c)) continue;
+        if (W.passageAt && W.passage(cx, cy) >= 0) continue; // (not somewhere to go and stand)
         all.push(cx, cy);
         if (W.solid(cx, cy + 1)) stand.push(cx, cy);
       }
@@ -381,5 +399,5 @@
     return (cache[key] = { version: W.version, all, stand });
   }
 
-  RW.Nav = { WALK, FALL, JUMP, findPath, nearestValid, randomValid, valid, standable, capsKey, validCells };
+  RW.Nav = { WALK, FALL, JUMP, TUNNEL, findPath, nearestValid, randomValid, valid, standable, capsKey, validCells };
 })();
