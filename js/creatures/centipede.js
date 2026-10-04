@@ -273,6 +273,17 @@
         g = null;
       }
       const node = this.pather.current();
+      // A head at each end: when the way on is behind it, it doesn't turn
+      // round, it just goes the other way (the far end leads).
+      if (node && !this.coil && P.length > 2) {
+        const bx = h.x - P[1].x;
+        const by = h.y - P[1].y;
+        const bl = Math.hypot(bx, by) || 1;
+        const nx = node.x - h.x;
+        const ny = node.y - h.y;
+        const nl = Math.hypot(nx, ny) || 1;
+        if ((bx / bl) * (nx / nl) + (by / bl) * (ny / nl) < -0.4 && nl > W.cell * 0.6) this.reverse();
+      }
       let dvx = 0;
       let dvy = 0;
       let leaving = false;
@@ -343,6 +354,24 @@
       this.phase += (Math.hypot(this.vx, this.vy) * dt * 0.45) / S;
     }
 
+    // Swap ends in place (same point objects, so references to the head
+    // stay valid): the old tail is now the head.
+    reverse() {
+      const P = this.chain.pts;
+      const n = P.length;
+      for (let i = 0; i < n >> 1; i++) {
+        const a = P[i];
+        const b = P[n - 1 - i];
+        for (const key of ['x', 'y', 'px', 'py']) {
+          const t = a[key];
+          a[key] = b[key];
+          b[key] = t;
+        }
+      }
+      this.chain.seg.reverse();
+      this.vx *= 0.3;
+      this.vy *= 0.3;
+    }
     stepCoil(dt) {
       const P = this.chain.pts;
       const S = this.size;
@@ -479,13 +508,13 @@
         const k = i / (n - 1);
         // a touch fuller at the head, ~15% slimmer by the tail; a dark cap
         // at each end (the head a bit bigger)
-        const endTaper = i === 0 ? 1.08 : i === n - 1 ? 0.78 : 1.02 - 0.17 * k;
+        const endTaper = i === 0 || i === n - 1 ? 1.04 : 1.02 - 0.12 * Math.abs(k - 0.5) * 2;
         const hh = 2.5 * S * endTaper; // half height: long, flat plates
-        const hl = seg * 0.5 * (i === 0 ? 1.05 : i === n - 1 ? 0.85 : 1); // half length
+        const hl = seg * 0.5 * (i === 0 || i === n - 1 ? 1.05 : 1); // half length
         // which local side faces the surface: the belly band goes there
         const belly = -Math.sin(ang) * -this.ux + Math.cos(ang) * -this.uy > 0 ? 1 : -1;
         const cap = i === 0 || i === n - 1;
-        const col = cap ? (i === 0 ? '#2a1410' : '#24120e') : U.mix(front, back, k * 0.6);
+        const col = cap ? '#2a1410' : U.mix(front, back, Math.abs(k - 0.5) * 1.2);
         ctx.save();
         ctx.translate(P[i].x, P[i].y);
         ctx.rotate(ang);
@@ -505,8 +534,10 @@
           roundRect(-hl + 0.8 * S, belly > 0 ? -hh + 0.5 * S : -hh * 0.25, hl * 2 - 1.6 * S, hh * 1.25 - 0.5 * S, hh * 0.3);
           ctx.fill();
         }
-        if (i === 0) {
-          // mandibles: two hooks reaching forward and curling down
+        if (i === 0 || i === n - 1) {
+          // a head at each end: mandibles, two hooks reaching out and
+          // curling down (the tail-end head faces the other way)
+          if (i === n - 1) ctx.scale(-1, 1);
           ctx.strokeStyle = ink;
           ctx.lineWidth = Math.max(ap, 1.1 * Math.sqrt(S));
           ctx.beginPath();

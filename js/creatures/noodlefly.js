@@ -81,8 +81,9 @@
       this.mass = this.infant ? 0.3 : 1.2;
       this.bloodColor = '#3a0c18';
       this.threats = ['daddy', 'centipede_large'];
-      // adults stab and eat lizards and anything smaller
-      this.diet = this.infant ? [] : this.p.diet || ['lizard_*', 'slugcat', 'centipede', 'centipede_medium', 'squidcada', 'dropwig'] // (not batflies: beneath its notice);
+      // adults stab and eat lizards and anything smaller (not batflies:
+      // beneath its notice)
+      this.diet = this.infant ? [] : this.p.diet || ['lizard_*', 'slugcat', 'centipede', 'centipede_medium', 'squidcada', 'dropwig'];
       this.meals = 0;
       this.huntCd = U.rand(5, 15);
       this.clingT = U.rand(2, 8);
@@ -271,6 +272,16 @@
     archPts() {
       return this.slack || this.archPtsLive();
     }
+    // How far round a turn the arch is at w (0 at the shoulder, 1 at the
+    // head end): the head goes over first and the body follows it round.
+    turnAt(w) {
+      const lag = 1.1;
+      const s = (this.faceS + 1) / 2; // 0 = facing left, 1 = right
+      const toward = this.facing > 0;
+      const u = toward ? s : 1 - s;
+      const k = U.clamp(u * (1 + lag) - (1 - w) * lag, 0, 1);
+      return (toward ? k : 1 - k) * 2 - 1;
+    }
     archPtsLive() {
       const L = this.L;
       const n = this.D.archN;
@@ -293,7 +304,7 @@
           // measured from straight up and scaled by faceS, so a turn swings
           // the crook over the top instead of flipping it
           const crook = 3.0 * Math.min(1, k / (noseAt - 1)) + Math.sin(this.age * 1.7 + k * 0.6) * 0.03;
-          cr = -Math.PI / 2 + crook * this.faceS;
+          cr = -Math.PI / 2 + crook * this.turnAt(k / Math.max(1, noseAt - 1));
         } else {
           // the nose hangs down, floppy, but the head looks where it's going:
           // the first nose segment leans most toward `look`, the rest droop
@@ -470,7 +481,7 @@
       if (this.infant) this.thinkInfant(dt);
       else this.thinkAdult(dt);
       // a steady swing over the top, about 0.8 s end to end
-      this.faceS += U.clamp(this.facing - this.faceS, -2.5 * dt, 2.5 * dt);
+      this.faceS += U.clamp(this.facing - this.faceS, -2 * dt, 2 * dt);
       this.updateLook(dt);
       // ease the body between the crook and the straight stabbing pose
       // (slowly enough to read as a wind-up, quickly for a clinging infant)
@@ -643,7 +654,7 @@
       }
       // face the way it lies, so what's left of the crook humps over the top
       if (Math.abs(Math.cos(want)) > 0.5) this.facing = Math.cos(want) > 0 ? 1 : -1;
-      this.faceS += U.clamp(this.facing - this.faceS, -2.5 * dt, 2.5 * dt);
+      this.faceS += U.clamp(this.facing - this.faceS, -2 * dt, 2 * dt);
       this.curl += (0.08 - this.curl) * U.approach(3, dt);
       this.aim = U.lerpAngle(this.aim, want, U.approach(4, dt));
       this.needle *= 0.98;

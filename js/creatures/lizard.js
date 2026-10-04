@@ -905,96 +905,6 @@
       for (const l of this.legs) l.leg.planted = false;
     }
 
-    // Turning round: the head leads. It rears up and arcs back over its own
-    // shoulders, coming down facing the other way (the head flips over at
-    // the top), and walks off; the body follows the exact path the head
-    // took, flowing up, over and back through itself, until the tail has
-    // been round too.
-    startTurn() {
-      const P = this.spine.pts;
-      const H = P[0];
-      let fx = H.x - P[2].x;
-      let fy = H.y - P[2].y;
-      const fl = Math.hypot(fx, fy) || 1;
-      fx /= fl;
-      fy /= fl;
-      // "up" is away from the surface, on the side the body isn't
-      let ux = this.ux;
-      let uy = this.uy;
-      if (Math.abs(fx * ux + fy * uy) > 0.7) {
-        ux = -fy;
-        uy = fx;
-      }
-      const r = 9 * this.L; // how high it rears
-      const trail = [];
-      for (let i = P.length - 1; i >= 0; i--) trail.push({ x: P[i].x, y: P[i].y });
-      const bodyLen = this.spine.seg.reduce((a, b) => a + b, 0);
-      this.turn = { t: 0, dur: 0.6, phase: 'arch', c: { x: H.x - fx * r, y: H.y - fy * r }, f: { x: fx, y: fy }, up: { x: ux, y: uy }, r, trail, moved: 0, bodyLen };
-      this.vx = this.vy = 0;
-    }
-
-    // The arch: the head along a half circle up, over and down behind.
-    stepTurn(dt) {
-      const T = this.turn;
-      T.t += dt;
-      const k = Math.min(1, T.t / T.dur);
-      const th = Math.PI * U.smooth(k);
-      const h = this.spine.pts[0];
-      h.x = h.px = T.c.x + T.f.x * T.r * Math.cos(th) + T.up.x * T.r * Math.sin(th);
-      h.y = h.py = T.c.y + T.f.y * T.r * Math.cos(th) + T.up.y * T.r * Math.sin(th);
-      this.followTrail();
-      if (k >= 1) {
-        // down and off the other way
-        T.phase = 'walk';
-        this.vx = -T.f.x * 30;
-        this.vy = -T.f.y * 30;
-      }
-    }
-
-    // Lay the body along the head's own path, link by link behind it.
-    followTrail() {
-      const T = this.turn;
-      const P = this.spine.pts;
-      const h = P[0];
-      const tr = T.trail;
-      const last = tr[tr.length - 1];
-      const d = Math.hypot(h.x - last.x, h.y - last.y);
-      if (d > 0.5) {
-        tr.push({ x: h.x, y: h.y });
-        T.moved += d;
-      }
-      let j = tr.length - 1; // walking back along the trail from the head
-      let ax = h.x;
-      let ay = h.y;
-      let left = 0; // distance still to go to the next body point
-      for (let i = 1; i < P.length; i++) {
-        left += this.spine.seg[i - 1];
-        while (j >= 0) {
-          const bx = tr[j].x;
-          const by = tr[j].y;
-          const sl = Math.hypot(bx - ax, by - ay);
-          if (sl >= left && sl > 0) {
-            ax += ((bx - ax) * left) / sl;
-            ay += ((by - ay) * left) / sl;
-            left = 0;
-            break;
-          }
-          left -= sl;
-          ax = bx;
-          ay = by;
-          j--;
-        }
-        P[i].x = P[i].px = ax;
-        P[i].y = P[i].py = ay;
-      }
-      // all the way round (or held up too long): back to the usual body
-      if ((T.phase === 'walk' && T.moved > T.bodyLen + T.r * 4) || T.t > 6) {
-        this.turn = null;
-        this.turnCd = 1.2;
-        this.look = 0;
-      }
-    }
-
     // --------------------------------------------------------- physics ----
     update(dt) {
       if (!this.tick(dt)) return;
@@ -1166,7 +1076,7 @@
           const surge = this.legs.some((l) => l.leg.stepping) ? 1.25 : 0.68;
           dvx = (dx / d) * this.speed * surge;
           dvy = (dy / d) * this.speed * surge;
-          if (g && this.speed > 0 && this.turnCd <= 0 && this.windT <= 0) {
+          if (g && !this.turn && this.speed > 0 && this.turnCd <= 0 && this.windT <= 0) {
             let nx = P[0].x - P[2].x;
             let ny = P[0].y - P[2].y;
             const nl = Math.hypot(nx, ny) || 1;
@@ -1205,6 +1115,21 @@
           this.vy -= back * fy;
         }
       }
+      // Coming round a turn it keeps walking until the tail is round too
+      // (stopping halfway left it folded in two).
+      if (this.turn && this.turn.phase === 'walk' && g) {
+        let hx = head.x - P[1].x;
+        let hy = head.y - P[1].y;
+        const hl = Math.hypot(hx, hy) || 1;
+        hx /= hl;
+        hy /= hl;
+        const along = this.vx * hx + this.vy * hy;
+        const want = Math.max(25, (this.p.speed || 40) * 0.7);
+        if (along < want) {
+          this.vx += (want - along) * hx;
+          this.vy += (want - along) * hy;
+        }
+      }
       head.x += this.vx * dt;
       head.y += this.vy * dt;
       if (g && this.lungeT <= 0 && !this.leavingSurface) {
@@ -1231,7 +1156,12 @@
       head.py = head.y;
 
       // Body and tail (coming round a turn, they follow the head's path)
-      if (this.turn && (this.lungeT > 0 || this.leavingSurface || !g)) this.turn = null;
+      // (only a lunge, a leap or a real fall cuts a turn short: rearing up
+      // out of reach of the ground mid-turn, the body still follows through)
+      if (this.turn && (this.lungeT > 0 || this.leap || (!g && this.vy > 150))) {
+        this.turn = null;
+        this.turnCd = 1.5; // (no straight back into another one)
+      }
       if (this.turn) this.followTrail();
       else {
         this.spine.verlet(this.bodyN, 0.88, 0, g ? 150 : 700, dt);

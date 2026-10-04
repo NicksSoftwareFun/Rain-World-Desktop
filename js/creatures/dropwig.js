@@ -244,6 +244,14 @@
       }
 
       this.think(dt);
+      // turning round: the head arcs back over and the body follows through
+      this.turnCd = (this.turnCd || 0) - dt;
+      if (this.turn && this.turn.phase === 'arch') {
+        this.stepTurn(dt);
+        this.updateLegs(dt, true);
+        return;
+      }
+      if (this.turn) this.turn.t += dt;
       const falling = this.state === 'drop' || this.state === 'recover';
       let g = falling ? null : W.nearestSurface(h.x, h.y, 22, this.mask);
       if (!g && !falling) {
@@ -337,6 +345,13 @@
           dvx = (dx / d) * this.speed;
           dvy = (dy / d) * this.speed;
           leaving = node.type === Nav.FALL || (g && (dx / d) * g.nx + (dy / d) * g.ny > 0.6);
+          // the way on is behind it: turn round rather than back into itself
+          if (g && !this.turn && this.turnCd <= 0 && node.type !== Nav.FALL) {
+            const fx = h.x - P[2].x;
+            const fy = h.y - P[2].y;
+            const fl = Math.hypot(fx, fy) || 1;
+            if ((fx / fl) * (dx / d) + (fy / fl) * (dy / d) < -0.3) this.startTurn();
+          }
         }
         if (g) {
           const k = U.approach(10, dt);
@@ -373,17 +388,23 @@
       if (this.state === 'drop' && h.y > W.h + 50) this.remove();
       h.px = h.x;
       h.py = h.y;
-      this.spine.follow(1);
-      for (let i = 1; i < P.length; i++) {
-        if (g) {
-          const s = W.nearestSurface(P[i].x, P[i].y, 20, this.mask);
-          if (s) {
-            const e = s.d - (this.state === 'wait' ? 5 : 8);
-            P[i].x -= s.nx * e * 0.3;
-            P[i].y -= s.ny * e * 0.3;
+      // coming round a turn the body follows the head's path; otherwise
+      // the usual follow and grip
+      if (this.turn && (falling || !g || this.leap)) this.turn = null;
+      if (this.turn) this.followTrail();
+      else {
+        this.spine.follow(1);
+        for (let i = 1; i < P.length; i++) {
+          if (g) {
+            const s = W.nearestSurface(P[i].x, P[i].y, 20, this.mask);
+            if (s) {
+              const e = s.d - (this.state === 'wait' ? 5 : 8);
+              P[i].x -= s.nx * e * 0.3;
+              P[i].y -= s.ny * e * 0.3;
+            }
           }
+          W.collideCircle(P[i], 4);
         }
-        W.collideCircle(P[i], 4);
       }
 
       const ux = g ? g.nx : 0;

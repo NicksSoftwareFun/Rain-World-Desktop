@@ -35,6 +35,7 @@
       };
       this.pather = new RW.Pather(this, this.caps);
       this.facing = U.sign();
+      this.faceS = this.facing; // the body's facing, following the head's
       this.look = 0;
       this.grounded = false;
       this.pole = null;
@@ -213,6 +214,7 @@
       this.jumping = false;
       this.lie += (1 - this.lie) * U.approach(6, dt);
       this.look += (this.facing - this.look) * U.approach(6, dt);
+      this.easeBody(dt);
       this.updateHead(dt, false);
       this.updateTail(dt);
       this.updateHand();
@@ -1006,6 +1008,16 @@
       else if (this.lookAt) lookTarget = U.clamp((this.lookAt.x - this.head.x) / 60, -1, 1);
       else if (this.state === 'flee' && this.threat) lookTarget = U.clamp((this.threat.x - this.head.x) / 60, -1, 1);
       this.look += (U.clamp(lookTarget, -1, 1) - this.look) * U.approach(6, dt);
+      this.easeBody(dt);
+    }
+    // Turning round, the head goes first (look) and the body comes round
+    // after it: limbs, hips and tail swing over through the middle.
+    easeBody(dt) {
+      if (this.faceS === undefined) this.faceS = this.facing;
+      this.faceS += U.clamp(this.facing - this.faceS, -3.2 * dt, 3.2 * dt);
+    }
+    faceSign() {
+      return this.faceS >= 0 ? 1 : -1;
     }
 
     updateHead(dt, held) {
@@ -1063,19 +1075,19 @@
     updateHand() {
       const sh = this.shoulder();
       const hands = this.limbTargets(sh).hands;
-      const k = U.ik2(sh.x, sh.y, hands[0].x, hands[0].y, ARM, ARM, -this.facing);
+      const k = U.ik2(sh.x, sh.y, hands[0].x, hands[0].y, ARM, ARM, -this.faceSign());
       this.handPt = { x: k.ex, y: k.ey };
-      const k2 = U.ik2(sh.x, sh.y, hands[1].x, hands[1].y, ARM, ARM, -this.facing);
+      const k2 = U.ik2(sh.x, sh.y, hands[1].x, hands[1].y, ARM, ARM, -this.faceSign());
       this.handPt2 = { x: k2.ex, y: k2.ey };
     }
 
     updateTail(dt) {
       const T = this.tail.pts;
-      T[0].x = this.hip.x - this.facing * 1.5;
+      T[0].x = this.hip.x - this.faceS * 1.5;
       T[0].y = this.hip.y + 2;
       T[0].px = T[0].x;
       T[0].py = T[0].y;
-      this.tail.verlet(1, 0.86, -this.facing * 520, 420, dt); // tail streams out behind
+      this.tail.verlet(1, 0.86, -this.faceS * 520, 420, dt); // tail streams out behind
       this.tail.follow(1);
       this.tail.collide(this.W, 1.5, 1);
     }
@@ -1085,7 +1097,7 @@
       const hip = this.hip;
       const h = this.head;
       const col = this.color;
-      const f = this.facing;
+      const f = this.faceS; // the body comes round after the head
       const dark = U.rgba(U.scale(col, 0.45)); // far limbs: clearly shaded so they separate
       const main = U.rgba(col);
       const lie = this.lie;
@@ -1108,7 +1120,7 @@
       }
 
       // far limbs
-      this.drawLimb(ctx, hip.x - f, hip.y + 2, limbs.feet[1], LEG, LEG, dark, 3, f);
+      this.drawLimb(ctx, hip.x - f, hip.y + 2, limbs.feet[1], LEG, LEG, dark, 3, this.faceSign());
       this.drawArm(ctx, shoulder, limbs.hands[1], dark, 2);
 
       // tail
@@ -1127,7 +1139,7 @@
       ctx.fill();
 
       // near leg
-      this.drawLimb(ctx, hip.x + f, hip.y + 2, limbs.feet[0], LEG, LEG, main, 3.2, f);
+      this.drawLimb(ctx, hip.x + f, hip.y + 2, limbs.feet[0], LEG, LEG, main, 3.2, this.faceSign());
       ctx.restore();
 
       // near arm, drawn before the head so a hand never paints across the face
@@ -1213,7 +1225,7 @@
 
     limbTargets(shoulder) {
       const hip = this.hip;
-      const f = this.facing;
+      const f = this.faceS;
       const feet = [];
       const hands = [];
       const gy = hip.y + R + 0.5;
@@ -1282,7 +1294,7 @@
 
     // Thin two-bone arm ending in a small round hand.
     drawArm(ctx, sh, t, col, w) {
-      const k = U.ik2(sh.x, sh.y, t.x, t.y, ARM, ARM, -this.facing);
+      const k = U.ik2(sh.x, sh.y, t.x, t.y, ARM, ARM, -this.faceSign());
       ctx.strokeStyle = col;
       ctx.lineWidth = w;
       ctx.beginPath();

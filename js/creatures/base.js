@@ -638,6 +638,100 @@
       if (along >= pp.len || pp.t > 6) this.dead = true; // counted as left by the ecosystem
       return false;
     }
+    // ---- turning round (any creature with a spine: lizards, dropwigs) ----
+    turnChain() {
+      return this.spine || this.chain;
+    }
+    // Turning round: the head leads. It rears up and arcs back over its own
+    // shoulders, coming down facing the other way (the head flips over at
+    // the top), and walks off; the body follows the exact path the head
+    // took, flowing up, over and back through itself, until the tail has
+    // been round too.
+    startTurn() {
+      const P = this.turnChain().pts;
+      const H = P[0];
+      let fx = H.x - P[2].x;
+      let fy = H.y - P[2].y;
+      const fl = Math.hypot(fx, fy) || 1;
+      fx /= fl;
+      fy /= fl;
+      // "up" is away from the surface, on the side the body isn't
+      let ux = this.ux;
+      let uy = this.uy;
+      if (Math.abs(fx * ux + fy * uy) > 0.7) {
+        ux = -fy;
+        uy = fx;
+      }
+      const r = (this.turnRear || 9) * (this.L || 1); // how high it rears
+      const trail = [];
+      for (let i = P.length - 1; i >= 0; i--) trail.push({ x: P[i].x, y: P[i].y });
+      const bodyLen = this.turnChain().seg.reduce((a, b) => a + b, 0);
+      this.turn = { t: 0, dur: 0.6, phase: 'arch', c: { x: H.x - fx * r, y: H.y - fy * r }, f: { x: fx, y: fy }, up: { x: ux, y: uy }, r, trail, moved: 0, bodyLen };
+      this.vx = this.vy = 0;
+    }
+
+    // The arch: the head along a half circle up, over and down behind.
+    stepTurn(dt) {
+      const T = this.turn;
+      T.t += dt;
+      const k = Math.min(1, T.t / T.dur);
+      const th = Math.PI * U.smooth(k);
+      const h = this.turnChain().pts[0];
+      h.x = h.px = T.c.x + T.f.x * T.r * Math.cos(th) + T.up.x * T.r * Math.sin(th);
+      h.y = h.py = T.c.y + T.f.y * T.r * Math.cos(th) + T.up.y * T.r * Math.sin(th);
+      this.followTrail();
+      if (k >= 1) {
+        // down and off the other way
+        T.phase = 'walk';
+        this.vx = -T.f.x * 30;
+        this.vy = -T.f.y * 30;
+      }
+    }
+
+    // Lay the body along the head's own path, link by link behind it.
+    followTrail() {
+      const T = this.turn;
+      const P = this.turnChain().pts;
+      const h = P[0];
+      const tr = T.trail;
+      const last = tr[tr.length - 1];
+      const d = Math.hypot(h.x - last.x, h.y - last.y);
+      if (d > 0.5) {
+        tr.push({ x: h.x, y: h.y });
+        T.moved += d;
+      }
+      let j = tr.length - 1; // walking back along the trail from the head
+      let ax = h.x;
+      let ay = h.y;
+      let left = 0; // distance still to go to the next body point
+      for (let i = 1; i < P.length; i++) {
+        left += this.turnChain().seg[i - 1];
+        while (j >= 0) {
+          const bx = tr[j].x;
+          const by = tr[j].y;
+          const sl = Math.hypot(bx - ax, by - ay);
+          if (sl >= left && sl > 0) {
+            ax += ((bx - ax) * left) / sl;
+            ay += ((by - ay) * left) / sl;
+            left = 0;
+            break;
+          }
+          left -= sl;
+          ax = bx;
+          ay = by;
+          j--;
+        }
+        P[i].x = P[i].px = ax;
+        P[i].y = P[i].py = ay;
+      }
+      // all the way round (or held up too long): back to the usual body
+      if ((T.phase === 'walk' && T.moved > T.bodyLen + T.r * 4) || T.t > 8) {
+        this.turn = null;
+        this.turnCd = 1.5;
+        if (this.look !== undefined) this.look = 0;
+      }
+    }
+
     // Back out of a pipe after the rain: laid down the pipe, head at the
     // mouth, the head leads out (along the ledge top, from a ledge pipe) and
     // the body follows it out the way it went in.
