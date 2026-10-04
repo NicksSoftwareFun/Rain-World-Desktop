@@ -32,7 +32,7 @@
       pal: {
         skyTop: '#33433f', skyBot: '#141d1b', fog: '#30413c', far: '#3f4d49', mid: '#26322f',
         near: '#141c19', dark: '#070b0a', rust: '#7a3a22', light: '#c2d6cb', glow: '#ff6a3a',
-        rain: '#a9c0b8', mass: '#0c1310', water: '#0e2218', accent: '#b8c24a',
+        rain: '#a9c0b8', mass: '#0c1310', water: '#1f6a45', accent: '#b8c24a',
         interior: '#2f403a', sky: '#5c7068',
       },
     },
@@ -132,9 +132,11 @@
     let prev = lift;
     while (x <= x1) {
       const run = 5 + Math.floor(R() * 8);
-      const step = 1 + Math.floor(R() * 3);
-      const r = R();
-      lift = U.clamp(lift + (r < 0.45 ? step : r < 0.85 ? -step : 0), 0, maxRise);
+      const step = 1 + Math.floor(Math.min(maxRise, 3) * R());
+      let next = lift + (R() < 0.5 ? step : -step);
+      if (next < 0) next = Math.min(maxRise, step);
+      if (next > maxRise) next = Math.max(0, lift - step);
+      lift = next;
       const xe = Math.min(x1, x + run - 1);
       if (lift > 0) g.fill(x, yFloor - lift, xe, yFloor - 1);
       if (f && Math.abs(lift - prev) > 1 && x > x0) {
@@ -489,11 +491,15 @@
         if (x < x0 || x + w - 1 > x1 || y + h - 1 > y1) continue;
         // clear around it, and room to stand on top
         if (!g.air(x - 1, y - 1, x + w, y + h + 1)) continue;
+        // staggered: not level with a neighbour within 10 cells
+        if (f.blocks.some((b) => Math.abs(b.y0 - y) < 2 && Math.abs(b.x0 - x) < 10)) continue;
         // what it hangs from: the first solid straight up from its middle
         const px = x + Math.floor(w / 2);
         let top = y - 1;
         while (top >= 0 && !g.solid(px, top)) top--;
         if (y - top > 14 && top >= 0) continue; // too long a pole
+        if (top < 0 && (f.topPoles || 0) >= 2) continue; // (only a couple hung from off the top)
+        if (top < 0) f.topPoles = (f.topPoles || 0) + 1;
         g.fill(x, y, x + w - 1, y + h - 1);
         f.blocks.push({ x0: x, y0: y, x1: x + w - 1, y1: y + h - 1, octagon: kind === 'octagon' });
         f.poles.push({ cx: px, y0: Math.max(0, top + 1), y1: y - 1, hang: true });
@@ -656,6 +662,18 @@
         if (x < 1 || y < 1 || x > C - 2 || y > Rows - 2 || !g.solid(x, y) || wet(x, y) || pitCol(x)) return false;
         const i = y * C + x;
         if (i === goal) return true;
+        // away from its doors, deep in the rock: two cells of it all round
+        // (not a channel skimming the surface of a wall or a floor)
+        const nearEnd = Math.abs(x - A.sx) + Math.abs(y - A.sy) <= 2 || Math.abs(x - B.sx) + Math.abs(y - B.sy) <= 2;
+        if (!nearEnd) {
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (!g.solid(nx, ny) || carved.has(ny * C + nx)) return false;
+            }
+          }
+        }
         // a wall all round (bar the way we came), clear of other passages
         for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
           const j = ny * C + nx;
@@ -716,7 +734,7 @@
       const cells = route(A, B);
       if (!cells) dbg.noRoute++;
       else if (cells.length > 40) dbg.long++;
-      if (!cells || cells.length > 40) continue;
+      if (!cells || cells.length > 30) continue;
       for (const [x, y] of cells) {
         g.set(x, y, 0);
         carved.add(y * C + x);
@@ -972,7 +990,7 @@
       const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region] };
       const info = ARCHETYPES[arch](g, R, f);
       // no flat floor longer than ~12 cells anywhere
-      for (const p of platforms(g)) if (p.x1 - p.x0 + 1 > 12 && p.y > 3 && !f.blocks.some((b) => p.y + 1 >= b.y0 && p.y + 1 <= b.y1)) roughFloor(g, p.x0 + 2, p.x1 - 2, p.y + 1, R, 2, f);
+      for (const p of platforms(g)) if (p.x1 - p.x0 + 1 > 12 && p.y > 3 && !f.blocks.some((b) => p.y + 1 >= b.y0 && p.y + 1 <= b.y1 && p.x1 >= b.x0 && p.x0 <= b.x1)) roughFloor(g, p.x0 + 2, p.x1 - 2, p.y + 1, R, 2, f);
       // water on about a third of maps (more in Shoreline), a pit on about a
       // third (the Citadel's drop shaft more often), never both
       const wetChance = region === 'shoreline' ? 0.5 : region === 'shaded' ? 0.15 : 0.33;
@@ -1220,6 +1238,38 @@
     }
   }
 
+  // Passages: a darker tube through the rock with a faint lighter rim, and
+  // at each door the three-mark sign the game puts on shortcut mouths.
+  function paintPassages(l, decor, pal) {
+    const room = decor.room;
+    const { cell } = room;
+    const fill = U.rgba(U.mix(pal.interior, pal.mass, 0.45));
+    const rim = U.rgba(U.mix(pal.mass, pal.light, 0.1));
+    for (const q of decor.passages || []) {
+      const set = new Set(q.cells.map(([x, y]) => x + ',' + y));
+      for (const [x, y] of q.cells) {
+        l.fillStyle = fill;
+        l.fillRect(x * cell, y * cell, cell, cell);
+        l.fillStyle = rim;
+        if (!set.has(x + ',' + (y - 1))) l.fillRect(x * cell, y * cell, cell, 1);
+        if (!set.has(x + ',' + (y + 1))) l.fillRect(x * cell, (y + 1) * cell - 1, cell, 1);
+        if (!set.has(x - 1 + ',' + y)) l.fillRect(x * cell, y * cell, 1, cell);
+        if (!set.has(x + 1 + ',' + y)) l.fillRect((x + 1) * cell - 1, y * cell, 1, cell);
+      }
+      // the marks, on the first cell in from each door
+      l.fillStyle = U.rgba('#ffffff', 0.55);
+      for (const [door, end] of [[q.a, q.cells[0]], [q.b, q.cells[q.cells.length - 1]]]) {
+        const cx = (end[0] + 0.5) * cell;
+        const cy = (end[1] + 0.5) * cell;
+        const horiz = end[1] === door[1];
+        for (let k = -1; k <= 1; k++) {
+          if (horiz) l.fillRect(cx - 1, cy + k * 4 - 1, 2, 2);
+          else l.fillRect(cx + k * 4 - 1, cy - 1, 2, 2);
+        }
+      }
+    }
+  }
+
   // A bottomless pit darkens toward the bottom of the screen: depth, a void.
   function paintPits(l, decor, pal, H) {
     for (const q of decor.pits || []) {
@@ -1401,11 +1451,12 @@
         const bx = (x + R()) * cell;
         const by = y * cell;
         l.strokeStyle = accCol;
-        l.lineWidth = region === 'industrial' ? 2 : 1.4;
+        l.lineWidth = region === 'industrial' ? 3 : 1.4;
         if (region === 'industrial') {
           // coral: a branching fan, 3-5 cells tall
-          for (let k = 0; k < 6; k++) {
-            const a = -Math.PI / 2 + (k - 2.5) * 0.3;
+          const nb = 5 + Math.floor(R() * 5);
+          for (let k = 0; k < nb; k++) {
+            const a = -Math.PI / 2 + (k - (nb - 1) / 2) * 0.24;
             const len = R(1.5, 2.5) * cell;
             l.beginPath();
             l.moveTo(bx, by);
@@ -1455,5 +1506,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintMass, paintAccents, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();

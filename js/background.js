@@ -584,6 +584,7 @@
       const p2 = play2.getContext('2d', { willReadFrequently: true });
       layer((l) => {
         RW.Rooms.paintMass(l, decor, pal, R);
+        RW.Rooms.paintPassages(l, decor, pal);
         RW.Rooms.paintAccents(l, decor, pal, R);
         for (const p of decor.poles) drawPole(l, p, pal);
         for (const b of decor.beams || []) drawBeam(l, b, pal);
