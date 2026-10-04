@@ -97,3 +97,14 @@ reference; its key numbers are copied below where they drive the code.
 
 Water physics and swimming (slugcats swim and dive, lizards wade, eels and
 leeches eventually), deep flooded rooms, more archetypes.
+
+## Status (2026-10-04)
+
+Phases 0-3 are done: there's no fake desktop on the web, and the generator
+covers five archetypes in four regions. Pits, water and the sky openings
+for fliers are in. The owner asked for passages (one-cell tunnels crawled
+like pipes) mid-way, and they're in too. Three art-director review rounds
+compare renders against the dataset (scores 4 → 6.5 → round 3 pending),
+and the `experimental` behaviour check covers generation and living in
+the maps. Next, once the owner has seen the placeholder: water physics
+and swimming.

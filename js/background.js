@@ -569,6 +569,7 @@
     function paintRoom() {
       RW.Rooms.paintBackdrop(ctx, W, H, pal, decor, R, layer);
       RW.Rooms.paintShade(ctx, decor, pal);
+      RW.Rooms.paintPits(ctx, decor, pal, H);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       grain(ctx, canvas.width, canvas.height, rnd);
       const mkc = () => {

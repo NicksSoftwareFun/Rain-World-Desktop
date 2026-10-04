@@ -22,7 +22,7 @@
       pal: {
         skyTop: '#bcc4cd', skyBot: '#8d96a5', fog: '#a3abb8', far: '#7b7690', mid: '#463a55',
         near: '#22182d', dark: '#0d0612', rust: '#8a5a4a', light: '#eef2f8', glow: '#c8f070',
-        rain: '#dde4ec', mass: '#170b20', water: '#2a4a66', accent: '#5fd94a',
+        rain: '#dde4ec', mass: '#170b20', water: '#1b2a40', accent: '#4ccf3c',
         interior: '#4a4852', sky: '#a8b1bb',
       },
     },
@@ -32,8 +32,8 @@
       pal: {
         skyTop: '#33433f', skyBot: '#141d1b', fog: '#30413c', far: '#3f4d49', mid: '#26322f',
         near: '#141c19', dark: '#070b0a', rust: '#7a3a22', light: '#c2d6cb', glow: '#ff6a3a',
-        rain: '#a9c0b8', mass: '#0c1310', water: '#1c3a28', accent: '#b8c24a',
-        interior: '#26352f', sky: '#5c7068',
+        rain: '#a9c0b8', mass: '#0c1310', water: '#0e2218', accent: '#b8c24a',
+        interior: '#2f403a', sky: '#5c7068',
       },
     },
     industrial: {
@@ -301,6 +301,21 @@
         g.carve(x, a.y1, x + w - 1, b.y0);
         f.poles.push({ cx: x + Math.floor(w / 2), y0: a.y1 - 3, y1: b.y1 - 1, ladder: true });
       }
+      // the floor's segments between the shafts never line up: each one
+      // raised or lowered 1-3 cells from its neighbour
+      let x = Math.max(a.x0, b.x0);
+      let lift = 0;
+      while (x < Math.min(a.x1, b.x1)) {
+        if (!g.solid(x, a.y1 + 1)) {
+          x++;
+          continue;
+        }
+        const s0 = x;
+        while (x < a.x1 && g.solid(x, a.y1 + 1)) x++;
+        lift = U.clamp(lift + (R() < 0.5 ? 1 : -1) * (1 + Math.floor(R() * 2)), -2, 3);
+        if (lift > 0) g.fill(s0, a.y1 - lift + 1, x - 1, a.y1);
+        else if (lift < 0) g.carve(s0, a.y1 + 1, x - 1, a.y1 - lift);
+      }
     }
     // one side open to the sky (stair-cliff edge)
     if (R() < 0.4) {
@@ -324,11 +339,14 @@
     const { C, R: Rows } = g;
     const floorY = Rows - 2;
     const top = 1 + Math.floor(R() * 2);
-    g.carve(1, top, C - 2, floorY - 1);
-    combCeiling(g, 2, C - 3, top, R, f.poles);
-    chamfer(g, 1, floorY - 1, 1, -1, 3);
-    chamfer(g, C - 2, floorY - 1, -1, -1, 3);
-    relieveWalls(g, 1, C - 2, top + 4, floorY - 1, R, true);
+    // walls 3-6 cells thick each side (not a one-cell skin)
+    const wl = 3 + Math.floor(R() * 4);
+    const wr = 3 + Math.floor(R() * 4);
+    g.carve(wl, top, C - 1 - wr, floorY - 1);
+    combCeiling(g, wl + 1, C - 2 - wr, top, R, f.poles);
+    chamfer(g, wl, floorY - 1, 1, -1, 4);
+    chamfer(g, C - 1 - wr, floorY - 1, -1, -1, 4);
+    relieveWalls(g, wl, C - 1 - wr, top + 4, floorY - 1, R, true);
     // shelves: thin slabs off the walls, all different lengths, stepping up
     // 3-4 cells at a time, alternating sides
     const lens = [5, 11, 16, 8].sort(() => R() - 0.5);
@@ -355,10 +373,10 @@
     for (let i = 0; i < np; i++) {
       const cx = Math.round(U.lerp(C * 0.2, C * 0.8, (i + 0.5) / np));
       const cy = top + 6 + Math.floor(R() * 6);
-      if (!g.air(cx - 2, cy - 2, cx + 2, cy + 2)) continue;
-      g.fill(cx - 1, cy - 1, cx + 1, cy + 1);
-      f.blocks.push({ x0: cx - 1, y0: cy - 1, x1: cx + 1, y1: cy + 1, octagon: true });
-      f.poles.push({ cx, y0: top, y1: cy - 2, hang: true });
+      if (!g.air(cx - 3, cy - 3, cx + 3, cy + 3)) continue;
+      g.fill(cx - 2, cy - 2, cx + 1, cy + 1);
+      f.blocks.push({ x0: cx - 2, y0: cy - 2, x1: cx + 1, y1: cy + 1, octagon: true });
+      f.poles.push({ cx, y0: top, y1: cy - 3, hang: true });
     }
     return { floorY, hallTop: top, wall: 1 };
   }
@@ -413,7 +431,7 @@
     for (let x = 3 + Math.floor(R() * 6); x < g.C - 3; x += 8 + Math.floor(R() * 8)) centres.push(x);
     for (let tries = 0; tries < 400 && vertical() < want; tries++) {
       const c0 = centres[Math.floor(R() * centres.length)];
-      const x = c0 + Math.floor(R() * 7) - 3;
+      const x = c0 + Math.floor(R() * 5) - 2;
       if (x < 2 || x > g.C - 3) continue;
       if (usedCols.has(x) || usedCols.has(x - 1) || usedCols.has(x + 1)) continue;
       // a ceiling above an open column
@@ -421,13 +439,13 @@
       if (g.solid(x, y)) continue;
       let top = y;
       while (top > 0 && !g.solid(x, top - 1)) top--;
-      if (top === 0 && R() < 0.5) continue; // (some hang from off the top of the screen)
+      if (top === 0 && R() < 0.9) continue; // (rarely from off the top of the screen)
       let bot = top;
       while (bot < g.R - 1 && !g.solid(x, bot + 1)) bot++;
       const span = bot - top;
       if (span < 6 || g.solid(x - 1, top) || g.solid(x + 1, top)) continue;
       // all the way down (a ladder) or stopping short, within a jump of the floor
-      const full = R() < 0.45 || span < 9;
+      const full = R() < 0.35 || span < 9;
       const y1 = full ? bot : top + Math.min(span - 3, 6 + Math.floor(R() * 14));
       f.poles.push({ cx: x, y0: top, y1, hang: true });
       usedCols.add(x);
@@ -499,10 +517,10 @@
   // floor on both sides of it (and never under water).
   function addPit(g, R, f, wide) {
     const w = wide ? 8 + Math.floor(R() * 5) : 3 + Math.floor(R() * 3);
-    const runs = groundRuns(g).filter((p) => p.x1 - p.x0 + 1 >= w + 9);
+    const runs = groundRuns(g).filter((p) => p.x1 - p.x0 + 1 >= w + 6);
     if (!runs.length) return false;
     const p = runs[Math.floor(R() * runs.length)];
-    const x = p.x0 + 4 + Math.floor(R() * (p.x1 - p.x0 - 7 - w));
+    const x = p.x0 + 2 + Math.floor(R() * Math.max(1, p.x1 - p.x0 - 3 - w));
     if (f.waterCols && [...Array(w).keys()].some((k) => f.waterCols.has(x + k))) return false;
     g.carve(x, p.y + 1, x + w - 1, g.R - 1);
     // a lip: one edge chamfered a step
@@ -514,12 +532,12 @@
   // a floor, filling every open cell below that line that it can reach
   // without spilling out of the screen's sides or down a pit.
   function addWater(g, R, f, info) {
-    const runs = groundRuns(g).filter((p) => p.x1 - p.x0 + 1 >= 8);
+    const runs = groundRuns(g).filter((p) => p.x1 - p.x0 + 1 >= 4);
     if (!runs.length) return false;
     // the lowest floor
     runs.sort((a, b) => b.y - a.y);
     const p = runs[0];
-    const depth = 3 + Math.floor(R() * 2);
+    const depth = 3 + Math.floor(R() * 3);
     const ys = p.y - depth + 1;
     const xm = Math.floor((p.x0 + p.x1) / 2);
     if (ys < 3 || g.solid(xm, ys)) return false;
@@ -784,7 +802,8 @@
     for (const b of f.beams) beams.push({ id: 'beam-' + beams.length, kind: 'beam', x: b.x0 * cell, y: b.cy * cell + cell * 0.5 - 2, w: (b.x1 - b.x0 + 1) * cell, h: 4, seed: R() * 1000 });
 
     // Dens: on floors near walls and in alcoves, spread out; 3-6 of them.
-    const plats = platforms(g).filter((p) => p.x1 - p.x0 >= 1 && g.solid(p.x0, p.y + 1) && g.solid(p.x1, p.y + 1));
+    const onBlock = (p) => f.blocks.some((b) => p.y + 1 >= b.y0 && p.y + 1 <= b.y1 && p.x1 >= b.x0 && p.x0 <= b.x1);
+    const plats = platforms(g).filter((p) => p.x1 - p.x0 >= 1 && g.solid(p.x0, p.y + 1) && g.solid(p.x1, p.y + 1) && !onBlock(p));
     const dens = [];
     const cand = [];
     for (const p of plats) {
@@ -909,6 +928,7 @@
   function addLadders(g, f, decor, W, H, cell) {
     const w = scratchWorld(decor, W, H, cell);
     const d0 = decor.dens.find((d) => !d.sky);
+    if (!d0) return 0; // (no dens at all: nothing to connect; the map is re-rolled)
     let added = 0;
     for (const p of platforms(g)) {
       if (p.x1 - p.x0 < 1 || added > 6) continue;
@@ -951,6 +971,8 @@
       const arch = REGIONS[region].archetypes[Math.floor(R() * REGIONS[region].archetypes.length)];
       const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region] };
       const info = ARCHETYPES[arch](g, R, f);
+      // no flat floor longer than ~12 cells anywhere
+      for (const p of platforms(g)) if (p.x1 - p.x0 + 1 > 12 && p.y > 3 && !f.blocks.some((b) => p.y + 1 >= b.y0 && p.y + 1 <= b.y1)) roughFloor(g, p.x0 + 2, p.x1 - 2, p.y + 1, R, 2, f);
       // water on about a third of maps (more in Shoreline), a pit on about a
       // third (the Citadel's drop shaft more often), never both
       const wetChance = region === 'shoreline' ? 0.5 : region === 'shaded' ? 0.15 : 0.33;
@@ -1121,10 +1143,19 @@
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
     };
     if (region === 'shoreline') {
-      const n = 2 + Math.floor(R() * 2);
-      for (let i = 0; i < n; i++) {
-        const atEdge = R() < 0.6;
-        glow(atEdge ? (R() < 0.5 ? R(0, W * 0.15) : R(W * 0.85, W)) : R(0, W), R(H * 0.6, H), R(8, 13) * cell, '#ff4a1c', R(0.22, 0.3));
+      for (let i = 0; i < 2; i++) {
+        const x = i === 0 ? R(0, W * 0.2) : R(W * 0.8, W);
+        const y = R(H * 0.6, H * 0.95);
+        const r = R(9, 13) * cell;
+        // a smooth (quadratic) falloff, and a small hot core
+        const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
+        rg.addColorStop(0, U.rgba('#ff5a22', 0.42));
+        rg.addColorStop(0.35, U.rgba('#ff5a22', 0.42 * 0.42));
+        rg.addColorStop(0.7, U.rgba('#ff5a22', 0.42 * 0.09));
+        rg.addColorStop(1, U.rgba('#ff5a22', 0));
+        ctx.fillStyle = rg;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        glow(x, y, 2.5 * cell, '#ffb060', 0.25);
       }
     } else if (region === 'shaded') {
       for (let i = 0; i < 5; i++) glow(R(0, W), R(H * 0.3, H), 14, pal.glow, 0.5);
@@ -1189,6 +1220,17 @@
     }
   }
 
+  // A bottomless pit darkens toward the bottom of the screen: depth, a void.
+  function paintPits(l, decor, pal, H) {
+    for (const q of decor.pits || []) {
+      const g = l.createLinearGradient(0, q.y, 0, H);
+      g.addColorStop(0, U.rgba(pal.mass, 0));
+      g.addColorStop(1, U.rgba('#000000', 0.75));
+      l.fillStyle = g;
+      l.fillRect(q.x0, q.y, q.x1 - q.x0, H - q.y);
+    }
+  }
+
   // The room's solid mass: flat near-black, a faint texture, a lighter lip
   // on top faces only, soft shade into the hollow, roots hanging off the
   // ceilings. Blocks are drawn as pieces of their own (octagons for the
@@ -1217,8 +1259,9 @@
     }
     // texture: masonry courses every 3 cells, brick dashes, and a few buried
     // conduits running through the thick of it
-    const tex = U.rgba(U.mix(pal.mass, pal.light, 0.07));
-    const course = U.rgba(U.mix(pal.mass, pal.light, 0.045));
+    const tex = U.rgba(U.mix(pal.mass, pal.light, 0.08));
+    const course = U.rgba(U.mix(pal.mass, pal.light, 0.06));
+    const mottle = [U.rgba(U.mix(pal.mass, pal.light, 0.035)), U.rgba(U.mix(pal.mass, '#000000', 0.25))];
     for (let y = 0; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         if (!solid(x, y) || inBlock[y * C + x]) continue;
@@ -1226,8 +1269,14 @@
           l.fillStyle = course;
           l.fillRect(x * cell, y * cell + 1, cell, 1);
         }
+        // mottling: a few soft-edged patches a shade lighter or darker
+        for (let k = 0; k < 2; k++) {
+          l.fillStyle = mottle[Math.floor(R() * 2)];
+          l.fillRect(x * cell + R() * (cell - 6), y * cell + R() * (cell - 6), 3 + R() * 6, 3 + R() * 5);
+        }
         l.fillStyle = tex;
-        if (R() < 0.6) l.fillRect(x * cell + R() * (cell - 6), y * cell + R() * (cell - 3), 4 + R() * 5, 1.5);
+        // brick dashes staggered along the course
+        if (R() < 0.7) l.fillRect(x * cell + ((y % 2) * cell) / 2 + R() * 4, y * cell + (y % 3) * 6 + 4, cell * 0.4 + R() * cell * 0.4, 1.5);
         if (R() < 0.15) l.fillRect(x * cell + R() * (cell - 2), y * cell + R() * (cell - 2), 1.5, 1.5);
       }
     }
@@ -1334,7 +1383,7 @@
       for (const b of room.blocks) {
         if (region !== 'outskirts') break;
         const n = 3 + Math.floor(R() * 4);
-        for (let i = 0; i < n; i++) vine(R(b.x0, b.x1 + 1) * cell, (b.y1 + 1) * cell, R(10, 40), accCol, 1.3);
+        for (let i = 0; i < n; i++) vine(R(b.x0, b.x1 + 1) * cell, (b.y1 + 1) * cell, R(4, 8) * cell, accCol, 1.6);
       }
       for (let y = 1; y < Rows - 2; y++) {
         for (let x = 0; x < C; x++) {
@@ -1348,16 +1397,16 @@
     for (let y = 1; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         if (!solid(x, y) || solid(x, y - 1)) continue;
-        if (region === 'industrial' ? R() > 0.06 : region === 'shaded' ? true : R() > 0.08) continue;
+        if (region === 'industrial' ? R() > 0.05 : region === 'shaded' ? true : R() > 0.07) continue;
         const bx = (x + R()) * cell;
         const by = y * cell;
         l.strokeStyle = accCol;
-        l.lineWidth = 1.2;
+        l.lineWidth = region === 'industrial' ? 2 : 1.4;
         if (region === 'industrial') {
-          // coral: a little branching fan
-          for (let k = 0; k < 4; k++) {
-            const a = -Math.PI / 2 + (k - 1.5) * 0.4;
-            const len = R(5, 11);
+          // coral: a branching fan, 3-5 cells tall
+          for (let k = 0; k < 6; k++) {
+            const a = -Math.PI / 2 + (k - 2.5) * 0.3;
+            const len = R(1.5, 2.5) * cell;
             l.beginPath();
             l.moveTo(bx, by);
             l.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
@@ -1365,10 +1414,10 @@
             l.stroke();
           }
         } else {
-          for (let k = 0; k < 5; k++) {
+          for (let k = 0; k < 9; k++) {
             l.beginPath();
-            l.moveTo(bx + k * 2 - 4, by);
-            l.lineTo(bx + k * 2 - 4 + R(-3, 3), by - R(4, 12));
+            l.moveTo(bx + k * 2 - 8, by);
+            l.lineTo(bx + k * 2 - 8 + R(-4, 4), by - R(6, 22));
             l.stroke();
           }
         }
@@ -1406,5 +1455,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintMass, paintAccents, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintMass, paintAccents, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();

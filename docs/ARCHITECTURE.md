@@ -173,7 +173,20 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   flood-filled (rejected if it would spill off the screen). Placeholder
   physics: drag on creatures in it, a splash in and out, fliers keep out
   (`Nav.valid`); drawn translucent over the creatures (`Engine.drawWater`).
-- **Dens** sit on floors, away from water; **sky dens** (`sky: true`, not
+- **Passages** (`carvePassages`): 1-2 one-cell tunnels through the rock
+  between side doors (open floor cells beside a wall) that are a long way
+  apart through the open or on different floors; routed through solid only
+  with a wall all round (A*, turns cost extra: L and Z shapes). Accidental
+  one-cell slits are filled first (`closeSlits`: creatures jammed in them).
+  `World.setPassages`/`passage()`; nav `TUNNEL` edges (straight steps only;
+  passage cells are never a start or goal). A creature whose path runs into
+  one (or that's in one, not held) crawls it end to end like a pipe
+  (`Creature.tryTunnel`/`tunnelStep`): head first, the body laid along the
+  head's own trail (`layOnTrail`), up and down alike. Meeting a bigger or
+  hungrier creature head on, it wriggles, squeezes round (`tunnelReverse`:
+  ends swapped, back out from the new lead) and backs out; one going the
+  same way just follows.
+- **Dens** sit on floors, away from water and off blocks; **sky dens** (`sky: true`, not
   drawn) are the openings along the top edge: only fliers use them, to
   spawn (mostly) and to leave (`openDens(flier)`, `denMouth` points up).
 - **Checking**: a scratch world and A* for a pole-climbing lizard between

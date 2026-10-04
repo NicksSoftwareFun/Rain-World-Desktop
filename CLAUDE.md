@@ -95,7 +95,16 @@ within 30 degrees of level; slugcats backflip to throw spears straight down, to
 double back at a run and to dodge a lunge.
 Details in docs/ARCHITECTURE.md.
 
-## Next session: resume here (saved at low usage, 2026-10-04)
+## Resumed 2026-10-04: done since the notes below
+
+Passages carve and are crawled (head-to-head squeeze-round works); slits
+closed; held creatures never enter passage mode; long leaps only when the
+flat arc is clear; art-review-2 fixes (stepped floors everywhere, offset
+slabs, thicker Shaded walls, 4-cell octagons with no grass/dens on top,
+mass mottling, red-orange Shoreline glow, deeper darker water, pit depth
+gradient, fewer poles off the top edge, accent clumps).
+
+## Notes saved at low usage (2026-10-04), now mostly done
 
 - **Not yet done since the last full suite:** run the full suite, then
   republish the artifact. The artifact needs `artifact.html` copied to its

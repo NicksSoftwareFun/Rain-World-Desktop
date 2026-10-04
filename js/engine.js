@@ -408,7 +408,13 @@
       const pal = this.pal;
       const wc = pal.water || '#3d5b70';
       const t = this.eco.t;
-      ctx.fillStyle = U.rgba(wc, 0.6);
+      // darker the deeper it goes (from the surface down)
+      const top = Math.min(...L.map((r) => r.y));
+      const bot = Math.max(...L.map((r) => r.y + r.h));
+      const g = ctx.createLinearGradient(0, top, 0, Math.max(top + 1, bot));
+      g.addColorStop(0, U.rgba(wc, 0.62));
+      g.addColorStop(1, U.rgba(U.mix(wc, '#02040a', 0.55), 0.85));
+      ctx.fillStyle = g;
       for (const r of L) ctx.fillRect(r.x, r.y, r.w, r.h);
       ctx.fillStyle = U.rgba(U.mix(wc, pal.light, 0.5), 0.9);
       for (const r of L) {
