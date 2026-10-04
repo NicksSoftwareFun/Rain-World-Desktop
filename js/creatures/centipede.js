@@ -312,14 +312,19 @@
       } else {
         this.vy += GRAV * dt;
       }
+      // where every link was, to keep this frame's moves smooth (below)
+      const before = P.map((q) => ({ x: q.x, y: q.y }));
       h.x += this.vx * dt;
       h.y += this.vy * dt;
       // (a pole it wraps round, close in; anything flat it rides 5*S off)
       const hold = (s) => (s.id && s.id.startsWith('pole') ? 1.5 * S : 5 * S);
+      // the pull onto a surface eases in: a new nearest surface (a corner, a
+      // pole beside a ledge) gets slid onto, not jumped to
+      const maxPull = 45 * S * dt;
       if (g && !leaving) {
-        const e = g.d - hold(g);
-        h.x -= g.nx * e * 0.3;
-        h.y -= g.ny * e * 0.3;
+        const e = U.clamp((g.d - hold(g)) * 0.3, -maxPull, maxPull);
+        h.x -= g.nx * e;
+        h.y -= g.ny * e;
         this.contactId = g.id;
       }
       const c = W.collideCircle(h, 3.5 * S);
@@ -337,12 +342,31 @@
       for (let i = 1; i < P.length; i++) {
         const s = W.nearestSurface(P[i].x, P[i].y, 18 * S, mask);
         if (s) {
-          const e = s.d - hold(s);
-          P[i].x -= s.nx * e * 0.35;
-          P[i].y -= s.ny * e * 0.35;
+          const e = U.clamp((s.d - hold(s)) * 0.35, -maxPull, maxPull);
+          P[i].x -= s.nx * e;
+          P[i].y -= s.ny * e;
         }
         W.collideCircle(P[i], 3 * S);
       }
+      // No link jumps: holding on, none moves much further in a frame than
+      // the body is travelling, so a correction (a new surface, the bend
+      // limit) plays out over a few frames. Falling, it's free.
+      if (g) {
+        const lim = Math.max(1.2 * S, Math.hypot(this.vx, this.vy) * dt * 2.2);
+        for (let i = 1; i < P.length; i++) {
+          const mx = P[i].x - before[i].x;
+          const my = P[i].y - before[i].y;
+          const m = Math.hypot(mx, my);
+          if (m > lim) {
+            P[i].x = before[i].x + (mx * lim) / m;
+            P[i].y = before[i].y + (my * lim) / m;
+          }
+        }
+      }
+      // gripping a pole: seen from behind, climbing up its middle (legs both
+      // sides, the whole plate showing); eases in and out
+      const gripPole = g && g.id && g.id.startsWith('pole') ? 1 : 0;
+      this.poleK = (this.poleK || 0) + (gripPole - (this.poleK || 0)) * U.approach(6, dt);
       const ux = g ? g.nx : 0;
       const uy = g ? g.ny : -1;
       const ku = U.approach(8, dt);
@@ -444,17 +468,24 @@
       ctx.strokeStyle = ink;
       ctx.lineWidth = Math.max(ap, 0.8 * Math.sqrt(S));
       ctx.beginPath();
+      const pk = this.coil ? 0 : this.poleK || 0;
       for (let i = 0; i < n; i++) {
         const t = tangent(i);
         for (const s of [-1, 1]) {
           const w = Math.sin(this.phase + i * 0.9 + (s > 0 ? Math.PI : 0));
           const st = this.corpse ? 0 : w * 2.2;
           const lift = this.corpse ? 0 : Math.max(0, w) * 1.2;
-          const kx = P[i].x - this.ux * (3.4 - lift) * S + t.x * (s * 2.4 + st * 0.5) * S;
-          const ky = P[i].y - this.uy * (3.4 - lift) * S + t.y * (s * 2.4 + st * 0.5) * S;
+          // side on, legs reach down to the surface; on a pole, out to
+          // either side of it (s picks the side)
+          let dx = -this.ux * (1 - pk) + -t.y * s * pk;
+          let dy = -this.uy * (1 - pk) + t.x * s * pk;
+          const dl = Math.hypot(dx, dy) || 1;
+          dx /= dl;
+          dy /= dl;
+          const spread = s * (1 - pk); // along the body: fore and aft side on
           ctx.moveTo(P[i].x, P[i].y);
-          ctx.lineTo(kx, ky);
-          ctx.lineTo(P[i].x - this.ux * (7 - lift) * S + t.x * (s * 3.4 + st) * S, P[i].y - this.uy * (7 - lift) * S + t.y * (s * 3.4 + st) * S);
+          ctx.lineTo(P[i].x + dx * (3.4 - lift) * S + t.x * (spread * 2.4 + st * 0.5) * S, P[i].y + dy * (3.4 - lift) * S + t.y * (spread * 2.4 + st * 0.5) * S);
+          ctx.lineTo(P[i].x + dx * (7 - lift) * S + t.x * (spread * 3.4 + st) * S, P[i].y + dy * (7 - lift) * S + t.y * (spread * 3.4 + st) * S);
         }
       }
       ctx.stroke();
@@ -531,7 +562,8 @@
         if (!cap) {
           ctx.fillStyle = U.rgba(col);
           ctx.beginPath();
-          roundRect(-hl + 0.8 * S, belly > 0 ? -hh + 0.5 * S : -hh * 0.25, hl * 2 - 1.6 * S, hh * 1.25 - 0.5 * S, hh * 0.3);
+          if ((this.poleK || 0) > 0.5 && !this.coil) roundRect(-hl + 0.8 * S, -hh + 0.6 * S, hl * 2 - 1.6 * S, hh * 2 - 1.2 * S, hh * 0.3); // from behind: the whole plate
+          else roundRect(-hl + 0.8 * S, belly > 0 ? -hh + 0.5 * S : -hh * 0.25, hl * 2 - 1.6 * S, hh * 1.25 - 0.5 * S, hh * 0.3);
           ctx.fill();
         }
         if (i === 0 || i === n - 1) {

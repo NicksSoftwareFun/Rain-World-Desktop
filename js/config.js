@@ -343,8 +343,8 @@
         params: {
           size: 2,
           segments: [10, 13],
-          speed: 38,
-          huntSpeed: 105, // a burst of speed that can run down most lizards
+          speed: 72, // 30% quicker than the small and medium ones (55)
+          huntSpeed: 111, // ...and on the hunt (85): runs down any lizard
           toughness: 3,
           diet: ['lizard_*', 'slugcat', 'centipede_medium', 'dropwig', 'squidcada', 'noodlefly'], // hunts lizards
           threats: ['daddy'],
