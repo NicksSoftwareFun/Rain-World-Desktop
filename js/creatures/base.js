@@ -1063,7 +1063,7 @@
     unburrowStep(dt) {
       const ub = this.unburrow;
       if (!ub) {
-        if (this.grabbedBy || this.alpha < 0.5) {
+        if (this.grabbedBy || this.alpha < 0.5 || this.coil) {
           this.trappedT = 0;
           return false;
         }

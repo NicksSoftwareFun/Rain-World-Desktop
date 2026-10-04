@@ -44,6 +44,7 @@
       return RW.Creature.ptsBounds(this.chain.pts, 16 * this.size);
     }
     holdPoint() {
+      if (this.coil) return { x: this.coil.cx, y: this.coil.cy }; // in the middle of the coil
       const P = this.chain.pts;
       const a = Math.atan2(P[0].y - P[1].y, P[0].x - P[1].x);
       return { x: P[0].x + Math.cos(a) * 6 * this.size, y: P[0].y + Math.sin(a) * 6 * this.size };
@@ -242,6 +243,14 @@
         return;
       }
       this.think(dt);
+      // Medium and large ones ball up round what they're eating: the body
+      // wound into a coil with the catch in the middle, slowly turning,
+      // squeezing and writhing, legs twitching.
+      if (this.holding && this.state === 'eat' && this.size >= 1.5) {
+        this.stepCoil(dt);
+        return;
+      }
+      this.coil = null;
       this.pather.update(dt, h.x, h.y);
       // (a path node counts as reached within the body's own grip offset
       // too: held off a surface by its size, a big one could otherwise sit a
@@ -332,6 +341,49 @@
       this.ux /= ul;
       this.uy /= ul;
       this.phase += (Math.hypot(this.vx, this.vy) * dt * 0.45) / S;
+    }
+
+    stepCoil(dt) {
+      const P = this.chain.pts;
+      const S = this.size;
+      const n = P.length;
+      const total = this.chain.seg.reduce((a, b) => a + b, 0);
+      if (!this.coil) {
+        // a ring resting on the surface it's on, about a turn and a quarter
+        const R = total / (U.TAU * 1.25);
+        const ux = this.ux || 0;
+        const uy = this.uy || -1;
+        const h = P[0];
+        const g = this.W.nearestSurface(h.x, h.y, 40 * S, this.maskNoPole);
+        const bx = g ? h.x - g.nx * Math.max(0, g.d - 4 * S) : h.x;
+        const by = g ? h.y - g.ny * Math.max(0, g.d - 4 * S) : h.y;
+        this.coil = { cx: bx + ux * (R + 3 * S), cy: by + uy * (R + 3 * S), R, th: Math.atan2(h.y - by - uy * R, h.x - bx - ux * R), dir: U.sign(), squeeze: 0, sqT: U.rand(0.6, 1.6) };
+      }
+      const co = this.coil;
+      // a slow turn, now and then a tightening squeeze
+      co.th += co.dir * dt * 0.9;
+      co.sqT -= dt;
+      if (co.sqT <= 0) {
+        co.sqT = U.rand(0.8, 2);
+        co.squeeze = 1;
+      }
+      co.squeeze = Math.max(0, co.squeeze - dt * 2.2);
+      let th = co.th;
+      const k = U.approach(7, dt);
+      for (let i = 0; i < n; i++) {
+        // winding inward a little, each turn pulsing out of step with the next
+        const r = co.R * (1 - 0.3 * (i / n)) * (1 - 0.18 * co.squeeze) * (1 + 0.09 * Math.sin(this.age * 5 + i * 0.8));
+        const tx = co.cx + Math.cos(th) * r;
+        const ty = co.cy + Math.sin(th) * r;
+        P[i].x += (tx - P[i].x) * k;
+        P[i].y += (ty - P[i].y) * k;
+        this.W.collideCircle(P[i], 3 * S); // squashed against a wall, not through it
+        P[i].px = P[i].x;
+        P[i].py = P[i].y;
+        if (i < n - 1) th -= (co.dir * this.chain.seg[i]) / Math.max(4, r);
+      }
+      this.vx = this.vy = 0;
+      this.phase += dt * 14; // legs scrabbling at it
     }
 
     // Drawn after the game's sprites: a row of square-ish armour plates,
