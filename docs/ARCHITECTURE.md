@@ -62,7 +62,12 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
   unburrowing from inside geometry, leaving through dens (`leave()` at a den
   starts `piping`: the head, `pipeLead()`, crawls into the mouth and the body
   follows via `pipeMove()`, clipped at the mouth by `Ecosystem.draw`; with no
-  den in reach it fades out). Also grabbing and
+  den in reach it fades out). Sheltering: from `rain.shelterWarnSeconds`
+  before the downpour each creature heads in at its own moment
+  (`shelterTime()`); those that go in for the rain (`sheltered`) wait in
+  `Ecosystem.shelterStash` and come back out after it (`startUnpiping`,
+  `layInPipe`, `unpipeStep`: head first, along the ledge top from a ledge
+  pipe). Also grabbing and
   being held (`holdPoint`), weapons (`hitParts`, `stun`, `kill`), goal picking
   (`readyForGoal`, `exploreGoal` with a `heightBias`), and the pole-to-ledge
   scramble (`cornerAhead`, `startScramble`, `stepScramble`).

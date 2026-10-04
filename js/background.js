@@ -894,6 +894,8 @@
       const wf = rc.waterfallsFrom ?? 0.35;
       this.waterfalls = rc.enabled ? U.smooth(U.clamp((this.intensity - wf) / 0.2, 0, 1)) : 0;
       this.downpour = rc.enabled && this.phase > 1 - dp;
+      // seconds until the next downpour (0 while it's on)
+      this.toDownpour = !rc.enabled ? Infinity : this.downpour ? 0 : (1 - dp - this.phase) * cycle;
 
       // Drips: light in light rain, more as it comes down harder.
       if (this.drips && world) {

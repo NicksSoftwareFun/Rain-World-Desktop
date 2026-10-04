@@ -124,14 +124,30 @@
     carry(dx, dy) {
       if (this.state === 'stuck' || this.corpse) this.shiftAll(dx, dy);
     }
+    // Out of a pipe nose first: straight down the pipe, pointing out.
+    layInPipe(mo) {
+      this.aim = Math.atan2(-mo.ay, -mo.ax);
+      this.curl = 0;
+      this.anchor = null;
+      const L = this.D.archN * this.D.archSeg * this.L;
+      this.pos.x = mo.x + mo.ax * (L + 2);
+      this.pos.y = mo.y + mo.ay * (L + 2);
+      let d = L + 2;
+      this.tail.pts.forEach((q, i) => {
+        if (i) d += this.tail.seg[i - 1];
+        q.x = q.px = mo.x + mo.ax * d;
+        q.y = q.py = mo.y + mo.ay * d;
+      });
+    }
     // Into a pipe nose first: the body straightens along the pipe and the
     // tail trails in after it.
     pipeLead() {
       return this.headPt();
     }
     pipeMove(dx, dy, dt) {
-      const pp = this.piping;
-      this.aim = U.lerpAngle(this.aim, Math.atan2(pp.ay, pp.ax), U.approach(10, dt));
+      const pp = this.piping || this.unpiping;
+      const into = this.piping ? 1 : -1;
+      this.aim = U.lerpAngle(this.aim, Math.atan2(pp.ay * into, pp.ax * into), U.approach(10, dt));
       this.curl += (0 - this.curl) * U.approach(8, dt);
       this.needle *= 0.9;
       this.pos.x += dx;
@@ -548,7 +564,7 @@
     // farthest; the rain sends everyone to the nearest. Infants go with the
     // family's adult.
     wantsToLeave(dt) {
-      if (this.eco.shouldShelter()) return true;
+      if (this.shelterTime()) return true;
       const fam = this.family;
       if (this.infant) {
         const a = fam.adult;
@@ -564,7 +580,7 @@
     }
     headForDen(dt) {
       const p = this.pos;
-      const den = (!this.eco.shouldShelter() && this.family.exitDen) || this.eco.nearestDen(p.x, p.y);
+      const den = (!this.shelterTime() && this.family.exitDen) || this.eco.nearestDen(p.x, p.y);
       this.setState('leave');
       if (!den) return;
       // close to the pipe it stops shying off the wall round it and goes in

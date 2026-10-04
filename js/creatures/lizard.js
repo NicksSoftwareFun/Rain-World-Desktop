@@ -195,7 +195,8 @@
       if (this.holding && RIVALRY.includes(this.state) && this.rival) {
         if (this.rivalry(dt, perceive)) return; // someone wants our food
       }
-      if (this.holding) {
+      // (with the rain coming it carries its catch into the den instead)
+      if (this.holding && !this.shelterTime()) {
         const prey = this.holding;
         this.jawTarget = 0.3;
         this.lash = 0.5;

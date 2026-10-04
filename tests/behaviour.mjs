@@ -86,7 +86,7 @@ const checks = [
           if (i % 4) continue;
           const W = e.world;
           for (const c of e.eco.creatures) {
-            if (c.dead || c.corpse || c.grabbedBy || c.burrow || c.turn) continue;
+            if (c.dead || c.corpse || c.grabbedBy || c.burrow || c.turn || c.piping || c.unpiping) continue; // (a body bent into a pipe mouth isn't balled up)
             let P;
             let n;
             let k;
@@ -418,7 +418,7 @@ const checks = [
           if (i % 60) continue;
           for (const c of e.eco.creatures) {
             if (!isFinite(c.x) || !isFinite(c.y)) out.bad++;
-            if (c.isFlier && !c.dead && !c.piping && (c.x < -5 || c.y < -5 || c.x > e.world.w + 5 || c.y > e.world.h + 5)) out.offScreen++;
+            if (c.isFlier && !c.dead && !c.piping && !c.unpiping && (c.x < -5 || c.y < -5 || c.x > e.world.w + 5 || c.y > e.world.h + 5)) out.offScreen++;
           }
         }
         return out;
@@ -500,6 +500,52 @@ const checks = [
       m.beamBlocked && `horizontal poles block the rain (${m.beamBlocked} points)`,
     ],
     warn: (m) => !m.beamExposed && 'no horizontal pole caught any rain on this map',
+  },
+  {
+    name: 'shelter',
+    about: 'creatures head into the pipes before the downpour and come back out of them after it',
+    run: (page) =>
+      page.evaluate(() => {
+        const e = RW_APP.engine;
+        const R = e.cfg.rain;
+        R.enabled = true;
+        R.shelterDuringDownpour = true;
+        const w = e.weather;
+        for (let i = 0; i < 60 * 40; i++) e.tick(1 / 60);
+        const cyc = R.cycleMinutes * 60;
+        // to 50 s before the next downpour
+        w.t = Math.floor(w.t / cyc) * cyc + cyc * (1 - R.downpourFraction) - 50;
+        const alive = () => e.eco.creatures.filter((c) => !c.dead && !c.corpse && !c.leaving && c.species !== 'batfly').length;
+        const out = { before: alive(), piped: 0, faded: 0, outAtDownpour: -1, sheltered: 0, backAfter40s: -1, stillInside: -1 };
+        const C = RW.Creature.prototype;
+        const lv = C.leave;
+        C.leave = function () {
+          const r = lv.apply(this, arguments);
+          if (this.piping) out.piped++;
+          else out.faded++;
+          return r;
+        };
+        let after = -1;
+        for (let i = 0; i < 60 * 140; i++) {
+          e.tick(1 / 60);
+          if (w.downpour && out.outAtDownpour < 0) out.outAtDownpour = alive();
+          if (w.downpour) out.sheltered = Math.max(out.sheltered, e.eco.shelterStash.filter((c) => c.species !== 'batfly').length);
+          if (out.outAtDownpour >= 0 && !w.downpour && after < 0) after = i;
+          if (after >= 0 && i === after + 60 * 40) {
+            out.backAfter40s = alive();
+            out.stillInside = e.eco.shelterStash.length;
+          }
+        }
+        C.leave = lv;
+        return out;
+      }),
+    judge: (m) => [
+      m.outAtDownpour > Math.max(3, m.before * 0.3) && `${m.outAtDownpour} of ${m.before} still out when the downpour hit`,
+      m.piped < m.faded && 'most creatures faded away instead of going into a pipe',
+      m.sheltered < 1 && 'nothing sheltered in the pipes',
+      m.stillInside > 0 && `${m.stillInside} never came back out after the rain`,
+      m.backAfter40s < m.sheltered * 0.6 && `only ${m.backAfter40s} creatures out 40 s after the rain`,
+    ],
   },
   {
     name: 'presets',

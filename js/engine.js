@@ -166,10 +166,21 @@
       if (newSeed) this.cfg.world.seed = 0;
       const keep = this.eco ? this.eco.creatures : [];
       const keepItems = this.eco ? this.eco.items : [];
+      const keepStash = this.eco ? this.eco.shelterStash : [];
       const t = this.weather ? this.weather.t : 0;
       const oldZoom = this.zoom;
       this.init(!newSeed);
       this.weather.t = t;
+      // anyone sitting out the rain comes back out of the new map's pipes
+      if (!newSeed) {
+        for (const c of keepStash) {
+          c.eco = this.eco;
+          c.W = this.world;
+          if (c.pather) c.pather.version = -1;
+          c.shelterDen = null;
+          this.eco.shelterStash.push(c);
+        }
+      }
       if (!newSeed && this.zoom !== oldZoom) {
         // Map resized: everyone stays put on screen and simply becomes
         // bigger or smaller relative to it (unburrowing sorts out anyone who

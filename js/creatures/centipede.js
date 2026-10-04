@@ -273,7 +273,12 @@
           if (Math.abs(node.x - h.x) < W.cell * 0.6) this.dropT = 0.35;
           else ty = h.y;
         }
-        const dx = node.x - h.x;
+        // stepping off a pole: climb level with the next node first, then
+        // across (cutting the corner left it holding nothing mid-step)
+        let tx = node.x;
+        // (only where the pole reaches that high or low)
+        if (g && g.id && g.id.startsWith('pole') && !W.pole(node.cx, node.cy) && Math.abs(ty - h.y) > 6 && W.pole(W.cellX(h.x), node.cy)) tx = h.x;
+        const dx = tx - h.x;
         const dy = ty - h.y;
         const d = Math.hypot(dx, dy) || 1;
         dvx = (dx / d) * this.speed;

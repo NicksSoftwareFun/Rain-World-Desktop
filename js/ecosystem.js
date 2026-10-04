@@ -15,6 +15,7 @@
       this.cfg = cfg;
       this.world = world;
       this.creatures = [];
+      this.shelterStash = []; // creatures sitting out the rain in the pipes
       this.items = [];
       this.particles = [];
       this.dens = [];
@@ -93,8 +94,41 @@
     }
 
     // ---- queries ------------------------------------------------------------
+    // Shelter: from shelterWarnSeconds before the downpour until it's over.
+    // No new arrivals in that time; creatures head into the pipes (each at
+    // its own moment, see Creature.shelterTime) and come back out after.
     shouldShelter() {
-      return !!(this.cfg.rain.enabled && this.cfg.rain.shelterDuringDownpour && this.weather && this.weather.downpour);
+      return this.shelterSoon(this.cfg.rain.shelterWarnSeconds ?? 45);
+    }
+    shelterSoon(lead) {
+      const R = this.cfg.rain;
+      const w = this.weather;
+      return !!(R.enabled && R.shelterDuringDownpour && w && (w.downpour || w.toDownpour < lead));
+    }
+    // After the rain, the sheltered come back out of the pipes one by one.
+    releaseSheltered(dt) {
+      const stash = this.shelterStash;
+      if (!stash.length || this.shouldShelter()) return;
+      for (const s of stash) if (s.backAt === undefined) s.backAt = this.t + U.rand(1.5, 25);
+      const open = this.openDens();
+      if (!open.length) return;
+      for (let i = stash.length - 1; i >= 0; i--) {
+        const c = stash[i];
+        if (this.t < c.backAt) continue;
+        stash.splice(i, 1);
+        const d = c.shelterDen && open.includes(c.shelterDen) ? c.shelterDen : U.pick(open);
+        c.dead = c.leaving = c.sheltered = c.migrating = false;
+        c.piping = c.burrow = c.nudge = c.unburrow = null;
+        c.holding = c.grabbedBy = null;
+        c.stillFor = 0;
+        c.lastCheck = null;
+        c.stateT = 0;
+        c.label = '';
+        delete c.backAt;
+        if (c.pather) c.pather.clear();
+        c.startUnpiping(d);
+        this.creatures.push(c);
+      }
     }
 
     denSpawnPoint(d) {
@@ -119,6 +153,7 @@
       this.stats = { born: 0, eaten: 0, left: 0 };
       this.noSlugT = 0;
       this.skips = {};
+      this.shelterStash = [];
       this.spawnT = 60 / Math.max(0.1, +this.cfg.ecosystem.spawnPerMinute || 0.1);
       this.populate();
     }
@@ -216,6 +251,7 @@
         const S = this.cfg.species;
         const group = species === 'noodlefly' ? { adult: null, infants: [] } : { members: [] };
         const lead = new Cls(this, species, x, y, group);
+        lead.homeState = lead.state;
         this.creatures.push(lead);
         let n = 1;
         const kid = species === 'noodlefly' ? 'noodlefly_infant' : 'squidcada';
@@ -223,13 +259,16 @@
         const want = U.randInt(range[0], range[1]) - (species === 'squidcada' ? 1 : 0);
         const room = Math.max(0, ((S[kid] && S[kid].max) || 10) - this.count(kid));
         for (let i = 0; i < Math.min(want, room); i++) {
-          this.creatures.push(new Cls(this, kid, x + U.rand(-14, 14), y + U.rand(-10, 10), group));
+          const k = new Cls(this, kid, x + U.rand(-14, 14), y + U.rand(-10, 10), group);
+          k.homeState = k.state;
+          this.creatures.push(k);
           n++;
         }
         this.stats.born += n;
         return lead;
       }
       const c = new Cls(this, species, x, y);
+      c.homeState = c.state; // what it settles back into after sheltering
       this.creatures.push(c);
       this.stats.born++;
       return c;
@@ -466,8 +505,11 @@
 
       for (const c of this.creatures) {
         if (c.dead && c.holding) c.release();
-        if (c.dead && c.leaving) this.stats.left++;
+        // gone into a pipe out of the rain: kept, and let back out after it
+        if (c.dead && c.leaving && c.sheltered && !c.corpse) this.shelterStash.push(c);
+        else if (c.dead && c.leaving) this.stats.left++;
       }
+      this.releaseSheltered(dt);
       this.creatures = this.creatures.filter((c) => !c.dead);
       this.items = this.items.filter((i) => !i.dead);
 
@@ -510,11 +552,11 @@
       // they're drawn afterwards, by drawLate.
       this.late = [];
       for (const c of sorted) {
-        if (c.burrow || c.piping) {
+        if (c.burrow || c.piping || c.unpiping) {
           // only the part still out of the surface (or the pipe) shows;
           // going into a pipe the body is also squeezed in toward the
           // pipe's axis, as if squirming through the gap
-          const b = c.burrow || c.piping;
+          const b = c.burrow || c.piping || c.unpiping;
           const nx = c.burrow ? b.nx : -b.ax;
           const ny = c.burrow ? b.ny : -b.ay;
           const tx = -ny;
@@ -528,7 +570,7 @@
           ctx.lineTo(b.sx + tx * F + nx * F, b.sy + ty * F + ny * F);
           ctx.closePath();
           ctx.clip();
-          if (c.piping) {
+          if (c.piping || c.unpiping) {
             const q = b.k - 1; // scale across the axis (direction tx, ty) by k
             ctx.translate(b.sx, b.sy);
             ctx.transform(1 + q * tx * tx, q * tx * ty, q * tx * ty, 1 + q * ty * ty, 0, 0);

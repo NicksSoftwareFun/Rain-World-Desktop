@@ -222,6 +222,19 @@
       this.weapon = this.offhand = null;
       super.leave();
     }
+    layInPipe(mo) {
+      this.head.x = mo.x + mo.ax * 2;
+      this.head.y = mo.y + mo.ay * 2;
+      this.hip.x = this.hip.px = mo.x + mo.ax * 13;
+      this.hip.y = this.hip.py = mo.y + mo.ay * 13;
+      let d = 13;
+      this.tail.pts.forEach((q, i) => {
+        if (i) d += this.tail.seg[i - 1];
+        q.x = q.px = mo.x + mo.ax * d;
+        q.y = q.py = mo.y + mo.ay * d;
+      });
+      this.handPt = this.handPt2 = null;
+    }
     // Into a pipe head first, hips and tail following.
     pipeLead() {
       return this.head;
@@ -340,7 +353,7 @@
       }
 
       // A transit slugcat still runs from danger on its way out.
-      const passing = this.exitDen && !eco.shouldShelter();
+      const passing = this.exitDen && !this.shelterTime();
       if (this.wantsToLeave(dt) && !(passing && this.state === 'flee' && this.stateT < 3.5)) {
         if (passing && perceive) {
           const t = this.threatNear(p.vision || 260);
@@ -578,7 +591,7 @@
     // slugcat leaves once it has eaten twice (or given up after a while),
     // heading for the den farthest from the one it arrived by.
     wantsToLeave(dt) {
-      if (this.eco.shouldShelter()) return true;
+      if (this.shelterTime()) return true;
       if (!this.origin) this.origin = this.eco.nearestDen(this.spawnX, this.spawnY) || { x: this.spawnX, y: this.spawnY };
       if (!this.exitDen && (this.meals >= 2 || this.age > 210) && !this.holding && !this.item && this.snackT <= 0) {
         const hip = this.hip;

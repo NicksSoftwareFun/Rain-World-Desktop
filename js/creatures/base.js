@@ -300,6 +300,7 @@
       this.stateT += dt;
       if (this.burrow) return this.burrowStep(dt);
       if (this.piping) return this.pipeStep(dt);
+      if (this.unpiping) return this.unpipeStep(dt);
       if (this.leaving) {
         this.alpha -= dt * 2;
         if (this.alpha <= 0) this.dead = true;
@@ -331,6 +332,13 @@
       }
       // No den reachable from here: slip away quietly rather than wait forever.
       if (this.state === 'leave' && this.stateT > (this.isFlier ? 60 : 30)) this.leave();
+      // Arrived at a pipe (nothing left to walk) but not quite close enough
+      // for its own "in we go" check: in we go.
+      if (this.state === 'leave' && !this.leaving && (this.isFlier ? this.stateT > 2 : this.pather && this.pather.goal && this.pather.done() && this.stateT > 0.5)) {
+        // (fliers keep their distance from walls: hovering by the pipe is
+        // close enough)
+        if (this.denMouthNear(this.isFlier ? 55 : 60) && this.wantsToLeave(0)) this.leave();
+      }
       // Easing out of a wedged spot (see below): a couple of px a frame.
       if (this.nudge) {
         const m = this.mainPoint();
@@ -540,8 +548,14 @@
       if (this.holding) this.release();
     }
     leave() {
+      // a catch carried in out of the rain is eaten in there
+      if (this.holding && this.eco.shouldShelter() && !this.holding.isHand) this.eco.consume(this.holding, this);
       if (this.holding) this.release();
       this.leaving = true;
+      // gone to ground for the rain (not a visitor moving on): it'll be
+      // back out once it passes
+      const fam = this.family;
+      this.sheltered = this.eco.shouldShelter() && !this.exitDen && !(fam && fam.exitDen) && !this.migrating;
       // at a den: squeeze in through the pipe mouth rather than fade out
       const d = !this.grabbedBy && !this.corpse ? this.denMouthNear(70) : null;
       if (d) this.startPiping(d);
@@ -587,6 +601,7 @@
         len = Math.hypot(b[2] - b[0], b[3] - b[1]) * 0.85 + 12;
       }
       this.piping = { t: 0, sx: mo.x, sy: mo.y, ax: mo.ax, ay: mo.ay, len: Math.min(420, len), k: 1, den: d };
+      this.shelterDen = d;
       this.label = '';
       if (this.pather) this.pather.clear();
       if ('vx' in this) this.vx = this.vy = 0;
@@ -623,6 +638,77 @@
       if (along >= pp.len || pp.t > 6) this.dead = true; // counted as left by the ecosystem
       return false;
     }
+    // Back out of a pipe after the rain: laid down the pipe, head at the
+    // mouth, the head leads out (along the ledge top, from a ledge pipe) and
+    // the body follows it out the way it went in.
+    startUnpiping(d) {
+      const mo = RW.Creature.denMouth(d);
+      const sp = this.spine || this.chain;
+      let len;
+      if (sp instanceof RW.Chain) len = sp.seg.reduce((a, b) => a + b, 0) + 16;
+      else {
+        const b = this.bounds();
+        len = Math.hypot(b[2] - b[0], b[3] - b[1]) * 0.6 + 12;
+      }
+      this.layInPipe(mo, len);
+      this.unpiping = { t: 0, sx: mo.x, sy: mo.y, ax: mo.ax, ay: mo.ay, len: Math.min(420, len), k: 1, den: d, out: 0, side: Math.random() < 0.5 ? -1 : 1 };
+      this.alpha = 1;
+      if ('vx' in this) this.vx = this.vy = 0;
+    }
+    // Lay the body straight down the pipe, head just inside the mouth.
+    layInPipe(mo, len) {
+      const sp = this.spine || this.chain;
+      if (sp instanceof RW.Chain) {
+        let d = 2;
+        sp.pts.forEach((q, i) => {
+          if (i) d += sp.seg[i - 1];
+          q.x = q.px = mo.x + mo.ax * d;
+          q.y = q.py = mo.y + mo.ay * d;
+        });
+        if (this.legs) {
+          for (const l of this.legs) {
+            const a = sp.pts[Math.min(l.at || 0, sp.pts.length - 1)];
+            if (l.leg.foot) l.leg.place(a.x, a.y);
+          }
+        }
+        return;
+      }
+      const m = this.mainPoint();
+      this.shiftAll(mo.x + mo.ax * len * 0.5 - m.x, mo.y + mo.ay * len * 0.5 - m.y);
+    }
+    unpipeStep(dt) {
+      const up = this.unpiping;
+      up.t += dt;
+      const lead = this.pipeLead();
+      const depth = (lead.x - up.sx) * up.ax + (lead.y - up.sy) * up.ay; // > 0: still inside
+      const speed = 45 + 120 * Math.min(1, up.t / 0.6);
+      const step = speed * dt;
+      let dx = -up.ax * step;
+      let dy = -up.ay * step;
+      if (up.ay > 0 && depth < -8) {
+        // out of a ledge pipe: off along the ledge top, hugging it
+        dx = up.side * step;
+        dy = (up.sy - 6 - lead.y) * Math.min(1, 8 * dt);
+      } else if (depth > 0) {
+        // in the pipe: kept to its middle
+        const px = -up.ay;
+        const py = up.ax;
+        const lat = (lead.x - up.sx) * px + (lead.y - up.sy) * py;
+        dx -= px * lat * Math.min(1, 10 * dt);
+        dy -= py * lat * Math.min(1, 10 * dt);
+      }
+      const crawls = this.pipeMove(dx, dy, dt);
+      up.k = crawls ? 1 : 0.4 + 0.6 * U.smooth(Math.min(1, up.t / 0.5));
+      up.out += step;
+      up.den.busyT = 0.6;
+      if (up.out >= up.len + 20 || up.t > 6) {
+        this.unpiping = null;
+        // back to what it was doing when it first arrived (not still 'leave')
+        this.setState(this.homeState || 'idle');
+        this.onUnburrowed();
+      }
+      return false;
+    }
     // The point that goes in first, and how the body follows it. Chain
     // bodies (lizards, centipedes, dropwigs) follow their head link by link;
     // returns false when the creature can only be moved whole.
@@ -655,45 +741,6 @@
         }
       }
       return true;
-    }
-
-    // Eaten, despawned or left the screen.
-    remove() {
-      this.dead = true;
-      if (this.holding) this.release();
-    }
-    leave() {
-      if (this.holding) this.release();
-      this.leaving = true;
-      // at a den: squeeze in through the pipe mouth rather than fade out
-      const d = !this.grabbedBy && !this.corpse ? this.denMouthNear(70) : null;
-      if (d) this.startPiping(d);
-    }
-
-    // --- going into a pipe ---
-    // A den's mouth: where the opening is, the way into the pipe (a), and
-    // the way out of it (n, the side the creature stays visible on).
-    static denMouth(d) {
-      if (d.wall) return { x: d.x + d.dir * 12, y: d.y, ax: -d.dir, ay: 0 };
-      return { x: d.x, y: d.y, ax: 0, ay: 1 };
-    }
-    denMouthNear(range) {
-      const dens = (this.eco && this.eco.dens) || [];
-      const parts = this.hitParts ? this.hitParts() : [];
-      const pts = [this.mainPoint()].concat(parts);
-      let best = null;
-      let bd = range;
-      for (const d of dens) {
-        const mo = RW.Creature.denMouth(d);
-        for (const q of pts) {
-          const dd = Math.hypot(q.x - mo.x, q.y - mo.y);
-          if (dd < bd) {
-            bd = dd;
-            best = d;
-          }
-        }
-      }
-      return best;
     }
 
     // --- grabbing ---
@@ -888,8 +935,15 @@
       return 1;
     }
     // Shelter / migration: head for the nearest den and vanish into it.
+    // Time to get under cover: each creature heads for a pipe at its own
+    // moment in the run-up to the downpour, so they trickle in.
+    shelterTime() {
+      const warn = this.eco.cfg.rain.shelterWarnSeconds ?? 45;
+      if (this.shelterLead === undefined) this.shelterLead = U.rand(Math.min(18, warn), warn);
+      return this.eco.shelterSoon(this.shelterLead);
+    }
     wantsToLeave(dt) {
-      if (this.eco.shouldShelter()) return true;
+      if (this.shelterTime()) return true;
       this.migrateCheck -= dt;
       if (this.migrateCheck <= 0) {
         this.migrateCheck = 10;

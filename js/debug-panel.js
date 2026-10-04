@@ -387,7 +387,13 @@
         // what's alive, by kind (lizards 1.2-2 each, centipedes by size; batflies free)
         '\n' + this.census() + '\n' +
         `born ${eco.stats.born}  eaten ${eco.stats.eaten}  left ${eco.stats.left}\n` +
-        (w.downpour ? 'DOWNPOUR — creatures sheltering' : `rain in ~${left.toFixed(1)} min`) +
+        (w.downpour
+          ? `DOWNPOUR — ${eco.shelterStash.length} sheltering in the pipes`
+          : eco.shouldShelter()
+            ? 'rain coming — creatures heading for the pipes'
+            : eco.shelterStash.length
+              ? `rain passed — ${eco.shelterStash.length} still to come back out`
+              : `rain in ~${left.toFixed(1)} min`) +
         (this.engine.provider.status ? '\n' + this.engine.provider.status() : '');
     }
   }

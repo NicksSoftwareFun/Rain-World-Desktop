@@ -34,6 +34,7 @@
       cycleMinutes: 4, // length of one rain cycle
       downpourFraction: 0.12, // final part of the cycle that is a downpour
       shelterDuringDownpour: true, // creatures retreat into dens when the rain hits
+      shelterWarnSeconds: 45, // ...starting this long before it, and come back out after
       drizzle: 0.24, // light rain outside the downpour (0-1)
       waterfallsFrom: 0.35, // rain heavier than this sends water pouring off ledge ends
       drips: 0.7, // water dripping from window/icon/ledge undersides (0 = none)
