@@ -347,10 +347,10 @@ it shows the dotted line). Each new map picks its own flood height, 40-80%
 from its seed (`Engine.init`); the dial overrides it until the next map.
 
 A second one, the **world menu**, sits top left behind a globe
-(`Panel.buildWorldMenu`): a new map on the inner ring, the world type
-(rooms = experimental, the default; ledges = `tiers` or `scatter`, each
-map picking one from its seed) in the middle, the size (compact,
-normal, large, XL) outside. A size picked there keeps the world type;
+(`Panel.buildWorldMenu`): the world type on the inner ring (rooms =
+experimental, the default; ledges = `tiers` or `scatter`, each map
+picking one from its seed; tapping the type it's already on makes a new
+map), the size (compact, normal, large, XL) outside. A size picked there keeps the world type;
 everything saves and redraws the side panel to match. (Saves from before
 rooms became the default, `cfg.rev` < 2, open on rooms once. The tests pin
 `?layout=tiers` unless a check picks its own.) A room fills the whole
@@ -363,11 +363,11 @@ under water.
 A tap on a creature (released within 180 ms without moving; a finger gets
 320 ms, 12 px of wobble and a bigger target) opens the **creature menu**
 (`js/ui/creature-menu.js`, `RW.CreatureMenu`, via `Engine.onCreatureTap`):
-four 46 px buttons in an arc over it that follow it about (under it near
+three 46 px buttons in an arc over it that follow it about (under it near
 the top of the screen): kill, make hungry (`Creature.makeHungry`: `fullT`
-to 0, or a slugcat's `hunger` up), its path (`showPath`) and its AI state
-(`labelPinned`, drawn below it while the menu's open). Path and AI state
-are per creature and stay on until switched off. Tapping it again, or a
+to 0, or a slugcat's `hunger` up), and path + AI: its route (`showPath`)
+and its AI state (`labelPinned`, drawn below it while the menu's open)
+together, per creature, on until switched off. Tapping it again, or a
 press anywhere else (`Engine.onPress`), closes the menu; so does dragging
 it. Holding or dragging picks it up (`Engine.press`), never opening the
 menu. Without a menu the tap falls back to the 15 s label

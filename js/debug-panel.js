@@ -175,8 +175,9 @@
       }
     }
 
-    // The world menu, top left: a globe that fans out the world type, the
-    // size and a new background (a RadialMenu, like the rain one).
+    // The world menu, top left: a globe that fans out the world type and the
+    // size (a RadialMenu, like the rain one). Tapping the type it's already
+    // on makes a new map of it.
     buildWorldMenu() {
       const eng = this.engine;
       const cfg = this.cfg;
@@ -193,10 +194,13 @@
       // ('ledges' covers the older tiers and scatter too)
       const isType = (value) => Wc.layout === value || (value === 'ledges' && (Wc.layout === 'tiers' || Wc.layout === 'scatter'));
       const type = (value, label, icon, title) => ({
-        type: 'toggle', ring: 1, label, icon, title,
+        type: 'toggle', ring: 0, label, icon, title: title + ' (tap again for a new map)',
         get: () => isType(value),
         set: () => {
-          if (isType(value)) return;
+          if (isType(value)) {
+            eng.regenerate(true);
+            return;
+          }
           Wc.layout = value;
           eng.regenerate(false);
           eng.restartWildlife();
@@ -224,13 +228,12 @@
         margin: 16,
         title: 'World',
         items: [
-          { type: 'action', ring: 0, label: 'new map', icon: '\u21bb', title: 'A new background: a fresh map of this type', run: () => eng.regenerate(true) },
           type('experimental', 'rooms', '\u25a6', 'Carved like real Rain World rooms'),
           type('ledges', 'ledges', '\u2630', 'Ledges and poles over open space: in rows, or scattered'),
-          size('compact', 'S', 2),
-          size('normal', 'M', 2),
-          size('large', 'L', 2),
-          size('xl', 'XL', 2),
+          size('compact', 'S', 1),
+          size('normal', 'M', 1),
+          size('large', 'L', 1),
+          size('xl', 'XL', 1),
         ],
       });
     }

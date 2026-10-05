@@ -1,7 +1,7 @@
 // The creature menu: tap a creature and a small arc of buttons fans out
 // above it (below it near the top of the screen), following it about:
-// kill it, make it hungry, show its path, show its AI state. The last two
-// are per creature and stay on until switched off. Tap the creature again,
+// kill it, make it hungry, watch it (its path and its AI state: per
+// creature, on until switched off). Tap the creature again,
 // or anywhere else, to close it (Escape too); dragging a creature never
 // opens it (see Engine.tick: a tap is a quick press that doesn't move).
 //
@@ -19,8 +19,8 @@
   const ICONS = {
     kill: '<path d="M12 3.5a7 7 0 0 0-7 7v2.6l2 1.9v3.5h2.2v-2h1.6v2h2.4v-2h1.6v2H17v-3.5l2-1.9v-2.6a7 7 0 0 0-7-7z"/><circle cx="9.2" cy="11" r="1.7" class="fill"/><circle cx="14.8" cy="11" r="1.7" class="fill"/>',
     hungry: '<path d="M7 3v6.5M5 3v4.2a2 2 0 0 0 4 0V3M7 9.5V21M17 21V3c-2.2 1.4-3.3 4.6-3.3 8.2H17"/>',
-    path: '<path d="M4 18c3.5 0 4-11 8-11s3.8 7 7.5 7" stroke-dasharray="2.2 2.4"/><circle cx="4" cy="18" r="2" class="fill"/><path d="M17.5 11.2l2.4 2.8-3.1 1.8"/>',
-    ai: '<path d="M4 5.5h16v10H10l-4.5 3.8v-3.8H4z"/><circle cx="8.5" cy="10.5" r="1.1" class="fill"/><circle cx="12" cy="10.5" r="1.1" class="fill"/><circle cx="15.5" cy="10.5" r="1.1" class="fill"/>',
+    // an eye over a dotted route
+    watch: '<path d="M3 10s3.3-5 9-5 9 5 9 5-3.3 5-9 5-9-5-9-5z"/><circle cx="12" cy="10" r="2.3" class="fill"/><path d="M4 20.5h16" stroke-dasharray="1.6 2.4"/>',
   };
   const SIZE = 46;
   const R = 62; // centre of the body to the centre of a button
@@ -55,18 +55,14 @@
           run: (c) => c.makeHungry(),
         },
         {
-          key: 'path', label: 'path', title: 'Show where it is going', toggle: true,
-          ok: (c) => !!c.pather,
-          on: (c) => !!c.showPath,
-          run: (c) => (c.showPath = !c.showPath),
-        },
-        {
-          key: 'ai', label: 'AI', title: 'Show what it is doing (its AI state)', toggle: true,
+          key: 'watch', label: 'path + AI', title: 'Show where it is going and what it is doing (its AI state)', toggle: true,
           ok: () => true,
           on: (c) => !!c.labelPinned,
           run: (c) => {
-            c.labelPinned = !c.labelPinned;
-            if (!c.labelPinned) c.labelUntil = Math.min(c.labelUntil || 0, eco().t);
+            const on = !c.labelPinned;
+            c.labelPinned = on;
+            c.showPath = on; // (fliers have no route: just the label)
+            if (!on) c.labelUntil = Math.min(c.labelUntil || 0, eco().t);
           },
         },
       ];
@@ -156,7 +152,7 @@
       if (this.flipped === null) this.flipped = y < R + SIZE + 10;
       this.root.style.transform = `translate(${Math.round(x)}px, ${Math.round(U.clamp(y, 0, vh))}px)`;
       const n = this.items.length;
-      const spread = 150;
+      const spread = 110;
       this.items.forEach((it, k) => {
         const deg = -90 - spread / 2 + (spread * k) / (n - 1);
         const a = ((this.flipped ? -deg : deg) * Math.PI) / 180;

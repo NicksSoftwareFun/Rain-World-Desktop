@@ -16,8 +16,8 @@ Everything is plain JavaScript + `<canvas>`, with no build step and no dependenc
   helper (below). (`index.html?desktop=1` puts a mock Windows desktop on top
   for testing that in a browser.)
   - Press **`** (backtick) or the ≡ button for the **ecosystem panel**.
-  - **Tap** a creature for its menu: kill, make hungry, show its path, show
-    its AI state (tap it again, or anywhere else, to close it).
+  - **Tap** a creature for its menu: kill, make hungry, path + AI (its route
+    and what it's doing); tap it again, or anywhere else, to close it.
   - **Drag** a creature (living or dead) to pick it up: it hangs limp from
     the cursor and drops where you let go. Both work with a finger. (Clicking bare wallpaper to drop
     a dangle fruit is still available as a panel toggle, off by default.)
@@ -77,8 +77,8 @@ titles.
   and fruit plant counts are densities: they scale with the map's area, and
   the tiered layout adds a row of ledges for about every 140 px of height.
 - **World menu** (the globe, top left): the world type (rooms, the default,
-  or ledges: rows of ledges or scattered ones, the map's pick), the size
-  (compact, normal, large, XL) and a new map.
+  or ledges: rows of ledges or scattered ones, the map's pick; tap the one
+  you're on for a new map) and the size (compact, normal, large, XL).
 - **Rain**: cycle length and whether creatures take shelter in dens during
   the downpour. The cycle runs itself: it opens dripping from the last
   storm, the drips die away into a calm, then light rain starts, builds on
