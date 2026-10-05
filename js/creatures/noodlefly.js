@@ -433,7 +433,9 @@
     // Somewhere open to drift to, near (x, y).
     airGoal(x, y, r) {
       const W = this.W;
-      return RW.Nav.randomValid(W, AIR, x, y, r, (cx, cy) => W.surfDist(cx, cy) >= 3, 30);
+      const wet = this.eco.heavyRain(); // (out of heavy rain if it can)
+      const open = (cx, cy) => W.surfDist(cx, cy) >= 3;
+      return (wet && RW.Nav.randomValid(W, AIR, x, y, r * 1.5, (cx, cy) => open(cx, cy) && !this.eco.rainOn(W.centerX(cx), W.centerY(cy)), 40)) || RW.Nav.randomValid(W, AIR, x, y, r, open, 30);
     }
 
     // ------------------------------------------------------------- update --

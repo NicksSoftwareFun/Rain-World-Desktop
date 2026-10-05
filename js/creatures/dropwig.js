@@ -69,12 +69,21 @@
 
     pickSpot() {
       const W = this.W;
+      const eco = this.eco;
       const h = this.spine.pts[0];
-      return Nav.randomValid(W, this.caps, h.x, h.y, 600, (cx, cy) => {
+      const ok = (cx, cy) => {
         if (!W.solid(cx, cy - 1) || W.solid(cx - 1, cy) || W.solid(cx + 1, cy)) return false;
         for (let k = 1; k <= 7; k++) if (W.solid(cx, cy + k)) return false;
         return true;
-      });
+      };
+      // (in heavy rain, a ceiling the rain doesn't reach: under a ledge,
+      // not the open sky at the top of the screen)
+      if (eco.heavyRain()) {
+        const dry = Nav.randomValid(W, this.caps, h.x, h.y, 600, (cx, cy) => ok(cx, cy) && !eco.rainOn(W.centerX(cx), W.centerY(cy)), 60);
+        if (dry) return dry;
+        this.noCoverUntil = eco.t + 12;
+      }
+      return Nav.randomValid(W, this.caps, h.x, h.y, 600, ok);
     }
 
     underCeiling() {
@@ -134,7 +143,8 @@
         return;
       }
       if (this.state === 'wait') {
-        if (!this.underCeiling() || this.stateT > (this.p.patience || 70)) {
+        const soaked = this.stateT > 2 && !(this.noCoverUntil > eco.t) && eco.heavyRain() && eco.rainOn(h.x, h.y);
+        if (!this.underCeiling() || this.stateT > (this.p.patience || 70) || soaked) {
           this.setState('seek');
           this.spot = null;
           return;

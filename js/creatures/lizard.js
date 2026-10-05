@@ -936,7 +936,9 @@
       if (!z || Math.random() > 0.55 + 0.3 * (1 - this.pers.energy)) return null;
       // (patrolling its patch, edge to edge, in a room)
       const W = this.W;
-      return Nav.randomValid(W, this.caps, z.cx, z.cy, Math.max(z.rx, z.ry) * 0.85, (cx, cy) => this.inZone({ x: W.centerX(cx), y: W.centerY(cy) }, 0.9));
+      // (in heavy rain, a dry corner of it: wanderGoal looks further afield)
+      const wet = this.eco.heavyRain();
+      return Nav.randomValid(W, this.caps, z.cx, z.cy, Math.max(z.rx, z.ry) * 0.85, (cx, cy) => this.inZone({ x: W.centerX(cx), y: W.centerY(cy) }, 0.9) && !(wet && this.eco.rainOn(W.centerX(cx), W.centerY(cy))));
     }
     truce(c, sec) {
       this.truces.set(c.id, this.eco.t + sec);

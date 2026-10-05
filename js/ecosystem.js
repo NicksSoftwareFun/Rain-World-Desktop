@@ -69,10 +69,16 @@
         for (const dx of r ? [-r, r] : [0]) {
           const x = n.x + dx;
           const y = n.y + 30;
-          if (x > 8 && x < W.w - 8 && !W.isSolidPt(x, y) && !W.isSolidPt(x, y - 12) && !W.isSolidPt(x, y + 10)) return { x, y };
+          if (x > 8 && x < W.w - 8 && !W.isSolidPt(x, y) && !W.isSolidPt(x, y - 12) && !W.isSolidPt(x, y + 10) && !this.nearWater(x, y, 24)) return { x, y };
         }
       }
       return null;
+    }
+    // Water at (x, y) or within `below` px under it: a nest (or a sky den)
+    // there stays shut, or its batflies would come out straight into it.
+    nearWater(x, y, below) {
+      const W = this.world;
+      return !!(W.waterSim && (W.waterDepth(x, y) >= 0 || W.waterDepth(x, y + below) >= 0));
     }
 
     // ---- cursor -----------------------------------------------------------
@@ -105,6 +111,19 @@
       const R = this.cfg.rain;
       const w = this.weather;
       return !!(R.enabled && R.shelterDuringDownpour && w && (w.downpour || w.toDownpour < lead));
+    }
+    // Heavy rain (past rain.avoidFrom, the build-up to the downpour):
+    // creatures keep out of it, under cover where there is any.
+    heavyRain() {
+      const R = this.cfg.rain;
+      const w = this.weather;
+      return !!(R.enabled && w && w.intensity >= (R.avoidFrom ?? 0.45));
+    }
+    // Does the rain reach (x, y)? (not under a ledge, a window, a beam of
+    // rock: wherever the rain shadow covers)
+    rainOn(x, y) {
+      const w = this.weather;
+      return !!(w && w.shelter && w.shelterAt(x, y) > y);
     }
     // After the rain, the sheltered come back out of the pipes one by one.
     releaseSheltered(dt) {
@@ -143,8 +162,8 @@
     openDens(flier) {
       const W = this.world;
       return this.dens.filter((d) => {
-        if (d.sky) return !!flier;
         const p = this.denSpawnPoint(d);
+        if (d.sky) return !!flier && !this.nearWater(p.x, p.y, 24);
         // (a den gone under the flood is shut until it drains)
         if (W.waterSim && W.waterDepth(p.x, p.y) >= 0) return false;
         return !W.solid(W.cellX(p.x), W.cellY(p.y)) && !W.isSolidPt(p.x, p.y) && !W.isSolidPt(p.x, p.y - 14);

@@ -19,7 +19,7 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 - **World size**: `zoom = 2 / mapSize`; the world is the window size divided
   by `zoom`, in *world units* (a 1080p screen at map size 1 is 960x540).
   Everything in the simulation works in world units.
-- **Pixel scale** `ps` (1, 1.5, 2, 3): the canvas is `world * zoom / ps`
+- **Pixel scale** `ps` (1, 1.5, 2, 2.5, 3; 2.5 for the Compact size): the canvas is `world * zoom / ps`
   pixels, upscaled with `image-rendering: pixelated`. `eco.artPx` is world
   units per art pixel.
 - **Layers**: a pre-painted background canvas (`Background.paint`), then the
@@ -67,7 +67,13 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
   (`shelterTime()`); those that go in for the rain (`sheltered`) wait in
   `Ecosystem.shelterStash` and come back out after it (`startUnpiping`,
   `layInPipe`, `unpipeStep`: head first, along the ledge top from a ledge
-  pipe). Also grabbing and
+  pipe). Before that, once the rain is past `rain.avoidFrom`
+  (`Ecosystem.heavyRain()`), creatures keep out of it: `wanderGoal` looks
+  for cover first (`Ecosystem.rainOn(x, y)`, from the weather's rain
+  shadow; nearest first, giving up for 12 s if there's none), and
+  `keepDry()` gets anything wandering, idling or resting out in it moving;
+  lizards' territory goals, flier air goals, batfly roosts, dropwig ceilings
+  and the rocks slugcats fetch all skip rained-on spots. Also grabbing and
   being held (`holdPoint`), weapons (`hitParts`, `stun`, `kill`), goal picking
   (`readyForGoal`, `exploreGoal` with a `heightBias`), and the pole-to-ledge
   scramble (`cornerAhead`, `startScramble`, `stepScramble`).
@@ -243,8 +249,10 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   surface, so nothing else dives to flee or to reach a pipe. A den under
   the flood is shut (`openDens`). Things under the water (sunk rocks and
   spears, corpses, fruit, downed prey) aren't worth a dive: creatures go
-  for what's on land (or floating). Batflies keep up off the water and die
-  the moment they touch it. Limp creatures float up to
+  for what's on land (or floating). Batflies keep up off the water (a hard
+  floor just over it: fleeing never drives them in) and die the moment they
+  touch it; a nest or sky den with water at or just under its exit stays
+  shut (`nearWater`), so no flock comes out straight into the flood. Limp creatures float up to
   lie along the surface, corpses sink slowly (`waterLimp`, `floatBody`);
   creatures that hate it (`hatesWater`: centipedes, dropwigs) thrash for the
   nearest dry footing (`waterPanic`, `nearestDry`); the small and weak
@@ -332,8 +340,8 @@ time to the downpour) and clicking it opens a **corner radial menu**
 (`js/ui/radial.js`, `RW.RadialMenu`, reusable): items fan out round the
 corner, toggles and actions on the inner ring, dials (drag up/right, the
 wheel, or arrow keys; a gauge arc and the value) further out, more rings
-as needed; Escape, the hub or a click outside closes it. Rain, curtains,
-shelter, downpour now, clear skies, a live "now" button (time into the
+as needed; Escape, the hub or a click outside closes it. Shelter,
+downpour now, clear skies, a live "now" button (time into the
 cycle out of its length; a click skips to the next stage); cycle length and
 flood height (turning it shows the dotted line).
 

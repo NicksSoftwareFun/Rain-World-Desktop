@@ -745,8 +745,10 @@
       const hip = this.hip;
       let best = null;
       let bs = range;
+      const wet = this.eco.heavyRain(); // (not one lying out in heavy rain)
       for (const it of this.eco.items) {
         if (!(it instanceof RW.Weapon) || !this.canTake(it)) continue;
+        if (wet && this.eco.rainOn(it.x, it.y - 8)) continue;
         if (it.claimedBy && it.claimedBy !== this) continue;
         if (this.W.waterDepth(it.x, it.y) >= 0) continue; // (one on land, not one sunk in the water)
         if (it === this.ignoreWeapon && this.ignoreWeaponT > 0) continue;

@@ -75,9 +75,11 @@ titles.
   and fruit plant counts are densities: they scale with the map's area, and
   the tiered layout adds a row of ledges for about every 140 px of height.
 - **Rain**: cycle length and whether creatures take shelter in dens during
-  the downpour. The cycle runs itself: it opens dripping from the last storm,
-  the drips die away into a calm, then light rain starts, builds on an
-  exponential curve into the downpour and stops. The cycle menu's "now"
+  the downpour. The cycle runs itself: it opens dripping from the last
+  storm, the drips die away into a calm, then light rain starts, builds on
+  an exponential curve into the downpour and stops. Once the rain gets
+  heavy (`rain.avoidFrom`, 0.45) creatures make for cover under ledges and
+  overhangs. The cycle menu's "now"
   button shows the time into the cycle and skips to the next stage. Water
   only pours off ledge ends once the rain is heavier than
   `rain.waterfallsFrom` (0.35); in light rain there are just drips.

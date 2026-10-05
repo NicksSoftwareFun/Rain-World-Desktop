@@ -80,7 +80,9 @@
 
     roostSpot() {
       const f = this.flock;
-      const dry = (o) => this.W.waterDepth(o.x, o.y + 6) < 0; // (never down by the water)
+      // (never down by the water; in heavy rain, only somewhere sheltered)
+      const wet = this.eco.heavyRain();
+      const dry = (o) => this.W.waterDepth(o.x, o.y + 6) < 0 && !(wet && this.eco.rainOn(o.x, o.y));
       if (f.roost && !this.W.isSolidPt(f.roost.x, f.roost.y) && dry(f.roost)) return f.roost;
       const opts = [];
       for (const g of this.eco.grass) opts.push({ x: g.x, y: g.y - g.h * 0.8 });
@@ -142,9 +144,15 @@
 
       if (this.perched) {
         this.perchT -= dt;
-        if (this.perchT <= 0 || W.isSolidPt(p.x, p.y)) {
+        // (perched out in heavy rain: off to somewhere sheltered)
+        const soaked = eco.heavyRain() && eco.rainOn(p.x, p.y);
+        if (this.perchT <= 0 || W.isSolidPt(p.x, p.y) || soaked) {
           this.perched = false;
           this.vy = -80;
+          if (soaked) {
+            this.flock.roost = null;
+            this.flock.roostT = 0;
+          }
         }
         return;
       }
@@ -217,6 +225,8 @@
             break;
           }
         }
+        // (a hard floor just over the surface: fleeing never drives it in)
+        if (W.waterDepth(p.x, p.y + 10) >= 0 && this.vy > -30) this.vy = -30;
       }
       // keep off walls and away from screen edges
       const s = W.nearestSurface(p.x, p.y, 30, null);

@@ -56,6 +56,7 @@ without page errors, populate, and react to geometry changes.
 | `fliers` | noodlefly families hunting, feeding and leaving together, revenge for a grabbed infant, squidcadas feeding and resting, fliers leaving the screen |
 | `rain` | the rain cycle (drips, calm, light rain, build-up, downpour, stop), waterfalls in light rain, rain blocked by horizontal poles |
 | `shelter` | creatures caught out in the downpour, fading instead of using pipes, or not coming back out after the rain |
+| `cover` | creatures staying out in heavy rain (past `rain.avoidFrom`) instead of making for cover |
 | `reds` | red lizards and large centipedes not fighting on sight, armoured reds grabbed alive, red lizards not spitting spines |
 | `corpses` | lizards never contesting a scavenged corpse, corpses left untaken |
 | `throws` | spears, rocks or spines thrown steeper than 30 degrees, slugcats eating corpses they didn't kill, backflips without a down-throw |

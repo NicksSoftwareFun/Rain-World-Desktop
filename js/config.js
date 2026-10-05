@@ -16,7 +16,7 @@
     world: {
       palette: 'industrial', // industrial | shoreline | outskirts | chimney | subterranean
       mapSize: 1, // how much world fits on screen: bigger = more map, everything smaller
-      pixelScale: 2, // 1 = full res, 1.5-3 = chunkier Rain World pixels
+      pixelScale: 2.5, // 1 = full res, 1.5-3 = chunkier Rain World pixels
       cellSize: 20, // navigation grid cell (px). Rain World tiles are 20px.
       seed: 0, // 0 = new background every load
       layout: 'tiers', // 'tiers': rows of ledges at shared heights, bridged by horizontal poles; 'scatter': anywhere; 'experimental': carved like real Rain World rooms (js/rooms.js)
@@ -42,6 +42,7 @@
       floodHeight: 0.75, // how high the water rises in the downpour, as a share of the map's height (experimental maps)
       drizzle: 0.24, // light rain outside the downpour (0-1)
       waterfallsFrom: 0.35, // rain heavier than this sends water pouring off ledge ends
+      avoidFrom: 0.45, // rain heavier than this sends creatures under cover (ledges, overhangs, the room's rock)
       drips: 0.7, // water dripping from window/icon/ledge undersides (0 = none)
       curtains: true, // faint drifting sheets of rain
       showCycleHud: true,
@@ -412,7 +413,7 @@
   // and the art pixels get finer so zoomed-out creatures keep their detail;
   // population, spawn rate, weapons and each species' cap scale with it.
   RW.SIZE_PRESETS = {
-    compact: { label: 'Compact', mapSize: 1, pixelScale: 2, maxPopulation: 12, spawnPerMinute: 2.5, rocks: 15, spears: 3, caps: 1 },
+    compact: { label: 'Compact', mapSize: 1, pixelScale: 2.5, maxPopulation: 12, spawnPerMinute: 2.5, rocks: 15, spears: 3, caps: 1 },
     normal: { label: 'Normal', mapSize: 1.4, pixelScale: 2, maxPopulation: 20, spawnPerMinute: 4, rocks: 28, spears: 6, caps: 1.7 },
     large: { label: 'Large', mapSize: 1.8, pixelScale: 1.5, maxPopulation: 30, spawnPerMinute: 6, rocks: 42, spears: 8, caps: 2.5 },
     xl: { label: 'XL', mapSize: 2.4, pixelScale: 1, maxPopulation: 45, spawnPerMinute: 9, rocks: 65, spears: 13, caps: 3.6 },

@@ -179,8 +179,6 @@
         title: 'Rain cycle',
         onChange: () => this.save(),
         items: [
-          { type: 'toggle', label: 'rain', icon: '\u2602', title: 'Rain on or off', get: () => R.enabled, set: (v) => (R.enabled = v) },
-          { type: 'toggle', label: 'curtains', icon: '\u224b', title: 'Sheets of rain drifting across', get: () => R.curtains !== false, set: (v) => (R.curtains = v) },
           { type: 'toggle', label: 'shelter', icon: '\u2302', title: 'Creatures shelter in dens during the downpour', get: () => R.shelterDuringDownpour, set: (v) => (R.shelterDuringDownpour = v) },
           { type: 'action', label: 'downpour', icon: '\u21ca', title: 'Bring the downpour on now', run: () => {
             const w = eng.weather;
@@ -362,7 +360,7 @@
       this.el.appendChild(
         this.section('World',
           this.select('palette', Wc, 'palette', Object.keys(RW.PALETTES), () => eng.applyPalette()),
-          this.select('pixel scale', Wc, 'pixelScale', [1, 1.5, 2, 3], () => {
+          this.select('pixel scale', Wc, 'pixelScale', [1, 1.5, 2, 2.5, 3], () => {
             this.custom('size');
             eng.applyPalette();
           }),

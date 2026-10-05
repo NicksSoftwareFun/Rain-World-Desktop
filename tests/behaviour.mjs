@@ -513,6 +513,48 @@ const checks = [
     warn: (m) => !m.beamExposed && 'no horizontal pole caught any rain on this map',
   },
   {
+    name: 'cover',
+    about: 'in heavy rain (past rain.avoidFrom) creatures make for cover under ledges instead of staying out in it',
+    run: (page) =>
+      page.evaluate(() => {
+        const e = RW_APP.engine;
+        const R = e.cfg.rain;
+        Object.assign(R, { enabled: true, shelterDuringDownpour: false, cycleMinutes: 12 });
+        const out = { off: 0, on: 0 };
+        // (the same two maps either way)
+        for (const avoid of [9, 0.45]) for (const seed of [3, 11]) {
+          e.seed = seed;
+          e.regenerate(false);
+          R.avoidFrom = avoid;
+          const total = R.cycleMinutes * 60;
+          e.weather.t = 0.55 * total;
+          for (let i = 0; i < 60 * 15; i++) e.tick(1 / 60);
+          e.weather.t = 0.72 * total; // (heavy rain, well short of the downpour)
+          let wet = 0;
+          let all = 0;
+          for (let i = 0; i < 60 * 40; i++) {
+            e.tick(1 / 60);
+            if (i % 30) continue;
+            for (const c of e.eco.creatures) {
+              if (c.dead || c.corpse || c.isFlier || c.leaving || c.unpiping || ['hunt', 'flee', 'leave'].includes(c.state)) continue;
+              const m = c.mainPoint();
+              all++;
+              // (out in it, and not on its way to cover)
+              const g = c.pather && c.pather.goal;
+              if (e.eco.rainOn(m.x, m.y) && !(g && !c.pather.done() && !e.eco.rainOn(g.x, g.y))) wet++;
+            }
+          }
+          out[avoid > 1 ? 'off' : 'on'] += Math.round((50 * wet) / Math.max(1, all));
+          out.heavy = e.eco.heavyRain();
+        }
+        return out;
+      }),
+    judge: (m) => [
+      !m.heavy && 'the test rain never got heavy',
+      m.on > Math.max(6, m.off * 0.5) && `${m.on}% of creatures staying out in heavy rain (${m.off}% with avoidance off)`,
+    ],
+  },
+  {
     name: 'shelter',
     about: 'creatures head into the pipes before the downpour and come back out of them after it',
     run: (page) =>
@@ -957,6 +999,8 @@ const checks = [
           e.seed = seed;
           e.regenerate(false);
           e.eco.creatures.length = 0;
+          // (into the downpour: the cycle opens with no rain at all)
+          e.weather.t = e.cfg.rain.cycleMinutes * 60 * (1 - e.cfg.rain.downpourFraction / 2);
           for (let i = 0; i < 120; i++) {
             e.weather.update(1 / 60, Object.assign({}, e.cfg, { rain: Object.assign({}, e.cfg.rain, { drizzle: 1 }) }), e.W, e.H, e.world);
           }
@@ -977,6 +1021,7 @@ const checks = [
           e.seed = seed;
           e.regenerate(false);
           e.eco.creatures.length = 0;
+          e.weather.t = e.cfg.rain.cycleMinutes * 60 * (1 - e.cfg.rain.downpourFraction / 2);
           e.weather.update(1 / 60, e.cfg, e.W, e.H, e.world);
           const sp = e.weather.fallSpans[0];
           if (!sp || sp.bot < 120) continue;
@@ -1161,7 +1206,7 @@ const checks = [
         !(s.normal.tiers > s.compact.tiers && s.xl.tiers >= 6) && `ledge rows don't grow with the map (${s.compact.tiers}/${s.normal.tiers}/${s.large.tiers}/${s.xl.tiers})`,
         s.xl.nests < 2 && 'XL should have two batfly nests',
         Object.values(s).some((r) => r.nests < 1) && 'a map without a batfly nest',
-        `${s.compact.pixelScale}/${s.normal.pixelScale}/${s.large.pixelScale}/${s.xl.pixelScale}` !== '2/2/1.5/1' && 'pixel scales should be 2/2/1.5/1',
+        `${s.compact.pixelScale}/${s.normal.pixelScale}/${s.large.pixelScale}/${s.xl.pixelScale}` !== '2.5/2/1.5/1' && 'pixel scales should be 2.5/2/1.5/1',
         s.xl.msMax > 3000 && `XL map takes ${s.xl.msMax}ms to build`,
         m.rainTimerAfterRestart > 0.1 && 'wildlife change did not restart the rain cycle',
         m.peacefulSpecies.split(',').some((k) => k && !peaceful.has(k)) && `Peaceful still has ${m.peacefulSpecies}`,
@@ -1185,7 +1230,7 @@ const COVERS = [
   [/js\/(weapons|items)\.js/, ['throws', 'fruit']],
   [/js\/(background|drips)\.js/, ['rain']],
   [/js\/config\.js/, ['presets']],
-  [/js\/(world|nav|engine|ecosystem)\.js|js\/creatures\/base\.js/, ['soak', 'bodies', 'centipedes', 'scramble', 'shelter']],
+  [/js\/(world|nav|engine|ecosystem)\.js|js\/creatures\/base\.js/, ['soak', 'bodies', 'centipedes', 'scramble', 'shelter', 'cover']],
 ];
 if (args.includes('--changed')) {
   const { execSync } = await import('node:child_process');

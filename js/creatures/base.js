@@ -376,6 +376,7 @@
       } else {
         this.floodT = 0;
       }
+      this.keepDry(dt);
       // Arrived at a pipe (nothing left to walk) but not quite close enough
       // for its own "in we go" check: in we go.
       if (this.state === 'leave' && !this.leaving && (this.isFlier ? this.stateT > 2 : this.pather && this.pather.goal && this.pather.done() && this.stateT > 0.5)) {
@@ -1080,6 +1081,20 @@
       return true;
     }
     wanderGoal(caps, radius, filter) {
+      // In heavy rain: somewhere under cover if there's anywhere near (if
+      // not, it stops looking for a while rather than churning).
+      const eco = this.eco;
+      if (eco.heavyRain() && !this.isFlier && !(this.noCoverUntil > eco.t)) {
+        const W = this.W;
+        const dry = (cx, cy) => (!filter || filter(cx, cy)) && !eco.rainOn(W.centerX(cx), W.centerY(cy));
+        // (the nearest cover first)
+        const g = this.pickWander(caps, Math.min(radius, 260), dry, true) || this.pickWander(caps, radius, dry, true);
+        if (g) return g;
+        this.noCoverUntil = eco.t + 12;
+      }
+      return this.pickWander(caps, radius, filter);
+    }
+    pickWander(caps, radius, filter, strict) {
       if (!filter && Math.random() < 0.6) {
         const g = this.exploreGoal(caps);
         if (g) return g;
@@ -1092,7 +1107,24 @@
         const r = Nav.findPath(this.W, m.x, m.y, g.x, g.y, caps, 4000);
         if (r && r.complete) return g;
       }
-      return Nav.randomValid(this.W, caps, m.x, m.y, radius, filter);
+      return strict ? null : Nav.randomValid(this.W, caps, m.x, m.y, radius, filter);
+    }
+    // Heavy rain: anything pottering about out in it (wandering, idling,
+    // resting) gets up and makes for cover, a fresh goal from wanderGoal.
+    keepDry(dt) {
+      this.dryCheckT = (this.dryCheckT || U.rand(0, 1.5)) - dt;
+      if (this.dryCheckT > 0) return;
+      this.dryCheckT = 1.5;
+      const eco = this.eco;
+      if (this.isFlier || !this.pather || this.swimming || this.grabbedBy || !eco.heavyRain() || this.noCoverUntil > eco.t) return;
+      if (this.state !== 'wander' && this.state !== 'idle' && this.state !== 'rest') return;
+      const m = this.mainPoint();
+      const g = this.pather.goal;
+      if (g && !this.pather.done() ? !eco.rainOn(g.x, g.y) : !eco.rainOn(m.x, m.y)) return;
+      this.setState('wander');
+      this.pather.clear();
+      this.goalCd = 0;
+      this.stateT = 99;
     }
     // Somewhere anywhere on the map, favouring high ground (window tops,
     // ledges, perches) so creatures don't all pool on the floor; only a
