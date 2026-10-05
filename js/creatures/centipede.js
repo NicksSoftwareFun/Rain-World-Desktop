@@ -25,6 +25,8 @@
       this.vx = 0;
       this.vy = 0;
       this.caps = { walls: true, ceil: true, poles: true, fall: true, wallCost: 1.1, ceilCost: 1.3 };
+      this.hatesWater = true; // (insects: out of it as fast as they can)
+      this.grav = GRAV;
       this.mask = { floor: true, walls: true, ceil: true, poles: true };
       this.maskNoPole = { floor: true, walls: true, ceil: true, poles: false };
       this.pather = new RW.Pather(this, this.caps);

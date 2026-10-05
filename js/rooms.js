@@ -1001,6 +1001,24 @@
       const c = ceilings[Math.floor(R() * ceilings.length)];
       fruitPlants.push({ x: Math.round((c.x + 0.5) * cell), y: c.y * cell, len: U.lerp(26, 50, R()) });
     }
+    // Under the water, now and then: a sea-fruit stalk standing up off the
+    // bottom of the pool (a slugcat has to swim down for it).
+    if (f.waterCells && f.waterCells.size && R() < 0.75) {
+      const beds = [];
+      for (const i of f.waterCells) {
+        const x = i % g.C;
+        const y = (i / g.C) | 0;
+        if (!g.solid(x, y + 1)) continue;
+        let d = 0;
+        while (f.waterCells.has((y - d) * g.C + x)) d++;
+        if (d >= 2) beds.push({ x, y, d });
+      }
+      const n = Math.min(beds.length, 1 + (R() < 0.4 ? 1 : 0) + Math.floor(Math.pow(f.rooms || 1, 0.5) - 1));
+      for (let k = 0; k < n; k++) {
+        const b = beds.splice(Math.floor(R() * beds.length), 1)[0];
+        fruitPlants.push({ x: Math.round((b.x + 0.5) * cell), y: (b.y + 1) * cell, len: U.clamp((b.d - 0.8) * cell, 26, 90), under: true });
+      }
+    }
     const grass = [];
     for (const p of plats) if (p.x1 - p.x0 >= 2 && R() < 0.5 && !(f.waterCells && f.waterCells.has(p.y * g.C + p.x0)) && !tun(p.x0, p.y)) grass.push({ x: Math.round((U.lerp(p.x0, p.x1, R()) + 0.5) * cell), y: (p.y + 1) * cell, h: U.lerp(20, 34, R()), phase: R() * 10 });
     const roomy = ceilings.filter((c) => !g.solid(c.x, c.y + 3) && !g.solid(c.x - 1, c.y) && !g.solid(c.x + 1, c.y) && !(f.waterCells && f.waterCells.has((c.y + 3) * g.C + c.x)));
@@ -1051,7 +1069,7 @@
   // A scratch world with the map's statics; every den must reach every other
   // for a pole-climbing lizard. Unreachable platforms get a ladder down to the
   // floor below them where there's a clear column; then it's checked again.
-  const CHECK_CAPS = { walls: false, ceil: false, poles: true, fall: true, jumpX: 3, jumpUp: 2, leapPoles: true, wallCost: 1.3 };
+  const CHECK_CAPS = { walls: false, ceil: false, poles: true, fall: true, jumpX: 3, jumpUp: 2, leapPoles: true, wallCost: 1.3, swim: 2 };
   function scratchWorld(decor, W, H, cell) {
     const w = new RW.World(cell);
     w.resize(W, H);
@@ -1671,5 +1689,505 @@
     }
   }
 
-  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  // Plant life round the water: reeds and cattails crowding the banks,
+  // kelp ribbons swaying up from the bottom, moss on the wet rock. (On a
+  // pit map, round the pits' rims: that's where the flood wells up.)
+  function paintWaterPlants(l, decor, pal, R0) {
+    const R = either(R0);
+    const room = decor.room;
+    const { C, cell, cells } = room;
+    const Rows = room.R;
+    const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
+    const wet = new Uint8Array(C * Rows);
+    for (const r of decor.water || []) {
+      for (let y = Math.floor(r.y / cell); y < Math.ceil((r.y + r.h) / cell); y++) for (let x = Math.floor(r.x / cell); x < Math.ceil((r.x + r.w) / cell); x++) if (x >= 0 && y >= 0 && x < C && y < Rows) wet[y * C + x] = 1;
+    }
+    // where the plants grow from: the water, or the pits' rims
+    const seeds = [];
+    for (let i = 0; i < wet.length; i++) if (wet[i]) seeds.push(i);
+    for (const p of decor.pits || []) {
+      const y = Math.floor(p.y / cell) - 1;
+      for (let x = Math.floor(p.x0 / cell) - 1; x <= Math.ceil(p.x1 / cell); x++) if (x >= 0 && x < C && y >= 0 && !solid(x, y)) seeds.push(y * C + x);
+    }
+    if (!seeds.length) return;
+    // how far (through the open) each cell is from the water
+    const dist = new Int16Array(C * Rows).fill(-1);
+    const q = seeds.slice();
+    for (const i of q) dist[i] = 0;
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h];
+      if (dist[i] >= 6) continue;
+      const x = i % C;
+      const y = (i / C) | 0;
+      for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+        if (solid(nx, ny)) continue;
+        const j = ny * C + nx;
+        if (dist[j] >= 0) continue;
+        dist[j] = dist[i] + 1;
+        q.push(j);
+      }
+    }
+    // reeds grow in clumps: runs of 3-5 columns with gaps of 2-4 between
+    const clump = new Uint8Array(C);
+    for (let x = 0, on = R() < 0.5; x < C; on = !on) {
+      const n = on ? 3 + Math.floor(R() * 3) : 2 + Math.floor(R() * 3);
+      for (let k = 0; k < n && x < C; k++, x++) clump[x] = on ? 1 : 0;
+    }
+    const green = decor.region === 'outskirts' || decor.region === 'shoreline' ? pal.accent : U.mix(pal.accent, '#4f7a3a', 0.6);
+    const stalk = U.rgba(U.mix(green, pal.mass, 0.35));
+    const leaf = U.rgba(U.mix(green, pal.mass, 0.15));
+    const dark = U.rgba(U.mix(green, pal.mass, 0.65));
+    const head = U.rgba(U.mix('#5a3a24', pal.mass, 0.35));
+    for (let y = 1; y < Rows; y++) {
+      for (let x = 0; x < C; x++) {
+        const i = y * C + x;
+        if (solid(x, y) || !solid(x, y + 1) || dist[i] < 0) continue;
+        const bx = x * cell;
+        const by = (y + 1) * cell;
+        if (wet[i]) {
+          // under water: kelp ribbons, swaying up toward the surface
+          let top = y;
+          while (top > 0 && wet[(top - 1) * C + x]) top--;
+          const n = R() < 0.85 ? 2 + Math.floor(R() * 3) : 0;
+          for (let k = 0; k < n; k++) {
+            const h = (by - top * cell) * R(0.45, 0.95);
+            let px = bx + R(2, cell - 2);
+            l.strokeStyle = k % 2 ? dark : stalk;
+            l.lineWidth = R(1.5, 3);
+            l.beginPath();
+            l.moveTo(px, by);
+            for (let t = 4; t < h; t += 4) {
+              px += Math.sin(t * 0.18 + x) * 1.4;
+              l.lineTo(px, by - t);
+            }
+            l.stroke();
+          }
+          // shallows: reeds standing up out of the water
+          if (by - top * cell <= 3 * cell && clump[x]) {
+            for (let k = 0; k < 6 + Math.floor(R() * 7); k++) {
+              const sx = bx + R(0, cell);
+              const h = by - top * cell + R(0.4, 1.6) * cell;
+              const lean = R(-5, 5);
+              l.strokeStyle = R() < 0.5 ? leaf : stalk;
+              l.lineWidth = R(1, 2);
+              l.beginPath();
+              l.moveTo(sx, by);
+              l.quadraticCurveTo(sx + lean * 0.2, by - h * 0.6, sx + lean, by - h);
+              l.stroke();
+              if (R() < 0.3) {
+                l.fillStyle = head;
+                l.fillRect(sx + lean - 1.5, by - h - 1, 3, 7);
+              }
+            }
+          }
+          continue;
+        }
+        // on the bank: reeds, thicker the closer to the water
+        const near = 1 - dist[i] / 7;
+        if (!clump[x] || R() > 0.4 + near * 0.6) continue;
+        const n = 4 + Math.floor(R() * 7 * near + R() * 3);
+        for (let k = 0; k < n; k++) {
+          const sx = bx + R(0, cell);
+          const h = R(0.8, 1.8 + near * 1.8) * cell;
+          const lean = R() < 0.2 ? R(-14, 14) : R(-6, 6); // (some bent over)
+          l.strokeStyle = R() < 0.4 ? leaf : stalk;
+          l.lineWidth = R(1, 2);
+          l.beginPath();
+          l.moveTo(sx, by);
+          l.quadraticCurveTo(sx + lean * 0.3, by - h * 0.6, sx + lean, by - h);
+          l.stroke();
+          // a cattail head on some
+          if (R() < 0.25 * near) {
+            l.fillStyle = head;
+            l.fillRect(sx + lean - 1.5, by - h - 1, 3, 7);
+          }
+        }
+        // broad leaves arching over
+        if (R() < near * 0.6) {
+          l.fillStyle = leaf;
+          const lx = bx + R(0, cell);
+          const s = R() < 0.5 ? 1 : -1;
+          l.beginPath();
+          l.moveTo(lx, by);
+          l.quadraticCurveTo(lx + s * 8, by - 16, lx + s * 16, by - 6);
+          l.quadraticCurveTo(lx + s * 8, by - 10, lx, by);
+          l.fill();
+        }
+      }
+    }
+    // vines and roots hanging down over the water from the ceilings above
+    for (let y = 1; y < Rows; y++) {
+      for (let x = 0; x < C; x++) {
+        if (solid(x, y) || !solid(x, y - 1) || R() > 0.6) continue;
+        let yy = y;
+        while (yy < Rows && !solid(x, yy) && !wet[yy * C + x] && yy - y < 14) yy++;
+        if (yy >= Rows || !wet[yy * C + x]) continue;
+        const len = (yy - y) * cell * R(0.3, 0.9);
+        let px = x * cell + R(2, cell - 2);
+        l.strokeStyle = R() < 0.5 ? leaf : stalk;
+        l.lineWidth = R(1, 1.8);
+        l.beginPath();
+        l.moveTo(px, y * cell);
+        for (let t = 4; t < len; t += 4) {
+          px += Math.sin(t * 0.25 + x * 3) * 0.9;
+          l.lineTo(px, y * cell + t);
+        }
+        l.stroke();
+        if (R() < 0.5) {
+          l.fillStyle = leaf;
+          l.fillRect(px - 2, y * cell + len - 2, 4, 3);
+        }
+      }
+    }
+    // moss in clumps on the rock round the water and just above it
+    for (let y = 0; y < Rows; y++) {
+      for (let x = 0; x < C; x++) {
+        if (!solid(x, y)) continue;
+        for (const [ax, ay] of [[x - 1, y], [x + 1, y], [x, y - 1]]) {
+          const j = ay * C + ax;
+          if (ax < 0 || ay < 0 || ax >= C || ay >= Rows || solid(ax, ay) || dist[j] < 0 || dist[j] > 3 || R() > 0.5) continue;
+          // a clump of a few blobs on that face, spilling a little over it
+          const fx = ax < x ? x * cell : ax > x ? (x + 1) * cell : null;
+          const cx0 = fx === null ? x * cell + R(2, cell - 2) : fx;
+          const cy0 = fx === null ? y * cell : y * cell + R(2, cell - 2);
+          for (let k = 0; k < 4 + Math.floor(R() * 5); k++) {
+            l.fillStyle = R() < 0.6 ? dark : leaf;
+            const s = R(3, 7);
+            l.fillRect(cx0 + R(-8, 8) - s / 2, cy0 + R(-5, 5) - s / 2, s, s);
+          }
+        }
+      }
+    }
+  }
+
+  // Manmade junk over the rock's edges, to break up its hard outlines:
+  // pipes run down wall faces and along under ceilings, girders brace the
+  // inside corners, grates and vents and glyph panels are set into the
+  // rock face, rebar pokes out of broken edges, and rubble collects in the
+  // floor corners. (Decor only: none of it is anything to stand on.)
+  function paintJunk(l, decor, pal, R0) {
+    const R = either(R0);
+    const room = decor.room;
+    const { C, cell, cells } = room;
+    const Rows = room.R;
+    const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
+    const tun = (x, y) => room.passage.has(y * C + x);
+    const metal = U.rgba(U.mix(pal.mass, pal.near, 0.6));
+    const metalD = U.rgba(U.mix(pal.mass, pal.near, 0.35));
+    const metalL = U.rgba(U.mix(pal.mass, pal.light, 0.42));
+    const rust = U.rgba(U.mix(U.mix(pal.mass, '#7a4a2a', 0.35), pal.near, 0.25));
+    const used = new Uint8Array(C * Rows);
+    const area = C * Rows;
+    // big pipes running down wall faces, straddling the edge (half in the
+    // rock, standing a few px proud of it), lighter than the face, with
+    // flanges every few cells and an elbow back into the rock at each end
+    const pipeB = U.rgba(U.mix(pal.mass, pal.light, 0.13));
+    const pipeH = U.rgba(U.mix(pal.mass, pal.light, 0.24));
+    const pipeS = U.rgba(U.mix(pal.mass, '#000000', 0.3));
+    for (let k = 0, tries = 0; k < area / 130 && tries < 900; tries++) {
+      const x = Math.floor(R() * C);
+      const y0 = Math.floor(R() * Rows);
+      const side = R() < 0.5 ? -1 : 1; // the rock's side
+      if (solid(x, y0) || !solid(x + side, y0) || used[y0 * C + x] || tun(x, y0)) continue;
+      let y1 = y0;
+      while (y1 + 1 < Rows && !solid(x, y1 + 1) && solid(x + side, y1 + 1)) y1++;
+      if (y1 - y0 < 2) continue;
+      const w = Math.round(R(11, 16));
+      const out = Math.round(R(3, 6)); // proud of the face
+      const face = side > 0 ? (x + 1) * cell : x * cell;
+      const px = side > 0 ? face - out : face + out - w;
+      const top = Math.max(0, y0 - Math.floor(R(0, 3))) * cell;
+      const bot = (y1 + 1) * cell;
+      l.fillStyle = pipeB;
+      l.fillRect(px, top, w, bot - top);
+      l.fillStyle = pipeH;
+      l.fillRect(px + 2, top, 2, bot - top);
+      l.fillStyle = pipeS;
+      l.fillRect(px + w - 2, top, 2, bot - top);
+      for (let y = top + R(10, 40); y < bot - 6; y += R(60, 90)) {
+        l.fillStyle = pipeH;
+        l.fillRect(px - 2, y, w + 4, 4); // a flange
+        l.fillStyle = pipeS;
+        l.fillRect(px - 2, y + 4, w + 4, 1.5);
+      }
+      // elbows back into the rock
+      l.fillStyle = pipeB;
+      if (y1 + 1 < Rows) l.fillRect(side > 0 ? px : face - cell * 0.6, bot - w, w + cell * 0.6, w);
+      for (let y = y0; y <= y1; y++) used[y * C + x] = 1;
+      k++;
+    }
+    // stubs: short pipe ends poking out of rock faces into the open, some
+    // dripping
+    for (let k = 0, tries = 0; k < area / 160 && tries < 900; tries++) {
+      const x = 1 + Math.floor(R() * (C - 2));
+      const y = 1 + Math.floor(R() * (Rows - 2));
+      if (!solid(x, y)) continue;
+      const dirs = [];
+      if (!solid(x - 1, y) && !solid(x - 2, y)) dirs.push([-1, 0]);
+      if (!solid(x + 1, y) && !solid(x + 2, y)) dirs.push([1, 0]);
+      if (!solid(x, y + 1) && !solid(x, y + 2)) dirs.push([0, 1]);
+      if (!dirs.length) continue;
+      const [dx, dy] = dirs[Math.floor(R() * dirs.length)];
+      const len = R(14, 34);
+      const w = R(6, 10);
+      const cx = (x + 0.5) * cell + dx * cell * 0.5;
+      const cy = (y + 0.5) * cell + dy * cell * 0.5;
+      l.fillStyle = pipeB;
+      if (dx) l.fillRect(dx > 0 ? cx - 4 : cx - len + 4, cy - w / 2, len, w);
+      else l.fillRect(cx - w / 2, cy - 4, w, len);
+      l.fillStyle = pipeH;
+      // the rim of the open end
+      if (dx) l.fillRect(dx > 0 ? cx + len - 6 : cx - len + 4, cy - w / 2 - 1.5, 2.5, w + 3);
+      else l.fillRect(cx - w / 2 - 1.5, cy + len - 6, w + 3, 2.5);
+      k++;
+    }
+    // recessed panels in the big masses: a sunken plate with a lit top and
+    // left rim, holding a grille, a round vent or a column of glyphs
+    const plate = U.rgba(U.mix(pal.mass, pal.light, 0.06));
+    const rimL = U.rgba(U.mix(pal.mass, pal.light, 0.17));
+    const rimD = U.rgba(U.mix(pal.mass, '#000000', 0.35));
+    const hole = U.rgba(U.mix(pal.mass, '#000000', 0.45));
+    let rockN = 0;
+    for (let i = 0; i < cells.length; i++) if (cells[i] === 1) rockN++;
+    for (let k = 0, tries = 0; k < rockN / 220 && tries < 1500; tries++) {
+      const w = 6 + Math.floor(R() * 5);
+      const h = 4 + Math.floor(R() * 3);
+      const x0 = Math.floor(R() * (C - w));
+      const y0 = Math.floor(R() * (Rows - h));
+      let ok = true;
+      for (let y = y0; y < y0 + h && ok; y++) for (let x = x0; x < x0 + w; x++) if (!solid(x, y) || used[y * C + x] === 2) ok = false;
+      if (!ok) continue;
+      // inset half a cell, so it sits inside the rock
+      const px = x0 * cell + cell / 2;
+      const py = y0 * cell + cell / 2;
+      const pw = (w - 1) * cell;
+      const ph = (h - 1) * cell;
+      l.fillStyle = plate;
+      l.fillRect(px, py, pw, ph);
+      l.fillStyle = rimL;
+      l.fillRect(px, py, pw, 2);
+      l.fillRect(px, py, 2, ph);
+      l.fillStyle = rimD;
+      l.fillRect(px, py + ph - 2, pw, 2);
+      l.fillRect(px + pw - 2, py, 2, ph);
+      const kind = R();
+      if (kind < 0.4) {
+        l.fillStyle = hole;
+        for (let y = py + 6; y < py + ph - 6; y += 5) l.fillRect(px + 6, y, pw - 12, 2.5);
+      } else if (kind < 0.7) {
+        const r = Math.min(pw, ph) * 0.32;
+        l.fillStyle = hole;
+        l.beginPath();
+        l.arc(px + pw / 2, py + ph / 2, r, 0, U.TAU);
+        l.fill();
+        l.fillStyle = rimL;
+        for (let a = 0; a < 6; a++) {
+          const ang = (a / 6) * U.TAU;
+          l.fillRect(px + pw / 2 + Math.cos(ang) * r * 0.6 - 1, py + ph / 2 + Math.sin(ang) * r * 0.6 - 1, 2, 2);
+        }
+      } else {
+        l.fillStyle = rimL;
+        for (let gx = px + 8; gx < px + pw - 8; gx += 9) {
+          for (let gy = py + 7; gy < py + ph - 10; gy += 11) {
+            l.fillRect(gx, gy, 2, R(4, 8));
+            if (R() < 0.6) l.fillRect(gx - 2, gy + R(0, 5), 6, 2);
+          }
+        }
+      }
+      for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) used[y * C + x] = 2;
+      k++;
+    }
+    // pipes along under ceilings, on brackets
+    for (let k = 0, tries = 0; k < area / 220 && tries < 600; tries++) {
+      const x0 = Math.floor(R() * C);
+      const y = 1 + Math.floor(R() * (Rows - 2));
+      if (solid(x0, y) || !solid(x0, y - 1) || used[y * C + x0] || tun(x0, y)) continue;
+      let x1 = x0;
+      while (x1 + 1 < C && !solid(x1 + 1, y) && solid(x1 + 1, y - 1)) x1++;
+      if (x1 - x0 < 4) continue;
+      const w = R() < 0.5 ? 7 : 4.5;
+      const py = y * cell + 2;
+      l.fillStyle = metalD;
+      l.fillRect(x0 * cell, py, (x1 - x0 + 1) * cell, w);
+      l.fillStyle = metal;
+      l.fillRect(x0 * cell, py + w - 1.2, (x1 - x0 + 1) * cell, 1.2);
+      l.fillStyle = metalL;
+      for (let x = x0 * cell + R(6, 20); x < (x1 + 1) * cell; x += R(30, 60)) l.fillRect(x, y * cell, 2, w + 3); // brackets
+      // a leak, now and then: a broken end hanging down
+      if (R() < 0.4) {
+        l.fillStyle = rust;
+        l.fillRect((x1 + 1) * cell - 3, py, 3, w + R(4, 10));
+      }
+      for (let x = x0; x <= x1; x++) used[y * C + x] = 1;
+      k++;
+    }
+    // girders bracing inside corners (floor to wall, ceiling to wall)
+    const brace = (ax, ay, bx, by) => {
+      l.strokeStyle = metal;
+      l.lineWidth = 2.5;
+      l.beginPath();
+      l.moveTo(ax, ay);
+      l.lineTo(bx, by);
+      l.stroke();
+      // a lattice: little crossbars along it
+      l.strokeStyle = metalD;
+      l.lineWidth = 1.2;
+      const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 8));
+      for (let i = 1; i < n; i++) {
+        const t = i / n;
+        const x = U.lerp(ax, bx, t);
+        const y = U.lerp(ay, by, t);
+        l.beginPath();
+        l.moveTo(x - (by - ay) / n / 2, y + (bx - ax) / n / 2);
+        l.lineTo(x + (by - ay) / n / 2, y - (bx - ax) / n / 2);
+        l.stroke();
+      }
+    };
+    for (let y = 1; y < Rows - 1; y++) {
+      for (let x = 1; x < C - 1; x++) {
+        if (solid(x, y) || tun(x, y)) continue;
+        for (const s of [-1, 1]) {
+          if (!solid(x + s, y)) continue;
+          const wallX = s > 0 ? (x + 1) * cell : x * cell;
+          // floor corner
+          if (solid(x, y + 1) && !solid(x, y - 1) && !solid(x - s, y) && R() < 0.07) brace(wallX, (y - 1) * cell + R(0, 8), wallX - s * R(1.4, 2.2) * cell, (y + 1) * cell);
+          // ceiling corner
+          if (solid(x, y - 1) && !solid(x, y + 1) && R() < 0.06) brace(wallX, (y + 1.5) * cell, wallX - s * R(1.4, 2.4) * cell, y * cell);
+        }
+      }
+    }
+    // grates, vents, glyph panels and machine boxes set into rock faces
+    for (let k = 0, tries = 0; k < area / 110 && tries < 900; tries++) {
+      const x = Math.floor(R() * C);
+      const y = Math.floor(R() * Rows);
+      if (!solid(x, y)) continue;
+      // a face: rock here, open air beside (left, right or below)
+      const face = !solid(x - 1, y) ? 'l' : !solid(x + 1, y) ? 'r' : !solid(x, y + 1) ? 'b' : !solid(x, y - 1) ? 't' : null;
+      if (!face || face === 't') continue;
+      // (one or two cells across, standing a few px proud of the face, so
+      // the rock's outline isn't a clean line)
+      const big = R() < 0.4 && (face === 'b' ? solid(x + 1, y) && !solid(x + 1, y + 1) : solid(x, y + 1) && (face === 'l' ? !solid(x - 1, y + 1) : !solid(x + 1, y + 1)));
+      const proud = face === 'b' ? 0 : R(2, 5); // (under a ledge, flush: nothing hangs in mid-air)
+      const bx = x * cell + 2 + (face === 'l' ? -proud : face === 'r' ? proud : 0);
+      const by = y * cell + 2 + (face === 'b' ? proud : 0);
+      const w = (big && face === 'b' ? 2 * cell : cell) - 4;
+      const h = (big && face !== 'b' ? 2 * cell : cell) - 4;
+      const kind = R();
+      l.fillStyle = metalD;
+      l.fillRect(bx, by, w, h);
+      if (kind < 0.35) {
+        // a grate: slats in a rim
+        l.fillStyle = U.rgba(U.mix(pal.mass, '#000000', 0.4));
+        for (let i = 2; i < w - 1; i += 3) l.fillRect(bx + i, by + 2, 1.5, h - 4);
+        l.strokeStyle = metal;
+        l.lineWidth = 1.5;
+        l.strokeRect(bx, by, w, h);
+      } else if (kind < 0.6 && face !== 'b') {
+        // a round vent
+        l.fillStyle = U.rgba(U.mix(pal.mass, '#000000', 0.45));
+        l.beginPath();
+        l.arc(bx + w / 2, by + h / 2, w * 0.35, 0, U.TAU);
+        l.fill();
+        l.strokeStyle = metalL;
+        l.lineWidth = 1;
+        l.beginPath();
+        l.moveTo(bx + w / 2 - w * 0.35, by + h / 2);
+        l.lineTo(bx + w / 2 + w * 0.35, by + h / 2);
+        l.stroke();
+      } else if (kind < 0.8) {
+        // a panel of old glyphs
+        l.fillStyle = metalL;
+        for (let i = 0; i < 3; i++) {
+          const gx = bx + 2 + i * 4;
+          l.fillRect(gx, by + 3, 1.5, R(3, 8));
+          if (R() < 0.6) l.fillRect(gx - 1, by + 3 + R(0, 6), 3, 1.5);
+        }
+      } else {
+        // a machine box with a bolted rim and a dead lamp
+        l.fillStyle = metal;
+        l.fillRect(bx, by, w, 2);
+        l.fillRect(bx, by + h - 2, w, 2);
+        l.fillStyle = rust;
+        l.fillRect(bx + w - 5, by + 5, 3, 3);
+      }
+    }
+    // rebar poking out of broken edges
+    l.strokeStyle = rust;
+    l.lineWidth = 1.2;
+    for (let y = 1; y < Rows - 1; y++) {
+      for (let x = 1; x < C - 1; x++) {
+        if (!solid(x, y) || R() > 0.035) continue;
+        const dirs = [];
+        if (!solid(x, y + 1)) dirs.push([0, 1]);
+        if (!solid(x - 1, y)) dirs.push([-1, 0]);
+        if (!solid(x + 1, y)) dirs.push([1, 0]);
+        if (!dirs.length) continue;
+        const [dx, dy] = dirs[Math.floor(R() * dirs.length)];
+        const ox = (x + 0.5 + dx * 0.5) * cell + (dy ? R(-7, 7) : 0);
+        const oy = (y + 0.5 + dy * 0.5) * cell + (dx ? R(-7, 7) : 0);
+        for (let i = 0; i < 1 + Math.floor(R() * 3); i++) {
+          const len = R(4, 12);
+          const a = Math.atan2(dy, dx) + R(-0.6, 0.6);
+          l.beginPath();
+          l.moveTo(ox + i * 3 * Math.abs(dy), oy + i * 3 * Math.abs(dx));
+          l.lineTo(ox + i * 3 * Math.abs(dy) + Math.cos(a) * len, oy + i * 3 * Math.abs(dx) + Math.sin(a) * len);
+          l.stroke();
+        }
+      }
+    }
+    // catwalk railings along the edges of ledge tops: posts and a rail,
+    // some broken off short, some bent
+    for (let y = 1; y < Rows - 1; y++) {
+      for (let x = 1; x < C - 1; x++) {
+        // the open end of a floor: rock below, a drop beside
+        if (solid(x, y) || !solid(x, y + 1) || tun(x, y)) continue;
+        const s = !solid(x + 1, y) && !solid(x + 1, y + 1) ? 1 : !solid(x - 1, y) && !solid(x - 1, y + 1) ? -1 : 0;
+        if (!s || R() > 0.45) continue;
+        let x0 = x;
+        let n = 0;
+        while (n < 4 && !solid(x0 - s, y) && solid(x0 - s, y + 1)) {
+          x0 -= s;
+          n++;
+        }
+        const gy = (y + 1) * cell;
+        const a = Math.min(x, x0) * cell + 2;
+        const b = (Math.max(x, x0) + 1) * cell - 2;
+        const h = R(9, 13);
+        l.fillStyle = metal;
+        for (let px = a; px <= b; px += R(9, 14)) l.fillRect(px, gy - (R() < 0.15 ? h * 0.5 : h), 1.6, R() < 0.15 ? h * 0.5 : h);
+        l.fillRect(a, gy - h, b - a, 1.6);
+        if (R() < 0.5) l.fillRect(a, gy - h * 0.55, b - a, 1.2);
+        // the end at the drop: a bent post leaning out
+        if (R() < 0.4) {
+          l.strokeStyle = metal;
+          l.lineWidth = 1.6;
+          const ex = s > 0 ? b : a;
+          l.beginPath();
+          l.moveTo(ex, gy);
+          l.lineTo(ex + s * R(4, 9), gy - h * R(0.7, 1.1));
+          l.stroke();
+        }
+      }
+    }
+    // rubble in floor corners: broken slabs, a pipe end, bits
+    for (let y = 1; y < Rows - 1; y++) {
+      for (let x = 1; x < C - 1; x++) {
+        if (solid(x, y) || !solid(x, y + 1) || tun(x, y)) continue;
+        const corner = solid(x - 1, y) || solid(x + 1, y);
+        if (R() > (corner ? 0.4 : 0.05)) continue;
+        const gy = (y + 1) * cell;
+        const toWall = solid(x - 1, y) ? -1 : 1;
+        let px = x * cell + (toWall < 0 ? 0 : cell * 0.3);
+        for (let i = 0; i < 3 + Math.floor(R() * 5); i++) {
+          const w = R(4, 12);
+          const h = R(3, corner ? 11 : 7);
+          l.fillStyle = [metalD, U.rgba(U.mix(pal.mass, pal.light, 0.12)), rust][Math.floor(R() * 3)];
+          l.fillRect(px, gy - h, w, h);
+          px += w * R(0.4, 0.9);
+        }
+      }
+    }
+  }
+
+  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();

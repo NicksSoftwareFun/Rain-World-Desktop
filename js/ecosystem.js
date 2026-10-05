@@ -31,9 +31,10 @@
     }
 
     setDecor(decor) {
+      this.decor = decor;
       this.dens = decor.dens.map((d) => Object.assign({}, d));
       this.grass = decor.grass.map((g) => Object.assign({}, g));
-      this.plants = decor.fruitPlants.map((p) => new RW.FruitPlant(this, p.x, p.y, p.len));
+      this.plants = decor.fruitPlants.map((p) => (p.under ? new RW.SeaFruitPlant(this, p.x, p.y, p.len) : new RW.FruitPlant(this, p.x, p.y, p.len)));
       this.nests = (decor.nests || []).map((n) => ({ x: n.x, y: n.y, phase: n.x % 10, pulse: 0 }));
       this.ledges = decor.ledges || [];
     }
@@ -275,6 +276,16 @@
       c.homeState = c.state; // what it settles back into after sheltering
       this.creatures.push(c);
       this.stats.born++;
+      // Yellow lizards hunt in packs: they come out in pairs, sharing a
+      // territory (see Lizard.mate).
+      if (species === 'lizard_yellow' && this.count(species) < (this.cfg.species[species].max || 0)) {
+        const m = new Cls(this, species, x + U.rand(-14, 14), y);
+        m.homeState = m.state;
+        c.packMate = m;
+        m.packMate = c;
+        this.creatures.push(m);
+        this.stats.born++;
+      }
       return c;
     }
 
@@ -510,26 +521,10 @@
 
       for (const p of this.plants) p.update(dt);
       const Wd = this.world;
-      const wetMap = Wd.water && Wd.water.length;
       for (const c of this.creatures) {
         c.update(dt);
-        // Water (placeholder): wading is slow, sinking is slower; a splash
-        // going in or coming out.
-        if (wetMap && !c.isFlier && !c.dead && 'vx' in c) {
-          const m = c.mainPoint();
-          const wet = Wd.inWater(m.x, m.y);
-          if (wet) {
-            c.vx *= Math.pow(0.2, dt);
-            if (c.vy > 0) c.vy *= Math.pow(0.05, dt);
-          }
-          if (wet !== !!c.wet) {
-            c.wet = wet;
-            if (c.age > 1) {
-              const s = Wd.water.find((r) => r.surface && m.x >= r.x && m.x < r.x + r.w);
-              this.burst(m.x, s ? s.y : m.y, U.rgba(U.mix((this.palette && this.palette.water) || '#6a8aa0', '#ffffff', 0.5)), 6);
-            }
-          }
-        }
+        // (in the water: see Creature.waterLimp, waterPanic and each
+        // swimmer's own swim)
         // anything that has fallen or been flung far out of the world is gone
         if (c.y > Wd.h + 500 || c.y < -500 || c.x < -500 || c.x > Wd.w + 500 || !isFinite(c.x) || !isFinite(c.y)) c.remove();
       }

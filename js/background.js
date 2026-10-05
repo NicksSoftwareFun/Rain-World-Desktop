@@ -585,7 +585,9 @@
       layer((l) => {
         RW.Rooms.paintMass(l, decor, pal, R);
         RW.Rooms.paintPassages(l, decor, pal);
+        RW.Rooms.paintJunk(l, decor, pal, R);
         RW.Rooms.paintAccents(l, decor, pal, R);
+        RW.Rooms.paintWaterPlants(l, decor, pal, R);
         for (const p of decor.poles) drawPole(l, p, pal);
         for (const b of decor.beams || []) drawBeam(l, b, pal);
         for (const d of decor.dens) if (!d.sky) drawDenStatic(l, d, pal);
@@ -1134,6 +1136,7 @@
         if (c.x > W + 200) c.x = -c.w - 200;
       }
       this.curtainsOn = rc.enabled && rc.curtains !== false;
+      this.cfgRain = !!rc.enabled;
 
       const want = Math.floor(this.intensity * 520);
       while (this.drops.length < want) this.drops.push(this.newDrop(W, H, true));
@@ -1171,11 +1174,34 @@
     updateShelter(world, H) {
       const slant = this.slant;
       const sh = this.shelter;
-      if (sh && sh.version === world.version && Math.abs(sh.slant - slant) < 0.01 && sh.H === H) return;
+      const room = this.decor && this.decor.room;
+      if (sh && sh.version === world.version && Math.abs(sh.slant - slant) < 0.01 && sh.H === H && sh.room === room) return;
       const step = 3;
       const x0min = -slant * H - 20;
       const n = Math.ceil((world.w - x0min) / step) + 2;
       const hits = new Float32Array(n);
+      if (room) {
+        // A room: rain only gets in through its openings, so each line
+        // stops at the first rock cell it meets (the rock round the edges
+        // of the screen included).
+        const { C, cell, cells } = room;
+        const Rr = room.R;
+        for (let i = 0; i < n; i++) {
+          const x0 = x0min + i * step;
+          let hit = Infinity;
+          for (let y = 0; y < Rr * cell; y += 4) {
+            const cx = Math.floor((x0 + slant * y) / cell);
+            if (cx < 0 || cx >= C) continue;
+            if (cells[Math.floor(y / cell) * C + cx] === 1) {
+              hit = y;
+              break;
+            }
+          }
+          hits[i] = hit;
+        }
+        this.shelter = { version: world.version, slant, H, step, x0min, hits, room };
+        return;
+      }
       // (thin horizontal poles don't shelter anything: rain falls past them)
       const solids = world.solids.filter((q) => q.kind !== 'edge' && q.kind !== 'beam');
       for (let i = 0; i < n; i++) {
@@ -1191,7 +1217,80 @@
         }
         hits[i] = hit;
       }
-      this.shelter = { version: world.version, slant, H, step, x0min, hits };
+      this.shelter = { version: world.version, slant, H, step, x0min, hits, room: null };
+    }
+
+    // Open tops (a room's openings to the sky): water pours in down one
+    // side of each, a trickle in light rain, a torrent in the downpour.
+    skyFalls() {
+      const decor = this.decor;
+      if (this.fallsOf === decor) return this.falls;
+      this.fallsOf = decor;
+      const out = [];
+      const room = decor && decor.room;
+      if (room) {
+        const { C, cell, cells } = room;
+        for (let x = 0; x < C; ) {
+          if (cells[x] === 1) {
+            x++;
+            continue;
+          }
+          const s0 = x;
+          while (x < C && cells[x] !== 1) x++;
+          if (x - s0 < 3) continue;
+          const left = (s0 * 7 + x * 13) % 2 === 0;
+          out.push({ x: left ? s0 * cell + 2 : x * cell - 2, side: left ? 1 : -1, phase: s0 * 0.37 });
+        }
+      }
+      return (this.falls = out);
+    }
+    drawSkyFalls(ctx, pal) {
+      const falls = this.skyFalls();
+      if (!falls.length || !this.world) return;
+      const room = this.decor.room;
+      const { C, cell, cells } = room;
+      const S = this.world.waterSim;
+      const k = this.intensity;
+      const w = Math.round(4 + 22 * k);
+      const a = 0.3 + 0.45 * k;
+      const col = U.mix(pal.rain, '#ffffff', 0.25);
+      for (const f of falls) {
+        // down to the first rock, or the water
+        const cx = U.clamp(Math.floor(f.x / cell), 0, C - 1);
+        let bot = room.R * cell;
+        for (let cy = 0; cy < room.R; cy++) {
+          if (cells[cy * C + cx] === 1) {
+            bot = cy * cell;
+            break;
+          }
+          const s = S ? S.surfaceY(f.x, (cy + 0.6) * cell) : null;
+          if (s !== null) {
+            bot = s;
+            break;
+          }
+        }
+        const x0 = Math.round(f.side > 0 ? f.x : f.x - w);
+        ctx.fillStyle = U.rgba(col, a * 0.5);
+        ctx.fillRect(x0, 0, w, bot);
+        // the water's streaks running down it
+        ctx.fillStyle = U.rgba(col, a);
+        const sp = 240 + 160 * k;
+        for (let lane = 0; lane < Math.max(2, w / 3); lane++) {
+          const lx = x0 + ((lane * 7 + 1) % Math.max(1, w - 1));
+          const off = (this.t * sp * (0.85 + (lane % 3) * 0.12) + lane * 11 + f.phase * 40) % 26;
+          ctx.fillStyle = U.rgba(col, a * (lane % 2 ? 0.7 : 1));
+          for (let y = off - 26; y < bot; y += 26) ctx.fillRect(lx, Math.max(0, y), lane % 3 ? 1 : 2, Math.min(14, bot - Math.max(0, y)));
+        }
+        // spray and mist where it lands
+        ctx.fillStyle = U.rgba(col, 0.1 + 0.15 * k);
+        ctx.fillRect(x0 - 6 - 6 * k, bot - 8 - 6 * k, w + 12 + 12 * k, 8 + 6 * k);
+        ctx.fillStyle = U.rgba(col, a);
+        for (let d = 0; d < 6; d++) {
+          const ph = (this.t * 2.6 + d * 0.17 + f.phase) % 1;
+          const dx = (d % 2 ? 1 : -1) * (w * 0.5 + ph * (6 + 12 * k));
+          ctx.fillRect(Math.round(x0 + w / 2 + dx), Math.round(bot - (4 + 8 * k) * Math.sin(ph * Math.PI)), 2, 2);
+        }
+      }
     }
     shelterAt(x, y) {
       const sh = this.shelter;
@@ -1255,6 +1354,7 @@
 
     drawRain(ctx, pal) {
       ctx.lineCap = 'butt';
+      if (this.world && this.decor && this.decor.room && this.cfgRain !== false) this.drawSkyFalls(ctx, pal);
       const slant = this.slant || 0.12 + this.intensity * 0.18;
       if (this.curtainsOn && this.world) {
         const H = this.world.h;

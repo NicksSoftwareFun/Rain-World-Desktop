@@ -118,3 +118,16 @@ shafts, with free-standing ledges (now and then on screen-sized maps, more
 on big ones). Experimental maps hold 30% fewer creatures, and creatures
 crawling a passage now squirm: surges, a wave down the body, legs pawing
 at the walls, a slugcat clawing hand over hand.
+
+## Update 2 (2026-10-05): water, rain, decor, territories
+
+Water is a simulation now (js/water.js): it rises with the downpour,
+spills into neighbouring hollows and drains after; pit maps flood up out
+of their pits. Slugcats swim (and dive for the new underwater sea fruit),
+lizards paddle, centipedes and dropwigs scramble out, corpses sink.
+Everything under the surface is dark and muted. Rain only falls through
+the openings to the sky, each with a waterfall down one side. Rooms get
+plants round the water and a lot more manmade junk on the rock. Lizard
+territories are ovals fitted to the room's chambers, and yellow lizards
+hunt in pairs. Art review round 4 scored 7.5 (from 6.5); its fixes for
+junk size, dark-map water, waterfall width and surface flatness are in.

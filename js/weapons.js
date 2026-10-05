@@ -144,6 +144,12 @@
       }
       this.vy += 900 * dt;
       this.vx *= this.grounded ? Math.pow(0.02, dt) : 0.995;
+      // in the water: sinks, slowly, to the bottom
+      if (W.waterSim && W.waterSim.depthAt(this.x, this.y) >= 0) {
+        this.vy -= 900 * dt;
+        this.vy += (45 - this.vy) * U.approach(5, dt);
+        this.vx *= Math.pow(0.1, dt);
+      }
       this.x += this.vx * dt;
       this.y += this.vy * dt;
       const c = W.collideCircle(this, this.r);
@@ -172,6 +178,16 @@
       // spears fly flat for a moment, then drop like anything else
       const g = this.kind === 'spear' ? (this.flyT < 0.45 ? 260 : 900) : 900;
       this.vy += g * h;
+      // into the water: it soon stops dead, then sinks
+      if (W.waterSim && W.waterSim.depthAt(this.x, this.y) >= 0) {
+        const k = Math.pow(0.004, h);
+        this.vx *= k;
+        this.vy *= k;
+        if (Math.hypot(this.vx, this.vy) < 120) {
+          this.state = 'free';
+          return;
+        }
+      }
       this.x += this.vx * h;
       this.y += this.vy * h;
       if (this.kind === 'spear') this.ang = Math.atan2(this.vy, this.vx);

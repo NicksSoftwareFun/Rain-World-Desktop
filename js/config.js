@@ -224,7 +224,7 @@
         label: 'Yellow Lizard',
         enabled: true,
         weight: 1.5,
-        max: 2,
+        max: 4, // (pack hunters: they come in pairs)
         popCost: 1.2,
         params: {
           headColor: '#ffbf1c',
@@ -426,7 +426,7 @@
       label: 'Lizard turf wars',
       note: 'every colour of lizard staking out ledges, fighting over hangouts and kills',
       weights: { lizard_pink: 3, lizard_green: 2, lizard_blue: 3, lizard_white: 1.5, lizard_red: 1, lizard_yellow: 2.5, lizard_cyan: 2, slugcat: 2, batfly: 3, centipede: 4, squidcada: 1 },
-      caps: { lizard_pink: 2, lizard_green: 2, lizard_blue: 2, lizard_white: 2, lizard_red: 2, lizard_yellow: 2, lizard_cyan: 2 },
+      caps: { lizard_pink: 2, lizard_green: 2, lizard_blue: 2, lizard_white: 2, lizard_red: 2, lizard_yellow: 4, lizard_cyan: 2 },
     },
     hunters: {
       label: 'Slugcat hunters',
@@ -521,7 +521,7 @@
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
-  const STORAGE_KEY = 'rw-desktop-config-v16'; // bumped when defaults change shape
+  const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
 
   RW.loadConfig = function () {
     const cfg = RW.U.clone(RW.DEFAULT_CONFIG);

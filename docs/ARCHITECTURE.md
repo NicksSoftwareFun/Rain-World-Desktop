@@ -108,9 +108,24 @@ next volley waits 7-11 s.
 **Corpse fights.** `findFoe` also gives lizards a `'food'` rival in another
 lizard carrying, eating or walking to a corpse it would eat (`prizeOf`):
 far likelier, from further off, and even when not hungry if the corpse is
-within 1.5 territory radii of its hangout (`onOwnGround`), which also adds
+within its territory (`onOwnGround`, 1.15x the zone), which also adds
 to its `resolve`. The corpse is the rivals' `prize`: dropped to fight, and
 the loser's `submitTo` sends the winner to `scavenge` it.
+
+**Territory zones.** A lizard's territory (`zone()`, `inZone(pt, k)`) is a
+150px circle round its hangout on the desktop layouts; in a room it's an
+oval fitted to the chamber the hangout is in (the open cells within 14
+across and 9 up or down: long and low along a floor, tall up a shaft;
+90-300 x 60-200px). A trespasser anywhere in it is noticed (even out of
+sight or beyond the usual range) and challenged a little more keenly in
+rooms; patrols (`homeGoal`) cover the whole zone.
+
+**Yellow packs.** Yellow lizards come out in pairs (`Ecosystem.spawn` links
+`packMate`; `max` 4), share one hangout (the elder's: `pickHome`,
+`updateHome`), regroup when more than 260px apart, never square up to
+another yellow (`findFoe`), and hunt together: one's quarry is the other's
+(within 1.6x vision), and with both on it each comes at it from the side
+away from the other until the last 90px.
 
 ## Ecosystem (`js/ecosystem.js`)
 
@@ -144,7 +159,12 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   downpour, an exponential ease-off), rain drops with a slanted rain shadow
   under ledges/windows (not beams), curtains, fog, the cycle HUD.
   `drips.js`: drips from undersides and ledge-end waterfalls (only in real
-  rain).
+  rain). In a room the rain shadow comes from the rock grid itself (each
+  slanted rain line stops at the first rock cell, the screen-edge rock
+  included), so rain only gets in through the openings; each opening to
+  the sky has a waterfall down one side (`skyFalls`/`drawSkyFalls`: 4px of
+  trickle in light rain, ~26px in the downpour, spray where it lands on
+  rock or the water's surface; drawn only, it adds no water).
 
 ## Experimental layout (`js/rooms.js`)
 
@@ -179,9 +199,38 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   the shaft so no walker paths into it (lizards don't leap over one; only
   slugcats do). Anything below the screen in a pit is removed (no corpse);
   items too. `addWater`: a flat surface 3-4 cells above the lowest floor,
-  flood-filled (rejected if it would spill off the screen). Placeholder
-  physics: drag on creatures in it, a splash in and out, fliers keep out
-  (`Nav.valid`); drawn translucent over the creatures (`Engine.drawWater`).
+  flood-filled (rejected if it would spill off the screen).
+- **Water** (`js/water.js`, `RW.Water`, `world.waterSim`): a falling-water
+  cellular automaton on the nav cells (each holds an amount, a little over 1
+  under pressure; down, then level out sideways, then up when squeezed; 5
+  rounds a tick, ~0.03ms). It's blocked by the room's own rock (thin bars
+  let it through) and passages. The rain drives it: the flood follows the
+  downpour (`flood`, lagging it), a pool rising by up to 16% of the open
+  cells' worth (poured over its surface) and spilling over lips into the
+  next hollow, then draining back to where it started; a pit map with no
+  pool wells up out of the pits (poured into the top of what's in each
+  shaft) and drains back down them. `World.inWater`/`waterDepth`/
+  `waterCell`/`hasWater` ask it (scratch worlds fall back to the rects).
+  Drawn over the creatures: everything under the surface is desaturated,
+  multiplied toward the water's tint and lifted a touch (never black), then
+  the translucent body, a rippling surface line, thin streams where it
+  spills, spray where they land.
+- **In the water** (`base.js`): `Nav.valid` lets swimmers (`caps.swim`, a
+  cost multiplier: slugcat 3, lizards 4) anywhere in it; everything else
+  keeps out (no jumps into or out of it either). Limp creatures float up to
+  lie along the surface, corpses sink slowly (`waterLimp`, `floatBody`);
+  creatures that hate it (`hatesWater`: centipedes, dropwigs) thrash for the
+  nearest dry footing (`waterPanic`, `nearestDry`). Slugcats swim like
+  otters (`Slugcat.swim`: quick surging strokes at the surface, head up,
+  arms pulling and legs kicking, tail sculling; a dive straight down when
+  the path goes under, ~10s of breath; out with a hop or onto a pole) but
+  would rather stay dry (no resting in it). Lizards paddle clumsily
+  (`Lizard.swim`: half speed in jerky surges, head held up, legs churning,
+  a wobble; slow dives; no lunges, only a snap at prey in reach). Rocks and
+  spears stall and sink; fruit floats. Splashes in and out (`noteWet`).
+- **Sea fruit** (`items.js`, `SeaFruitPlant`): on most pool maps 1-2 fruit
+  stalks stand up off the pool's bottom. Thrown things can't reach them;
+  a hungry slugcat swims down and plucks one (state `dive`).
 - **Passages** (`carvePassages`): 1-2 one-cell tunnels through the rock
   between side doors (open floor cells beside a wall) that are a long way
   apart through the open or on different floors; routed through solid only
@@ -211,8 +260,15 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   column lattice, fluted pillars), Shoreline's red and Shaded's warm glows,
   a hard shade band along faces into the hollow (`paintShade`), then the
   mass (texture courses, brick dashes, conduits, a lit lip on top faces,
-  roots), blocks (octagons for Shaded), and accents and cables
-  (`paintAccents`). No cast sun shadows in rooms.
+  roots), blocks (octagons for Shaded), manmade junk to break up the rock's
+  edges (`paintJunk`: big pipes straddling wall faces with flanges and
+  elbows, pipes under ceilings, pipe stubs, recessed panels with lit rims in
+  the big masses holding grilles, vents or glyphs, small grates and boxes
+  in faces, girders braced into corners, rebar, catwalk railings along ledge
+  tops, rubble in floor corners), accents and cables (`paintAccents`), and
+  plant life round the water or the pits' rims (`paintWaterPlants`: kelp on
+  the bottom, reeds and cattails in clumps on the banks and standing out of
+  the shallows, vines hanging over it, moss). No cast sun shadows in rooms.
 
 ## Settings (`js/config.js`, `js/debug-panel.js`)
 

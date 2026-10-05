@@ -143,6 +143,7 @@
       this.world.setPassages(this.decor.passages);
       this.world.setDynamic(g.rects);
       this.world.rebuild();
+      this.world.waterSim = RW.Water && this.decor.room ? new RW.Water(this.world, this.decor) : null;
       this.eco = new RW.Ecosystem(cfg, this.world);
       this.weather = this.weather || new RW.Background.Weather();
       this.weather.reset(this.W, this.H);
@@ -354,6 +355,7 @@
       }
       if ((g.releases || []).length) this.dropHand();
       this.weather.update(dt, this.cfg, this.W, this.H, this.world);
+      if (this.world.waterSim) this.world.waterSim.update(dt, this.weather.intensity);
       this.eco.update(dt);
     }
 
@@ -403,6 +405,7 @@
     // Water (a placeholder for now): a see-through body in front of whatever
     // is in it, a lighter surface line rippling gently.
     drawWater(ctx) {
+      if (this.world.waterSim) return this.world.waterSim.draw(ctx, this.pal);
       const L = this.decor && this.decor.water;
       if (!L || !L.length) return;
       const pal = this.pal;

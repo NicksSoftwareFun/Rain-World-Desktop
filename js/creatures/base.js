@@ -324,17 +324,35 @@
         }
         if (this.grabbedBy) return true;
         this.limp(dt);
+        this.waterLimp(dt);
         return false;
       }
       // Stunned (a rock, say): limp until it wears off.
       if (this.stunT > 0 && !this.grabbedBy) {
         this.stunT -= dt;
         this.limp(dt);
+        this.waterLimp(dt);
         if (this.stunT <= 0) {
           this.flipped = false;
           this.onRecovered();
         }
         return false;
+      }
+      // In the water and hating it (centipedes, dropwigs): thrash for the
+      // nearest dry footing. (Swimmers swim in their own update.)
+      if (this.hatesWater && !this.grabbedBy && this.W.waterSim && this.W.waterSim.active()) {
+        const lead = this.pipeLead();
+        const d = this.depthOf(lead);
+        // (until it's out and up on the dry footing it was making for)
+        const g = this.dryGoal;
+        const out = d < 0 && (!g || Math.hypot(g.x - lead.x, g.y - lead.y) < this.W.cell * 0.8 || !this.W.waterCell(this.W.cellX(lead.x), this.W.cellY(lead.y) + 1));
+        if (d > 3 || (this.panicking && !out)) {
+          this.panicking = true;
+          this.tunnel = null;
+          return this.waterPanic(dt);
+        }
+        this.panicking = false;
+        this.dryGoal = null;
       }
       // Passages: crawling through one, or about to (the path runs into one)
       if (this.tunnel && this.grabbedBy) this.tunnel = null;
@@ -1123,6 +1141,116 @@
     }
     limp(dt) {}
     onRecovered() {}
+
+    // ---- water ----
+    // How far below the surface a point is (-1: dry).
+    depthOf(pt) {
+      const S = this.W.waterSim;
+      return S ? S.depthAt(pt.x, pt.y) : -1;
+    }
+    // Going in or coming out: a splash where it breaks the surface.
+    noteWet(pt) {
+      const S = this.W.waterSim;
+      if (!S) return false;
+      const s = S.surfaceY(pt.x, pt.y);
+      const wet = s !== null;
+      if (wet) this.wetSurf = s;
+      if (wet !== !!this.wet) {
+        this.wet = wet;
+        const pal = this.eco.palette;
+        if (this.age > 1 && this.wetSurf !== undefined) this.eco.burst(pt.x, this.wetSurf, U.rgba(U.mix((pal && pal.water) || '#6a8aa0', '#ffffff', 0.5)), 6);
+      }
+      return wet;
+    }
+    // In the water, limp (stunned or dead): the living float up to the
+    // surface and lie along it; a corpse sinks slowly to the bottom.
+    waterLimp(dt) {
+      if (!this.W.waterSim || !('vx' in this)) return;
+      const m = this.mainPoint();
+      this.noteWet(m);
+      const d = this.depthOf(m);
+      if (d < 0) return;
+      this.vy -= (this.grav || 900) * dt; // (no free fall in water)
+      const want = this.corpse ? 26 : U.clamp((4 - d) * 5, -80, 40);
+      this.vy += (want - this.vy) * U.approach(4, dt);
+      this.vx *= Math.pow(0.15, dt);
+      this.floatBody(dt, 2, !this.corpse);
+    }
+    // Body points under water: slowed by it, and (floating) drifting up
+    // toward the surface, so a floating body lies along it rather than
+    // hanging down.
+    floatBody(dt, depth, floats) {
+      for (const ch of [this.spine, this.chain, this.tail]) {
+        if (!(ch instanceof RW.Chain)) continue;
+        for (let i = 1; i < ch.pts.length; i++) {
+          const q = ch.pts[i];
+          const d = this.depthOf(q);
+          if (d < 0) continue;
+          q.py += (q.y - q.py) * 0.3; // drag
+          if (floats && d > depth) {
+            const k = Math.min(d - depth, 70 * dt);
+            q.y -= k;
+            q.py -= k;
+          }
+        }
+      }
+    }
+    // Water-haters in the water: thrashing at the surface, paddling for the
+    // nearest dry footing, hauling out as soon as they reach it.
+    waterPanic(dt) {
+      const W = this.W;
+      const S = W.waterSim;
+      const lead = this.pipeLead();
+      this.noteWet(lead);
+      this.panicT = (this.panicT || 0) - dt;
+      if (this.panicT <= 0 || !this.dryGoal) {
+        this.dryGoal = this.nearestDry(lead.x, lead.y);
+        this.panicT = 0.8;
+      }
+      const g = this.dryGoal;
+      const surf = S.surfaceY(lead.x, lead.y);
+      let tx = g ? g.x : lead.x;
+      let ty = (surf === null ? lead.y : surf) + 1;
+      if (g && Math.abs(g.x - lead.x) < W.cell * 1.6 && g.y < ty + W.cell) ty = g.y; // up and out
+      const dx = tx - lead.x;
+      const dy = ty - lead.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const sp = U.clamp((this.p.speed || 60) * 0.55, 30, 70) * (0.4 + Math.abs(Math.sin(this.age * 9)));
+      const st = Math.min(d, sp * dt);
+      this.pipeMove((dx / d) * st, (dy / d) * st, dt);
+      const ch = this.spine || this.chain;
+      if (ch instanceof RW.Chain) {
+        this.floatBody(dt, 1, true);
+        this.tunnelWiggle(ch, this.age * 16);
+      }
+      if ('vx' in this) this.vx = this.vy = 0;
+      if (this.pather) this.pather.clear();
+      return false;
+    }
+    // The nearest dry cell it could stand or cling in, through open cells.
+    nearestDry(x, y) {
+      const W = this.W;
+      const caps = this.caps;
+      if (!caps) return null;
+      const C = W.cols;
+      const start = W.cellY(y) * C + W.cellX(x);
+      const seen = new Set([start]);
+      const q = [start];
+      for (let h = 0; h < q.length && h < 900; h++) {
+        const i = q[h];
+        const cx = i % C;
+        const cy = (i / C) | 0;
+        if (!W.waterCell(cx, cy) && !W.waterCell(cx, cy + 1) && RW.Nav.valid(W, cx, cy, caps) && !(W.passageAt && W.passage(cx, cy) >= 0)) return { x: W.centerX(cx), y: W.centerY(cy) };
+        for (const [nx, ny] of [[cx, cy - 1], [cx - 1, cy], [cx + 1, cy], [cx, cy + 1]]) {
+          if (!W.inBounds(nx, ny) || W.solid(nx, ny)) continue;
+          const j = ny * C + nx;
+          if (seen.has(j)) continue;
+          seen.add(j);
+          q.push(j);
+        }
+      }
+      return null;
+    }
     // ---- passages ----
     // One-cell tunnels through the rock (experimental maps). A creature goes
     // through one end to end as through a pipe: head first, the body drawn

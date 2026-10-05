@@ -47,7 +47,9 @@
         ceilCost: 1.8,
         poleCost: 1.4,
         fallCost: p.climbWalls ? 4 : 1, // climbers climb down rather than drop
+        swim: 4, // (they swim, clumsily, and would rather not)
       };
+      this.grav = GRAV;
       this.mask = { floor: true, walls: !!p.climbWalls, ceil: !!p.climbCeilings, poles: !!p.poles };
       this.maskNoPole = Object.assign({}, this.mask, { poles: false });
       this.pather = new RW.Pather(this, this.caps);
@@ -343,6 +345,15 @@
           this.setState('wander');
         }
       }
+      // A pack hunts together: the mate's quarry is ours too.
+      const mate = this.mate();
+      if (perceive && mate && mate.state === 'hunt' && mate.prey && !mate.prey.dead && !mate.prey.grabbedBy && this.state !== 'hunt' && !this.holding && !RIVALRY.includes(this.state) && this.state !== 'flee' && this.diet.includes(mate.prey.species)) {
+        if (U.dist(head.x, head.y, mate.prey.x, mate.prey.y) < (this.p.vision || 300) * 1.6) {
+          this.prey = mate.prey;
+          this.setState('hunt');
+          this.noticeT = 0.2;
+        }
+      }
       // The red feud: another red creature anywhere in sight of the map is
       // the only thing that matters.
       if (this.p.red && perceive && !this.holding) {
@@ -368,7 +379,16 @@
         } else {
           this.speed = (this.p.huntSpeed || 90) * (0.9 + 0.2 * pe.aggression);
           this.pather.interval = 0.45;
-          this.pather.setGoal(prey.x, prey.y);
+          // with the mate on the same quarry: come at it from the other side
+          // (flanking), straight in only at the last
+          const hm = this.mate();
+          const dp = U.dist(head.x, head.y, prey.x, prey.y);
+          if (hm && hm.state === 'hunt' && hm.prey === prey && dp > 90) {
+            const side = Math.sign(prey.x - hm.spine.pts[0].x) || 1;
+            this.pather.setGoal(prey.x + side * 70, prey.y);
+          } else {
+            this.pather.setGoal(prey.x, prey.y);
+          }
           this.lookAt = prey.mainPoint();
           this.lash = 0.7;
           const d = U.dist(head.x, head.y, prey.x, prey.y);
@@ -478,7 +498,10 @@
           this.idleT = U.rand(1.5, 4.5) * (1.5 - pe.energy) * (this.p.camouflage ? 2.5 - 1.5 * pe.energy : 1);
           return;
         }
-        const g = this.homeGoal() || this.wanderGoal(this.caps, 500);
+        // (a pack sticks together: strayed too far, back to the mate)
+        const pm = this.mate();
+        const regroup = pm && U.dist(head.x, head.y, pm.spine.pts[0].x, pm.spine.pts[0].y) > 260 && Math.random() < 0.7 ? Nav.randomValid(this.W, this.caps, pm.spine.pts[0].x, pm.spine.pts[0].y, 90) : null;
+        const g = regroup || this.homeGoal() || this.wanderGoal(this.caps, 500);
         if (g) this.pather.setGoal(g.x, g.y, true);
         this.stateT = 0;
       }
@@ -503,6 +526,155 @@
       }
       return true;
     }
+    // ------------------------------------------------------------ water --
+    // In the water (shoulders under): swimming, until it hauls out.
+    swimCheck(dt) {
+      if (!this.W.waterSim || !this.W.waterSim.active()) return (this.swimming = false);
+      const P = this.spine.pts;
+      this.noteWet(P[2]);
+      if (this.swimCd > 0) {
+        this.swimCd -= dt;
+        return (this.swimming = false);
+      }
+      const d = this.depthOf(P[2]);
+      const was = this.swimming;
+      this.swimming = was ? d >= 0 : d > 5;
+      if (this.swimming && !was) {
+        this.leap = null;
+        this.scramble = null;
+        this.leapWind = 0;
+        this.lungeT = 0;
+        this.turn = null;
+        this.dropT = 0;
+        this.jolt = null;
+      }
+      return this.swimming;
+    }
+    // A clumsy paddle: the head held up out of the water, the legs churning
+    // under the body in jerky surges, the tail sculling, a wobble. It can
+    // go under after something, slowly; it bobs back up when it stops.
+    swim(dt) {
+      const W = this.W;
+      const S = W.waterSim;
+      const P = this.spine.pts;
+      const head = P[0];
+      const L = this.L;
+      const cell = W.cell;
+      this.grip = null;
+      this.windT = 0; // (no lunging in the water)
+      this.pather.advance(head.x, head.y, cell * 0.9);
+      const node = this.pather.current();
+      let surf = S.surfaceY(P[2].x, P[2].y);
+      if (surf === null) surf = S.surfaceY(head.x, head.y + 12 * L);
+      if (surf === null) surf = head.y;
+      this.swimPh = (this.swimPh || 0) + dt * 5.5;
+      const sp = (this.speed || 60) * 0.5;
+      let tx = head.x;
+      let ty = surf - 3 * L;
+      let dive = false;
+      if (node) {
+        tx = node.x;
+        const dry = !W.waterCell(node.cx, node.cy);
+        if (!dry && node.y > surf + cell) {
+          ty = node.y;
+          dive = true;
+        }
+        if (dry && node.y < surf + cell && Math.abs(node.x - head.x) < cell * 1.6) {
+          // the bank: a heave up and out onto it
+          this.vy = -Math.sqrt(2 * GRAV * Math.max(16, head.y - node.y + 16 * L));
+          this.vx = U.clamp((node.x - head.x) * 3, -130, 130);
+          this.swimCd = 0.6;
+          this.swimming = false;
+          head.x += this.vx * dt;
+          head.y += this.vy * dt;
+          return;
+        }
+      }
+      const surge = 0.3 + 1.0 * Math.max(0, Math.sin(this.swimPh));
+      const dx = tx - head.x;
+      const dy = ty - head.y;
+      const d = Math.hypot(dx, dy) || 1;
+      let wvx = Math.abs(dx) > 4 ? (dx / d) * sp * surge : 0;
+      let wvy = dive ? (dy / d) * sp * 0.7 * surge : U.clamp(dy * 4, -120, 90);
+      wvy += Math.sin(this.swimPh * 0.7) * 14;
+      const k = U.approach(2.5, dt);
+      this.vx += (wvx - this.vx) * k;
+      this.vy += (wvy - this.vy) * k;
+      head.x += this.vx * dt;
+      head.y += this.vy * dt;
+      const c = W.collideCircle(head, 5 * L);
+      if (c) {
+        const vn = this.vx * c.nx + this.vy * c.ny;
+        if (vn < 0) {
+          this.vx -= vn * c.nx;
+          this.vy -= vn * c.ny;
+        }
+      }
+      head.px = head.x;
+      head.py = head.y;
+      // the body trails along, floating; the tail sculls
+      this.spine.verlet(1, 0.85, 0, 60, dt);
+      this.spine.follow(1);
+      this.spine.limitBend(0.8, 2, this.bodyN + 2, 0.5);
+      this.spine.limitBend(0.75, this.bodyN + 2, P.length, 0.5);
+      this.floatBody(dt, 3 * L, true);
+      // a backbone: stretched out behind the head, not bunched in a heap
+      for (let i = 1; i < P.length - 1; i++) {
+        const a = P[i - 1];
+        const b = P[i + 1];
+        P[i].x += ((a.x + b.x) / 2 - P[i].x) * 0.25;
+        P[i].y += ((a.y + b.y) / 2 - P[i].y) * 0.25;
+      }
+      this.spine.follow(1);
+      const n = P.length;
+      for (let i = 2; i < n; i++) {
+        const a = P[i - 1];
+        let ax = P[i].x - a.x;
+        let ay = P[i].y - a.y;
+        const al = Math.hypot(ax, ay) || 1;
+        const w = Math.sin(this.swimPh * 1.4 - i * 0.7) * 2.2 * L * (i / n);
+        P[i].x += (-ay / al) * w;
+        P[i].y += (ax / al) * w;
+        W.collideCircle(P[i], i < this.bodyN ? 4 * L : 2.5);
+      }
+      // legs churn: each foot circles under its shoulder or hip, in turn
+      for (const l of this.legs) {
+        const a = P[l.at];
+        const b = P[l.at + 1];
+        let fx = a.x - b.x;
+        let fy = a.y - b.y;
+        const fl = Math.hypot(fx, fy) || 1;
+        fx /= fl;
+        fy /= fl;
+        const reach = (l.leg.l1 + l.leg.l2) * 0.6;
+        const ph = this.swimPh * 1.6 + l.leg.group * Math.PI + (l.near ? 0 : 0.6);
+        const ftx = a.x + fx * Math.cos(ph) * reach * 0.7;
+        const fty = a.y + reach * 0.5 + Math.sin(ph) * reach * 0.3;
+        const f = l.leg.foot;
+        if (!f) continue;
+        f.x += (ftx - f.x) * 0.35;
+        f.y += (fty - f.y) * 0.35;
+        l.leg.planted = false;
+        l.leg.stepping = false;
+      }
+      // back up, head level and a little nose-up
+      this.ux += (0 - this.ux) * U.approach(6, dt);
+      this.uy += (-1 - this.uy) * U.approach(6, dt);
+      const ang = Math.atan2(head.y - P[1].y, head.x - P[1].x);
+      this.headAng = U.lerpAngle(this.headAng, ang - 0.25 * Math.sign(Math.cos(ang) || 1), U.approach(8, dt));
+      this.jaw += (this.jawTarget - this.jaw) * U.approach(8, dt);
+      this.lurking = false;
+      this.camo += (1 - this.camo) * U.approach(3, dt);
+      // a snap at prey that comes within reach
+      const prey = this.prey;
+      if (this.state === 'hunt' && prey && !prey.dead && !prey.grabbedBy && !(prey.p && prey.p.armored && !prey.corpse) && this.eco.cfg.ecosystem.predation && U.dist(head.x, head.y, prey.x, prey.y) < 16 * L) {
+        if (this.grab(prey)) {
+          this.eatT = 0;
+          this.thrashT = 0.6;
+        }
+      }
+    }
+
     // Knocked about: fall under gravity, legs flailing (in the air if flipped).
     limp(dt) {
       const W = this.W;
@@ -617,9 +789,21 @@
       if (y < 4 || this.W.isSolidPt(x, y)) return null; // covered over
       return { x, y };
     }
+    // The pack mate (yellow lizards hunt in pairs), while it's about.
+    mate() {
+      const m = this.packMate;
+      return m && !m.dead && !m.corpse && !m.leaving && m.eco === this.eco ? m : null;
+    }
     // Hangouts: the tops of windows, the taskbar and wallpaper ledges.
+    // (A pack shares one: the mate's, if it has one.)
     pickHome(exclude) {
       const W = this.W;
+      const mate = this.mate();
+      if (mate && mate.home && mate.home.sid !== exclude && mate.homePos()) {
+        this.home = { sid: mate.home.sid, ox: mate.home.ox };
+        this.homeAwayT = 0;
+        return;
+      }
       const head = this.spine.pts[0];
       const cands = [];
       for (const sol of W.solids) {
@@ -631,7 +815,7 @@
         // unclaimed spots appeal; a dominant lizard may covet a claimed one
         let owner = null;
         for (const c of this.eco.creatures) {
-          if (c !== this && c.home && c.home.sid === sol.id && isLizard(c) && !c.dead && !c.corpse) owner = c;
+          if (c !== this && c !== this.packMate && c.home && c.home.sid === sol.id && isLizard(c) && !c.dead && !c.corpse) owner = c;
         }
         const claim = owner ? (this.pers.dominance - owner.pers.dominance) * 0.8 - 0.25 : 0.3;
         // greens keep to the ground; the rest stake out the middle and top
@@ -671,20 +855,86 @@
       const hp = this.homePos();
       if (!hp) return this.pickHome();
       const head = this.spine.pts[0];
+      // a pack keeps to one patch: the elder's (if it moved, follow)
+      const mate = this.mate();
+      if (mate && mate.id < this.id && mate.home && (mate.home.sid !== this.home.sid || mate.home.ox !== this.home.ox)) {
+        this.home = { sid: mate.home.sid, ox: mate.home.ox };
+        this.homeAwayT = 0;
+        return;
+      }
       // can't get there (or keeps getting chased off): settle somewhere else
-      if (U.dist(head.x, head.y, hp.x, hp.y) > TERR_R) this.homeAwayT += dt;
+      if (!this.inZone(head)) this.homeAwayT += dt;
       else this.homeAwayT = 0;
       if (this.homeAwayT > 70) this.pickHome(this.home.sid);
     }
-    atHome() {
+    // The territory round the hangout: a circle on the desktop; in a room
+    // (experimental maps), an oval fitted to the chamber the hangout is in:
+    // long and low along a floor, tall up a shaft. {cx, cy, rx, ry}.
+    zone() {
       const hp = this.homePos();
-      const head = this.spine.pts[0];
-      return !!hp && U.dist(head.x, head.y, hp.x, hp.y) < TERR_R;
+      if (!hp) return null;
+      const W = this.W;
+      const key = this.home.sid + ':' + Math.round(this.home.ox) + ':' + W.version;
+      if (this.zoneKey === key) return this.zoneC;
+      let z = { cx: hp.x, cy: hp.y, rx: TERR_R, ry: TERR_R };
+      if (this.eco.decor && this.eco.decor.room) {
+        // the open space round it, out to 14 cells across and 9 up or down
+        const C = W.cols;
+        const sx = W.cellX(hp.x);
+        const sy = W.cellY(hp.y);
+        const seen = new Set([sy * C + sx]);
+        const q = [sy * C + sx];
+        let x0 = sx;
+        let x1 = sx;
+        let y0 = sy;
+        let y1 = sy;
+        for (let h = 0; h < q.length; h++) {
+          const i = q[h];
+          const x = i % C;
+          const y = (i / C) | 0;
+          x0 = Math.min(x0, x);
+          x1 = Math.max(x1, x);
+          y0 = Math.min(y0, y);
+          y1 = Math.max(y1, y);
+          for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+            if (!W.inBounds(nx, ny) || W.solid(nx, ny) || Math.abs(nx - sx) > 14 || Math.abs(ny - sy) > 9) continue;
+            if (W.passageAt && W.passage(nx, ny) >= 0) continue;
+            const j = ny * C + nx;
+            if (seen.has(j)) continue;
+            seen.add(j);
+            q.push(j);
+          }
+        }
+        const cell = W.cell;
+        z = {
+          cx: ((x0 + x1 + 1) / 2) * cell,
+          cy: ((y0 + y1 + 1) / 2) * cell,
+          rx: U.clamp(((x1 - x0 + 1) / 2 + 1) * cell, 90, 300),
+          ry: U.clamp(((y1 - y0 + 1) / 2 + 1) * cell, 60, 200),
+        };
+      }
+      this.zoneKey = key;
+      this.zoneC = z;
+      return z;
+    }
+    // Is pt inside the territory (scaled by k)?
+    inZone(pt, k) {
+      const z = this.zone();
+      if (!z) return false;
+      k = k || 1;
+      const dx = (pt.x - z.cx) / (z.rx * k);
+      const dy = (pt.y - z.cy) / (z.ry * k);
+      return dx * dx + dy * dy < 1;
+    }
+    atHome() {
+      return this.inZone(this.spine.pts[0]);
     }
     homeGoal() {
-      const hp = this.homePos();
-      if (!hp || Math.random() > 0.55 + 0.3 * (1 - this.pers.energy)) return null;
-      return Nav.randomValid(this.W, this.caps, hp.x, hp.y, TERR_R * 0.6);
+      const z = this.zone();
+      if (!z || Math.random() > 0.55 + 0.3 * (1 - this.pers.energy)) return null;
+      // (patrolling its patch, edge to edge, in a room)
+      const W = this.W;
+      return Nav.randomValid(W, this.caps, z.cx, z.cy, Math.max(z.rx, z.ry) * 0.85, (cx, cy) => this.inZone({ x: W.centerX(cx), y: W.centerY(cy) }, 0.9));
     }
     truce(c, sec) {
       this.truces.set(c.id, this.eco.t + sec);
@@ -701,6 +951,7 @@
       for (const c of this.eco.creatures) {
         if (c === this || !isLizard(c) || c.dead || c.corpse || c.leaving || c.grabbedBy || c.alpha < 0.8) continue;
         if (this.diet.includes(c.species) || c.diet.includes(this.species)) continue; // that's hunting, not rivalry
+        if (this.species === 'lizard_yellow' && c.species === 'lizard_yellow') continue; // (yellows never fight yellows)
         if ((this.truces.get(c.id) || 0) > this.eco.t) continue;
         if (RIVALRY.includes(c.state) || c.state === 'flee' || c.state === 'leave') continue;
         const ch = c.spine.pts[0];
@@ -710,15 +961,19 @@
         // from further off, even when we're not that hungry).
         const prize = this.holding ? null : this.prizeOf(c);
         const ours = prize && this.onOwnGround(prize);
-        if (d > (prize ? (ours ? 300 : 240) : 200) * L) continue;
+        // (a trespasser anywhere on our patch, however big the patch)
+        const trespass = home && this.inZone(ch, 0.9);
+        if (d > (prize ? (ours ? 300 : 240) : 200) * L && !trespass) continue;
         // (on its own patch it knows what's going on even without a clear view)
-        if (!this.canSee(ch.x, ch.y, 320 * L) && !(ours && d < 220 * L)) continue;
+        if (!this.canSee(ch.x, ch.y, 320 * L) && !(ours && d < 220 * L) && !trespass) continue;
         let why = null;
         if (prize && (this.fullT <= 0 || ours)) {
           if (Math.random() < (ours ? 0.55 : 0.2) + 0.5 * pe.aggression) why = 'food';
-        } else if (home && hp && U.dist(ch.x, ch.y, hp.x, hp.y) < TERR_R * 0.9) {
-          // trespasser on our hangout
-          if (Math.random() < 0.3 + 0.7 * Math.max(pe.aggression, pe.dominance)) why = 'territory';
+        } else if (trespass) {
+          // trespasser on our hangout (a room's chambers make for proper
+          // patches, and they're guarded more keenly)
+          const keen = this.eco.decor && this.eco.decor.room ? 0.2 : 0;
+          if (Math.random() < 0.3 + keen + 0.7 * Math.max(pe.aggression, pe.dominance)) why = 'territory';
         } else if (c.holding && this.fullT <= 0 && !this.holding) {
           // it has food and we're hungry
           if (Math.random() < 0.25 + 0.6 * pe.aggression) why = 'food';
@@ -740,8 +995,7 @@
     }
     // In or close by our own territory?
     onOwnGround(pt) {
-      const hp = this.homePos();
-      return !!(this.home && hp && U.dist(pt.x, pt.y, hp.x, hp.y) < TERR_R * 1.5);
+      return !!this.home && this.inZone(pt, 1.15);
     }
     // Is the food we're squabbling over still there to be had?
     prizeLive(r) {
@@ -798,7 +1052,7 @@
         this.pather.interval = 0.5;
         this.pather.setGoal(rh.x, rh.y);
         const hp = this.homePos();
-        const left = this.rivalWhy === 'territory' && hp && U.dist(rh.x, rh.y, hp.x, hp.y) > TERR_R * 1.3;
+        const left = this.rivalWhy === 'territory' && hp && !this.inZone(rh, 1.3);
         if (left || this.stateT > 9 || (this.rivalWhy === 'food' && !this.prizeLive(r))) {
           // it moved on (or the food's gone): good enough
           this.truce(r, 20);
@@ -1050,6 +1304,7 @@
 
       this.think(dt);
       this.pather.update(dt, head.x, head.y);
+      if (this.swimCheck(dt)) return this.swim(dt);
       this.turnCd = (this.turnCd || 0) - dt;
       if (this.turn && this.turn.phase === 'arch') {
         this.stepTurn(dt);
@@ -1653,7 +1908,8 @@
           ctx.strokeStyle = U.rgba(this.headColor, 0.9);
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(hp.x, hp.y, TERR_R, 0, U.TAU);
+          const z = this.zone();
+          ctx.ellipse(z.cx, z.cy, z.rx, z.ry, 0, 0, U.TAU);
           ctx.stroke();
           ctx.fillStyle = U.rgba(this.headColor, 0.8);
           ctx.fillRect(hp.x - 2, hp.y - 2, 4, 4);

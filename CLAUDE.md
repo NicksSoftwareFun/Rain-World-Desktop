@@ -102,8 +102,10 @@ pawing legs), slits closed, held creatures never enter passages, long
 leaps only along a clear arc, three art-review rounds, and multi-room
 Large/XL experimental maps with ledges (`roomGrid`, `connectH`/`connectV`,
 `addLedges` in rooms.js). Experimental maps carry 30% fewer creatures
-(`Ecosystem.maxPopulation`). Next, once the owner approves the water
-placeholder: water physics and swimming. The `bodies` check is
+(`Ecosystem.maxPopulation`). Then water (js/water.js: rising and
+draining with the downpour, swimming, sea fruit, dark muted underwater),
+rain only through openings plus open-top waterfalls, waterside plants and
+junk decor, oval lizard territories and yellow lizard packs. The `bodies` check is
 occasionally noisy (lizard hairpins), and so is `fruit` (a burst of
 knocks can leave 7 loose fruit against a limit of 6; it fails without
 these changes too).

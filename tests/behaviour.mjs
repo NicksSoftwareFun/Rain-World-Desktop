@@ -818,6 +818,208 @@ const checks = [
     ],
   },
   {
+    name: 'water',
+    about: 'water rises with the downpour (out of the pits on a dry map) and drains after; slugcats and lizards swim and climb out, centipedes scramble out; corpses and rocks sink, fruit floats; rain only falls through a room\'s openings; a slugcat dives for sea fruit',
+    run: (page) =>
+      page.evaluate(() => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.world.layout = 'experimental';
+        e.cfg.world.region = 'auto';
+        const out = {};
+        const find = (mode, min) => {
+          for (let s = 1; s < 400; s++) {
+            e.seed = s;
+            e.regenerate(false);
+            const w = e.world.waterSim;
+            if (w.mode === mode && w.vbase >= (min || 0)) return w;
+          }
+          return null;
+        };
+        // floods, driven straight (40s of downpour, 90s after)
+        for (const mode of ['pool', 'pit']) {
+          const w = find(mode, mode === 'pool' ? 40 : 0);
+          if (!w) continue;
+          for (let i = 0; i < 60 * 40; i++) w.update(1 / 60, 1);
+          const peak = w.vol;
+          for (let i = 0; i < 60 * 90; i++) w.update(1 / 60, 0);
+          out[mode] = { rise: +((peak - w.vbase) / w.extra).toFixed(2), left: +((w.vol - w.vbase) / w.extra).toFixed(2) };
+        }
+        // creatures dropped in a pool
+        const w = find('pool', 90);
+        e.eco.creatures.length = 0;
+        e.eco.populated = true;
+        const cap = e.cfg.ecosystem.maxPopulation;
+        e.cfg.ecosystem.maxPopulation = 0;
+        e.cfg.ecosystem.predation = false;
+        const L = e.decor.water;
+        const top = Math.min(...L.map((r) => r.y));
+        const x0 = Math.min(...L.map((r) => r.x));
+        const x1 = Math.max(...L.map((r) => r.x + r.w));
+        const mid = (x0 + x1) / 2;
+        const sc = e.eco.spawn('slugcat', mid - 40, top + 8);
+        const lz = e.eco.spawn('lizard_pink', mid + 20, top + 8);
+        const cp = e.eco.spawn('centipede', mid + 60, top + 8);
+        const dead = e.eco.spawn('lizard_green', mid - 70, top + 4);
+        dead.kill();
+        const W = e.world;
+        const rock = new RW.Weapon(e.eco, 'rock', mid, top + 4);
+        rock.pickupCd = 999; // (not for the slugcat to carry off)
+        e.eco.items.push(rock);
+        const fruit = new RW.Fruit(e.eco, mid + 30, top + 30);
+        e.eco.items.push(fruit);
+        const seen = { slugSwam: 0, lizSwam: 0, centPanic: 0 };
+        const d0 = { corpse: W.waterDepth(dead.x, dead.y), rock: rock.y, fruit: W.waterDepth(fruit.x, fruit.y) };
+        for (let i = 0; i < 60 * 30; i++) {
+          e.tick(1 / 60);
+          if (sc.swimming) seen.slugSwam++;
+          if (lz.swimming) seen.lizSwam++;
+          if (cp.panicking) seen.centPanic++;
+          if (i === 60 * 4) {
+            out.corpseSank = Math.round(W.waterDepth(dead.x, dead.y) - d0.corpse);
+            out.rockSank = Math.round(rock.y - d0.rock);
+            out.fruitDepth = Math.round(W.waterDepth(fruit.x, fruit.y));
+          }
+        }
+        out.slugSwam = seen.slugSwam > 0;
+        out.lizSwam = seen.lizSwam > 0;
+        out.centPanicked = seen.centPanic > 0;
+        out.centStillIn = !cp.dead && cp.panicking;
+        out.slugStillIn = !sc.dead && !sc.leaving && sc.swimming;
+        // rain in a room: no drop inside rock
+        e.cfg.rain.enabled = true;
+        e.weather.t = 0;
+        let inRock = 0;
+        let drops = 0;
+        for (const seed of [3, 12, 21]) {
+          e.seed = seed;
+          e.regenerate(false);
+          e.eco.creatures.length = 0;
+          for (let i = 0; i < 120; i++) {
+            e.weather.update(1 / 60, Object.assign({}, e.cfg, { rain: Object.assign({}, e.cfg.rain, { drizzle: 1 }) }), e.W, e.H, e.world);
+          }
+          const room = e.decor.room;
+          for (const d of e.weather.drops) {
+            if (d.y < 2 || d.y >= room.R * room.cell || d.x < 0 || d.x >= room.C * room.cell) continue;
+            drops++;
+            if (room.cells[Math.floor(d.y / room.cell) * room.C + Math.floor(d.x / room.cell)] === 1) inRock++;
+          }
+        }
+        out.drops = drops;
+        out.dropsInRock = inRock;
+        e.cfg.rain.enabled = false;
+        // sea fruit: a hungry slugcat swims down and picks it
+        let plucked = null;
+        for (let s = 1; s < 400 && plucked === null; s++) {
+          e.seed = s;
+          e.regenerate(false);
+          const sp = e.eco.plants.find((q) => q.under);
+          if (!sp) continue;
+          e.eco.creatures.length = 0;
+          e.eco.items.length = 0; // (nothing else to go and fetch)
+          sp.grow = 1;
+          for (const q of e.eco.plants) if (!q.under) q.grow = 0;
+          const t = sp.tip();
+          const vc = RW.Nav.validCells(W, { poles: true, fall: true, jumpX: 7, jumpUp: 5, swim: 3 }).stand;
+          let best = null;
+          let bd = 1e9;
+          for (let i = 0; i < vc.length; i += 2) {
+            const x = W.centerX(vc[i]);
+            const y = W.centerY(vc[i + 1]);
+            const dd = Math.hypot(x - t.x, y - t.y);
+            if (dd > 100 && dd < bd) {
+              bd = dd;
+              best = { x, y };
+            }
+          }
+          const s2 = e.eco.spawn('slugcat', best.x, best.y);
+          s2.hunger = 0.9;
+          s2.armed = true;
+          s2.mealKinds = { fruit: 0, meat: 0 };
+          plucked = false;
+          for (let i = 0; i < 60 * 40 && !plucked; i++) {
+            e.tick(1 / 60);
+            if (!sp.ripe()) plucked = !!s2.item;
+          }
+        }
+        out.seaFruitPlucked = plucked;
+        e.cfg.ecosystem.maxPopulation = cap;
+        e.cfg.ecosystem.predation = true;
+        e.cfg.world.layout = 'tiers';
+        return out;
+      }),
+    judge: (m) => [
+      !m.pool && 'no pool map found',
+      !m.pit && 'no pit map found',
+      m.pool && m.pool.rise < 0.6 && `the pool hardly rose in the downpour (${m.pool.rise})`,
+      m.pool && m.pool.left > 0.15 && `the pool didn't drain back after it (${m.pool.left})`,
+      m.pit && m.pit.rise < 0.6 && `no flood welled up from the pits (${m.pit.rise})`,
+      m.pit && m.pit.left > 0.15 && `the pit flood didn't drain away (${m.pit.left})`,
+      !m.slugSwam && 'the slugcat never swam',
+      !m.lizSwam && 'the lizard never swam',
+      !m.centPanicked && 'the centipede didn\'t mind the water',
+      m.centStillIn && 'the centipede was still in the water after 30s',
+      m.slugStillIn && 'the slugcat was still in the water after 30s',
+      !(m.corpseSank > 5) && `the corpse didn't sink (${m.corpseSank}px)`,
+      !(m.rockSank > 5) && `the rock didn't sink (${m.rockSank}px)`,
+      !(m.fruitDepth < 8) && `the fruit didn't float up (${m.fruitDepth}px deep)`,
+      m.drops < 20 && 'too few raindrops to check',
+      // (a stray one at a rock corner is rounding: rain lines are 3px apart)
+      m.dropsInRock > m.drops * 0.01 && `${m.dropsInRock} raindrops falling inside rock`,
+      m.seaFruitPlucked !== true && 'the slugcat never picked the sea fruit',
+    ],
+  },
+  {
+    name: 'packs',
+    about: 'yellow lizards come in pairs, share a territory, hunt together and never fight each other; other lizards hold oval territories in rooms',
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.world.layout = 'experimental';
+        e.cfg.world.region = 'auto';
+        e.seed = 7;
+        e.regenerate(false);
+        const was = {};
+        for (const k of Object.keys(e.cfg.species)) {
+          was[k] = e.cfg.species[k].enabled;
+          e.cfg.species[k].enabled = ['lizard_yellow', 'lizard_pink', 'slugcat', 'centipede'].includes(k);
+        }
+        e.restartWildlife();
+        const out = { yyRivalries: 0, jointHunts: 0, territory: 0 };
+        const jh = new Set();
+        for (let i = 0; i < mins * 3600; i++) {
+          e.tick(1 / 60);
+          if (i % 15) continue;
+          for (const c of e.eco.creatures) {
+            if (!c.species.startsWith('lizard_')) continue;
+            if (c.state === 'challenge' && c.rivalWhy === 'territory' && c.stateT < 0.26) out.territory++;
+            if (c.species !== 'lizard_yellow') continue;
+            if (c.rival && c.rival.species === 'lizard_yellow') out.yyRivalries++;
+            const m = c.mate();
+            if (m && c.state === 'hunt' && m.state === 'hunt' && c.prey && c.prey === m.prey) jh.add(c.prey.id);
+          }
+        }
+        const ys = e.eco.creatures.filter((c) => c.species === 'lizard_yellow' && !c.corpse && !c.dead);
+        out.yellows = ys.length;
+        out.unpaired = ys.filter((c) => !c.packMate).length;
+        out.splitHomes = ys.filter((c) => c.mate() && c.home && c.mate().home && c.home.sid !== c.mate().home.sid).length;
+        out.jointHunts = jh.size;
+        const z = e.eco.creatures.find((c) => c.zone && c.zone());
+        out.zone = z ? Math.round(z.zone().rx) + 'x' + Math.round(z.zone().ry) : null;
+        for (const k of Object.keys(was)) e.cfg.species[k].enabled = was[k];
+        e.cfg.world.layout = 'tiers';
+        return out;
+      }, T(2.5)),
+    judge: (m) => [
+      m.yellows < 2 && 'no yellow pack came out',
+      m.unpaired > 0 && `${m.unpaired} yellow lizards came out alone`,
+      m.yyRivalries > 0 && 'yellow lizards squared up to each other',
+      m.splitHomes > 0 && 'a yellow pack split its territory',
+      m.jointHunts < 1 && 'the pack never hunted together',
+    ],
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>

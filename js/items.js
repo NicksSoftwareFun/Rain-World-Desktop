@@ -43,6 +43,14 @@
       if (this.y > this.eco.world.h + 60) this.dead = true; // (down a bottomless pit)
       this.vy += 900 * dt;
       this.vx *= this.grounded ? 0.8 : 0.995;
+      // fruit floats: up to the surface, bobbing there
+      const W = this.eco.world;
+      const wd = W.waterSim ? W.waterSim.depthAt(this.x, this.y) : -1;
+      if (wd >= 0) {
+        this.vy -= 900 * dt;
+        this.vy += (U.clamp((2 - wd) * 6, -70, 30) - this.vy) * U.approach(5, dt);
+        this.vx *= Math.pow(0.3, dt);
+      }
       this.x += this.vx * dt;
       this.y += this.vy * dt;
       const c = this.eco.world.collideCircle(this, this.r);
@@ -131,11 +139,12 @@
       if (this.eco.world.isSolidPt(this.x, this.y + 4)) return; // covered by a window
       this.grow = Math.min(1, this.grow + dt * this.regrowRate);
       if (!this.ripe()) return;
-      // a creature barging into the ripe fruit knocks it loose
+      // a creature barging into the ripe fruit knocks it loose (a slugcat
+      // swimming down to an underwater one picks it instead)
       const t = this.tip();
       const fy = t.y + 5;
       for (const c of this.eco.creatures) {
-        if (c.dead || c.burrow || !c.hitParts) continue;
+        if (c.dead || c.burrow || !c.hitParts || (this.under && c.species === 'slugcat')) continue;
         const sp = Math.hypot(c.vx || 0, c.vy || 0);
         if (sp < 120 || Math.abs(c.x - t.x) > 80 || Math.abs(c.y - fy) > 80) continue;
         for (const pt of c.hitParts()) {
@@ -175,7 +184,86 @@
     }
   }
 
+  // The underwater kind: a kelp-like stalk standing up off the bottom of a
+  // pool with the fruit at its top. Thrown things stall in water, so the
+  // only way to get one is to swim down and pluck it. Knocked loose, the
+  // fruit floats up to the surface.
+  class SeaFruitPlant extends FruitPlant {
+    constructor(eco, x, y, len) {
+      super(eco, x, y, len);
+      this.under = true;
+      this.claimedBy = null;
+    }
+    tip() {
+      const sway = Math.sin(this.eco.t * 0.7 + this.phase) * 5;
+      return { x: this.x + sway, y: this.y - this.len };
+    }
+    // Picked by hand (a swimming slugcat): the fruit comes away in it.
+    pluck(by) {
+      if (!this.ripe()) return null;
+      const t = this.tip();
+      const f = new Fruit(this.eco, t.x, t.y);
+      this.eco.items.push(f);
+      f.heldBy = by;
+      this.grow = 0;
+      this.claimedBy = null;
+      return f;
+    }
+    knockOff(vx, vy) {
+      if (!this.ripe()) return;
+      const t = this.tip();
+      const f = new Fruit(this.eco, t.x, t.y);
+      f.vx = (vx || 0) * 0.2;
+      f.vy = -20;
+      this.eco.items.push(f);
+      this.grow = 0;
+    }
+    update(dt) {
+      const c = this.claimedBy;
+      if (c && (c.dead || c.leaving || c.seaPlant !== this)) this.claimedBy = null;
+      super.update(dt);
+    }
+    draw(ctx) {
+      const pal = this.eco.palette;
+      if (!pal) return;
+      const t = this.tip();
+      const stem = U.rgba(U.mix(pal.near, '#3f7a5a', 0.4));
+      ctx.strokeStyle = stem;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.quadraticCurveTo(this.x - (t.x - this.x) * 0.8, this.y - this.len * 0.5, t.x, t.y + 3);
+      ctx.stroke();
+      // ribbon leaves off the stalk, waving
+      ctx.fillStyle = U.rgba(U.mix(pal.near, '#4f9a6a', 0.45));
+      for (let k = 1; k <= 4; k++) {
+        const u = k / 5;
+        const ly = this.y - this.len * u;
+        const lx = U.lerp(this.x, t.x, u * u);
+        const s = k % 2 ? 1 : -1;
+        const w = Math.sin(this.eco.t * 1.3 + this.phase + k) * 2;
+        ctx.beginPath();
+        ctx.ellipse(lx + s * (5 + w), ly, 5, 1.6, s * 0.4, 0, U.TAU);
+        ctx.fill();
+      }
+      const g = Math.min(1, this.grow);
+      if (g > 0.15) {
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        ctx.scale(g, g);
+        // a pale glow round it: it catches the eye down there
+        ctx.fillStyle = 'rgba(140,180,255,0.18)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, U.TAU);
+        ctx.fill();
+        drawFruit(ctx, 0, 0, 0, 1);
+        ctx.restore();
+      }
+    }
+  }
+
   RW.Fruit = Fruit;
   RW.FruitPlant = FruitPlant;
+  RW.SeaFruitPlant = SeaFruitPlant;
   RW.drawFruit = drawFruit;
 })();

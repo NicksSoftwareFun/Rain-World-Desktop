@@ -42,7 +42,9 @@
         jumpX: p.jumpX || 7,
         jumpUp: p.jumpUp || 5,
         poleCost: 1.1,
+        swim: 3, // (a fine swimmer, but it likes to keep dry)
       };
+      this.grav = GRAV;
       this.pather = new RW.Pather(this, this.caps);
       this.facing = U.sign();
       this.faceS = this.facing; // the body's facing, following the head's
@@ -320,6 +322,8 @@
       if (perceive) this.perceiveT = 0.3;
       this.hunger = Math.min(1, this.hunger + dt / 100);
       this.ignoreFoodT = (this.ignoreFoodT || 0) - dt;
+      this.ignorePlantT = (this.ignorePlantT || 0) - dt;
+      this.swimTo = null;
       this.speed = p.speed || 105;
       this.sleeping = false;
       this.reachTo = null;
@@ -497,6 +501,54 @@
             f.heldBy = this;
             this.item = f;
             this.eatT = 0;
+          }
+          return;
+        }
+      }
+      // Fruit growing under the water: swim down and pluck it.
+      if (perceive && this.hunger > 0.35 && this.wants('fruit') && !this.item && (this.state === 'wander' || this.state === 'idle')) {
+        let best = null;
+        let bd = this.hunger > 0.6 ? 700 : 450;
+        for (const pp of eco.plants) {
+          if (!pp.under || !pp.ripe() || (pp.claimedBy && pp.claimedBy !== this) || (pp === this.ignorePlant && this.ignorePlantT > 0)) continue;
+          const tp = pp.tip();
+          const d = U.dist(tp.x, tp.y, hip.x, hip.y);
+          if (d < bd) {
+            bd = d;
+            best = pp;
+          }
+        }
+        if (best) {
+          this.seaPlant = best;
+          this.setState('dive');
+        }
+      }
+      if (this.state === 'dive') {
+        const sp = this.seaPlant;
+        const unreachable = this.pather.nodes && !this.pather.complete && this.pather.remaining() === 0 && this.stateT > 2;
+        if (!sp || !sp.ripe() || this.stateT > 25 || unreachable || (sp.claimedBy && sp.claimedBy !== this)) {
+          if (sp && (unreachable || this.stateT > 25)) {
+            this.ignorePlant = sp;
+            this.ignorePlantT = 40;
+          }
+          this.seaPlant = null;
+          this.setState('wander');
+        } else {
+          sp.claimedBy = this;
+          const tp = sp.tip();
+          this.pather.interval = 0.6;
+          this.pather.setGoal(tp.x, tp.y);
+          if (this.swimming && U.dist(hip.x, hip.y, tp.x, tp.y) < this.W.cell * 4) this.swimTo = tp; // (in the water and close: straight for it)
+          const d = Math.min(U.dist(hip.x, hip.y, tp.x, tp.y), U.dist(this.head.x, this.head.y, tp.x, tp.y));
+          if (d < 30) this.reachTo = tp;
+          if (d < 14) {
+            const f = sp.pluck(this);
+            if (f) {
+              this.item = f;
+              this.eatT = 0;
+            }
+            this.seaPlant = null;
+            this.setState('wander');
           }
           return;
         }
@@ -730,7 +782,7 @@
     // A vine with ripe fruit near `from` (in clear sight, if `see`).
     ripePlant(from, range, see) {
       return this.eco.plants.find((pp) => {
-        if (!pp.ripe()) return false;
+        if (!pp.ripe() || pp.under) return false; // (no throwing through water)
         const tp = pp.tip();
         if (U.dist(tp.x, tp.y, from.x, from.y) > range) return false;
         return !see || this.W.lineClear(from.x, from.y - 8, tp.x, tp.y + 5);
@@ -745,7 +797,7 @@
       return 'spear';
     }
     startThrow(t) {
-      if (!(this.weapon || this.offhand) || this.throwT > 0 || this.throwCd > 0 || !t) return false;
+      if (!(this.weapon || this.offhand) || this.throwT > 0 || this.throwCd > 0 || !t || this.swimming) return false;
       // bring the right weapon to the throwing hand
       const want = this.pickWeaponFor(t);
       if (this.offhand && (!this.weapon || (this.offhand.kind === want && this.weapon.kind !== want))) {
@@ -1007,7 +1059,9 @@
       this.scrambleCd = (this.scrambleCd || 0) - dt;
       // jammed against a corner on the way to the next cell: clamber round it
       if ((this.grounded || this.pole) && !this.jumping && !(this.crouchT > 0) && this.state !== 'eat') this.noteProgress(dt, hip);
-      if (this.scramble) {
+      if (this.swimCheck(dt)) {
+        this.swim(dt, node);
+      } else if (this.scramble) {
         // hauling up over a ledge lip, hands on the edge
         const lip = this.scramble.lip;
         this.facing = this.scramble.side;
@@ -1216,6 +1270,109 @@
       this.look += (U.clamp(lookTarget, -1, 1) - this.look) * U.approach(6, dt);
       this.easeBody(dt);
     }
+    // ---- water ----
+    // Hips under: swimming (a pole it's climbing keeps it out).
+    swimCheck(dt) {
+      const W = this.W;
+      if (!W.waterSim || !W.waterSim.active()) return (this.swimming = false);
+      const hip = this.hip;
+      this.noteWet(hip);
+      if (this.swimCd > 0) {
+        this.swimCd -= dt;
+        return (this.swimming = false);
+      }
+      const d = this.depthOf(hip);
+      const was = this.swimming;
+      this.swimming = d > (was ? -1 : 4) && !(this.pole && d < 14);
+      if (this.swimming && !was) {
+        this.pole = null;
+        this.jumping = false;
+        this.flip = null;
+        this.crouchT = 0;
+        this.pendingJump = null;
+        this.longJump = false;
+        this.scramble = null;
+      }
+      if (this.swimming && this.state === 'rest') this.setState('wander'); // (no napping in the water)
+      return this.swimming;
+    }
+    // Swimming like an otter: quick strokes along the surface, head up;
+    // a dive straight down after something under the water, then floating
+    // back up when it stops swimming (or runs short of breath). Out onto
+    // the bank with a hop, or onto a pole.
+    swim(dt, node) {
+      const W = this.W;
+      const S = W.waterSim;
+      const hip = this.hip;
+      const cell = W.cell;
+      let surf = S.surfaceY(hip.x, hip.y);
+      if (surf === null) surf = hip.y - 4;
+      const sp = this.p.swimSpeed || 125;
+      this.swimPh = (this.swimPh || 0) + dt * (5 + Math.hypot(this.vx, this.vy) / 30);
+      let tx = hip.x;
+      let ty = surf + 4;
+      let dive = false;
+      if (this.swimTo) {
+        tx = this.swimTo.x;
+        ty = this.swimTo.y;
+        dive = ty > surf + cell * 0.4;
+      } else if (node) {
+        tx = node.x;
+        const dry = !W.waterCell(node.cx, node.cy);
+        if (!dry && node.y > surf + cell * 0.7) {
+          ty = node.y;
+          dive = true;
+        }
+        if (dry && node.y < surf + cell && Math.abs(node.x - hip.x) < cell * 1.5) {
+          // the bank (or a pole): up and out
+          const pole = this.findPole(node.x, node.y);
+          this.swimming = false;
+          this.swimCd = 0.5;
+          if (pole && Math.abs(pole.x - hip.x) < 16) {
+            this.pole = pole;
+            this.vx = this.vy = 0;
+            return;
+          }
+          this.vy = -Math.sqrt(2 * GRAV * Math.max(14, hip.y - node.y + 14));
+          this.vx = U.clamp((node.x - hip.x) * 4, -150, 150);
+          this.jumping = true;
+          this.jumpTarget = node;
+          hip.x += this.vx * dt;
+          hip.y += this.vy * dt;
+          return;
+        }
+      }
+      // short of breath down there: back up for air
+      const under = hip.y - surf;
+      this.breath = U.clamp((this.breath === undefined ? 10 : this.breath) + (under > 8 ? -dt : dt * 4), -1, 10);
+      if (this.breath <= 0) {
+        dive = false;
+        ty = surf + 4;
+      }
+      this.diving = dive;
+      // strokes: a surge, then a glide
+      const surge = 0.55 + 0.75 * Math.max(0, Math.sin(this.swimPh));
+      const dx = tx - hip.x;
+      const dy = ty - hip.y;
+      let wvx;
+      let wvy;
+      if (dive) {
+        const d = Math.hypot(dx, dy) || 1;
+        wvx = (dx / d) * sp * surge;
+        wvy = (dy / d) * sp * surge;
+      } else {
+        // floating: the water holds it at the surface
+        wvx = Math.abs(dx) > 4 ? Math.sign(dx) * sp * surge * Math.min(1, Math.abs(dx) / 30 + 0.3) : 0;
+        wvy = U.clamp(dy * 5, -160, 120) + Math.sin(this.swimPh * 0.5) * 6;
+      }
+      const k = U.approach(dive ? 5 : 4, dt);
+      this.vx += (wvx - this.vx) * k;
+      this.vy += (wvy - this.vy) * k;
+      if (Math.abs(this.vx) > 8) this.facing = Math.sign(this.vx);
+      hip.x += this.vx * dt;
+      hip.y += this.vy * dt;
+    }
+
     // Turning round, the head goes first (look) and the body comes round
     // after it: limbs, hips and tail swing over through the middle.
     easeBody(dt) {
@@ -1238,6 +1395,17 @@
       } else if (this.flip && this.flip.t < FLIP_T) {
         tx = hip.x + Math.sin(this.flip.ang) * 18;
         ty = hip.y - Math.cos(this.flip.ang) * 18;
+      } else if (this.swimming) {
+        // stretched out along the stroke: head up out of the water at the
+        // surface, leading the way in a dive
+        const sp = Math.hypot(this.vx, this.vy);
+        if (this.diving && sp > 20) {
+          tx = hip.x + (this.vx / sp) * 17;
+          ty = hip.y + (this.vy / sp) * 17;
+        } else {
+          tx = hip.x + this.faceS * 15;
+          ty = hip.y - 8 + Math.sin(this.swimPh * 2) * 1.2;
+        }
       } else if (this.crouchT > 0) {
         tx = hip.x + this.facing * 6;
         ty = hip.y - 10;
@@ -1296,8 +1464,24 @@
       T[0].y = this.hip.y + 2;
       T[0].px = T[0].x;
       T[0].py = T[0].y;
-      this.tail.verlet(1, 0.86, -this.faceS * 520, 420, dt); // tail streams out behind
-      this.tail.follow(1);
+      if (this.swimming) {
+        // swimming: streaming out behind, sculling side to side
+        this.tail.verlet(1, 0.86, -this.faceS * 300, 0, dt);
+        this.tail.follow(1);
+        const P = this.tail.pts;
+        for (let i = 1; i < P.length; i++) {
+          const a = P[i - 1];
+          let ax = P[i].x - a.x;
+          let ay = P[i].y - a.y;
+          const al = Math.hypot(ax, ay) || 1;
+          const w = Math.sin((this.swimPh || 0) * 1.5 - i * 0.9) * 1.6 * (i / P.length);
+          P[i].x += (-ay / al) * w;
+          P[i].y += (ax / al) * w;
+        }
+      } else {
+        this.tail.verlet(1, 0.86, -this.faceS * 520, 420, dt); // tail streams out behind
+        this.tail.follow(1);
+      }
       this.tail.collide(this.W, 1.5, 1);
     }
 
@@ -1461,6 +1645,22 @@
           const side = k ? -1 : 1;
           hands.push({ x: hd.x + dx * (3 + s * 4) - dy * side * 4, y: hd.y + dy * (3 + s * 4) + dx * side * 4 });
           feet.push({ x: hip.x - dx * (5 - s * 3) - dy * side * 3, y: hip.y - dy * (5 - s * 3) + dx * side * 3 });
+        }
+      } else if (this.swimming) {
+        // swimming: the arms reach and pull in turn, the legs kick behind
+        const hd = this.head;
+        let dx = hd.x - hip.x;
+        let dy = hd.y - hip.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        dx /= dl;
+        dy /= dl;
+        const c = this.swimPh || 0;
+        for (const k of [0, Math.PI]) {
+          const s = Math.sin(c + k);
+          const co = Math.cos(c + k);
+          const side = k ? -1 : 1;
+          hands.push({ x: hd.x + dx * (1 + s * 6) - dy * (co * 3 + side), y: hd.y + dy * (1 + s * 6) + dx * (co * 3 + side) + 3 });
+          feet.push({ x: hip.x - dx * (7 + s * 2) - dy * side * (2 + co * 3), y: hip.y - dy * (7 + s * 2) + dx * side * (2 + co * 3) });
         }
       } else if (this.pole) {
         // hugging the pole, hand over hand

@@ -92,7 +92,10 @@
       this.water = (list || []).map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
       this.dirty = true;
     }
+    // With the water simulation running (an experimental map), it answers;
+    // otherwise (a scratch world) the generated rects do.
     inWater(x, y) {
+      if (this.waterSim) return this.waterSim.depthAt(x, y) >= 0;
       const L = this.water;
       if (!L) return false;
       for (let i = 0; i < L.length; i++) {
@@ -101,7 +104,19 @@
       }
       return false;
     }
+    // How far below the surface (x, y) is: -1 when dry.
+    waterDepth(x, y) {
+      if (this.waterSim) return this.waterSim.depthAt(x, y);
+      const L = this.water;
+      if (!L) return -1;
+      for (const r of L) if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return y - Math.min(...L.filter((q) => q.surface && x >= q.x && x < q.x + q.w).map((q) => q.y), r.y);
+      return -1;
+    }
+    hasWater() {
+      return this.waterSim ? this.waterSim.active() : !!(this.water && this.water.length);
+    }
     waterCell(cx, cy) {
+      if (this.waterSim) return this.waterSim.wet(cx, cy);
       return !!this.water && this.water.length > 0 && this.inWater((cx + 0.5) * this.cell, (cy + 0.5) * this.cell);
     }
 

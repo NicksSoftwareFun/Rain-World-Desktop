@@ -60,6 +60,7 @@
       const L = (this.L = this.p.size || 1);
       this.D = DIMS[this.infant ? 'infant' : 'adult'];
       this.isFlier = true;
+      this.grav = 700;
       this.pos = { x, y };
       this.vx = U.rand(-30, 30);
       this.vy = -20;

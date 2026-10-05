@@ -91,6 +91,7 @@
       this.diet = ['slugcat', 'lizard_*', 'dropwig', 'centipede', 'batfly', 'squidcada', 'noodlefly', 'noodlefly_infant'];
       this.isFlier = true;
       this.mass = 6;
+      this.grav = GRAV;
       this.bloodColor = '#151830';
     }
 

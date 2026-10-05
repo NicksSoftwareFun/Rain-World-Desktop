@@ -87,9 +87,15 @@
     return top;
   }
 
+  // Water: swimmers (c.swim, a cost multiplier) can be anywhere in it;
+  // everything else keeps out (fliers above it, walkers round it).
+  function wet(W, cx, cy) {
+    return !!W.water && W.waterCell(cx, cy);
+  }
   function valid(W, cx, cy, c) {
     if (W.solid(cx, cy)) return false;
-    if (c.fly) return !W.water || !W.waterCell(cx, cy); // (fliers keep out of the water)
+    if (wet(W, cx, cy)) return !!c.swim && !c.fly;
+    if (c.fly) return true;
     if (W.pitCols && W.inPit(cx, cy)) return false; // (nor down a pit, for anything else)
     if (W.passageAt && W.passage(cx, cy) >= 0) return true; // (anything that walks can crawl a passage)
     if (W.solid(cx, cy + 1)) return true;
@@ -304,7 +310,9 @@
           }
           if (dx && dy && W.solid(cx + dx, cy) && W.solid(cx, cy + dy)) continue;
           let cost = dx && dy ? 1.414 : 1;
-          if (!c.fly) {
+          if (c.swim && wet(W, nx, ny)) {
+            cost *= c.swim; // (swimming: as a swimmer likes it)
+          } else if (!c.fly) {
             if (!W.solid(nx, ny + 1)) {
               if (c.poles && W.pole(nx, ny)) cost *= c.poleCost || 1.2;
               else if (W.solid(nx, ny - 1) && !W.solid(nx - 1, ny) && !W.solid(nx + 1, ny)) cost *= c.ceilCost || 2;
@@ -341,7 +349,11 @@
 
       if (c.jumpX > 0 || c.ceilLeap > 0) {
         const list = jumpEdges(W, cx, cy, c);
-        for (let k = 0; k < list.length; k += 2) relax(list[k], list[k + 1], JUMP);
+        for (let k = 0; k < list.length; k += 2) {
+          // (no leaping into water, or out of it: swim)
+          if (W.water && (wet(W, list[k] % cols, (list[k] / cols) | 0) || wet(W, cx, cy))) continue;
+          relax(list[k], list[k + 1], JUMP);
+        }
       }
     }
 
@@ -376,7 +388,7 @@
   }
 
   function capsKey(c) {
-    return [c.fly ? 1 : 0, c.walls ? 1 : 0, c.ceil ? 1 : 0, c.poles ? 1 : 0, c.fall ? 1 : 0, c.jumpX | 0, c.jumpUp | 0, c.leapPoles ? 1 : 0, c.ceilLeap | 0].join(',');
+    return [c.fly ? 1 : 0, c.walls ? 1 : 0, c.ceil ? 1 : 0, c.poles ? 1 : 0, c.fall ? 1 : 0, c.jumpX | 0, c.jumpUp | 0, c.leapPoles ? 1 : 0, c.ceilLeap | 0, c.swim || 0].join(',');
   }
 
   // Every cell a creature with these caps can be in (and the standable ones),
@@ -392,6 +404,7 @@
       for (let cx = 0; cx < W.cols; cx++) {
         if (!valid(W, cx, cy, c)) continue;
         if (W.passageAt && W.passage(cx, cy) >= 0) continue; // (not somewhere to go and stand)
+        if (wet(W, cx, cy)) continue; // (nor the water)
         all.push(cx, cy);
         if (W.solid(cx, cy + 1)) stand.push(cx, cy);
       }
@@ -399,5 +412,5 @@
     return (cache[key] = { version: W.version, all, stand });
   }
 
-  RW.Nav = { WALK, FALL, JUMP, TUNNEL, findPath, nearestValid, randomValid, valid, standable, capsKey, validCells };
+  RW.Nav = { WALK, FALL, JUMP, TUNNEL, wet, findPath, nearestValid, randomValid, valid, standable, capsKey, validCells };
 })();

@@ -20,6 +20,7 @@
       this.perchT = 0;
       this.wanderA = a;
       this.isFlier = true;
+      this.grav = 700;
       this.squeezeClear = 1; // tiny: only a real crack traps a batfly
       this.threats = ['lizard_*', 'slugcat', 'dropwig', 'daddy', 'centipede_medium', 'centipede_large', 'squidcada'];
       this.bloodColor = '#2a2a33';

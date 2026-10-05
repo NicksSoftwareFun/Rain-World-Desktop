@@ -79,6 +79,13 @@ titles.
   downpour on an exponential curve and eases back off the same way. Water
   only pours off ledge ends once the rain is heavier than
   `rain.waterfallsFrom` (0.35); in light rain there are just drips.
+- **Experimental layout** (World layout: experimental): maps built like real
+  Rain World rooms, with bottomless pits, passages and water. The water
+  rises in the downpour (welling up out of the pits on a map without a
+  pool) and drains after; slugcats swim (and dive for fruit growing under
+  the water), lizards paddle, centipedes scramble out. Rain only falls
+  through the openings to the sky. Lizards hold territories fitted to the
+  room's chambers; yellow lizards hunt in pairs.
 - **Dangle fruit** ripens on its vine and only drops when something hits it
   (a thrown rock or spear, or a creature barging into it). Fruit left lying
   about rots away after a minute.
