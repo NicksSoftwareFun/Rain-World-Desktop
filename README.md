@@ -86,7 +86,7 @@ titles.
   button shows the time into the cycle and skips to the next stage. Water
   only pours off ledge ends once the rain is heavier than
   `rain.waterfallsFrom` (0.35); in light rain there are just drips.
-- **Experimental layout** (World layout: experimental): maps built like real
+- **Rooms** (World layout: experimental, the default): maps built like real
   Rain World rooms, with bottomless pits, passages and water. The water
   rises in the downpour (welling up out of the pits on a map without a
   pool) and drains after; slugcats swim (and dive for fruit growing under
