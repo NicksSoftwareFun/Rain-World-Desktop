@@ -39,7 +39,9 @@ measurements.
 
 `smoke.mjs`: the prototype and the wallpaper build (served by
 `fake-helper.mjs`, a stand-in for the Windows helper) run for a few minutes
-without page errors, populate, and react to geometry changes.
+without page errors, populate, and react to geometry changes; a touch
+screen tap opens and closes the creature menu and a finger drag picks a
+creature up instead.
 
 `behaviour.mjs`, one check per thing that has gone wrong before:
 

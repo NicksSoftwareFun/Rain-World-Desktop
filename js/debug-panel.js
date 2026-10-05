@@ -164,6 +164,15 @@
         this.buildRainMenu();
         this.buildWorldMenu();
       }
+      // Tap a creature: its menu (kill, hungry, path, AI state); tap it
+      // again, or press anywhere else, to close it.
+      if (RW.CreatureMenu) {
+        const menu = (this.creatureMenu = new RW.CreatureMenu(this.mount, this.engine));
+        this.engine.onCreatureTap = (c) => menu.toggle(c);
+        this.engine.onPress = (c) => {
+          if (c !== menu.c) menu.close();
+        };
+      }
     }
 
     // The world menu, top left: a globe that fans out the world type, the

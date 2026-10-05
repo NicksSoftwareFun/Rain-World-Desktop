@@ -64,6 +64,60 @@ try {
     await page.close();
   }
 
+  // 1b. Touch: a tap on a creature opens its menu, a second tap closes it,
+  // and a finger drag picks it up without opening it
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(pathToFileURL(path.join(root, 'index.html')).href + '?paused=1&seed=5');
+    await page.waitForFunction(() => window.RW_APP);
+    const at = () =>
+      page.evaluate(() => {
+        const e = window.RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        // (one that's out and about, not still coming out of a pipe)
+        const ok = (c) => !c.corpse && !c.leaving && !c.piping && !c.unpiping && !c.grabbedBy && c.alpha > 0.9 && c.pather;
+        let c = null;
+        for (let i = 0; i < 40 && !c; i++) {
+          window.RW_APP.step(30);
+          c = e.eco.creatures.find(ok);
+        }
+        window.T = c;
+        const m = c.mainPoint();
+        return { x: m.x * e.zoom, y: m.y * e.zoom };
+      });
+    const state = () =>
+      page.evaluate(() => {
+        window.RW_APP.step(2);
+        return { open: window.RW_APP.panel.creatureMenu.c === window.T, held: window.T.grabbedBy === window.RW_APP.engine.hand };
+      });
+    let p = await at();
+    await page.touchscreen.tap(p.x, p.y);
+    if (!(await state()).open) fail('touch: tapping a creature did not open its menu');
+    const m = await page.evaluate(() => {
+      const c = window.T.mainPoint();
+      return { x: c.x * window.RW_APP.engine.zoom, y: c.y * window.RW_APP.engine.zoom };
+    });
+    await page.touchscreen.tap(m.x, m.y);
+    if ((await state()).open) fail('touch: a second tap did not close the menu');
+    p = await at();
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p.x, y: p.y }] });
+    for (let i = 1; i <= 6; i++) {
+      await page.evaluate(() => window.RW_APP.step(1));
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: p.x + i * 10, y: p.y - i * 5 }] });
+    }
+    const s = await state();
+    if (!s.held) fail('touch: dragging a creature did not pick it up');
+    if (s.open) fail('touch: dragging a creature opened its menu');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    if (errors.length) fail('touch page errors:\n  ' + errors.join('\n  '));
+    console.log('touch: tap opens and closes the creature menu, a drag picks it up');
+    await ctx.close();
+  }
+
   // 2. Wallpaper build against the fake helper
   {
     const port = 47399;

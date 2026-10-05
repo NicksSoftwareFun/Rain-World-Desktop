@@ -344,6 +344,25 @@ html, body {
 .rw-radial-toggle.on .face { background: rgba(201, 183, 122, 0.32); border-color: rgba(255, 207, 122, 0.75); }
 .rw-radial-toggle:not(.on) .icon { opacity: 0.45; }
 .rw-radial-item.flash .face { background: rgba(255, 207, 122, 0.45); }
+/* the creature menu (js/ui/creature-menu.js): a small arc over a creature */
+.rw-radial.rw-cmenu { inset: auto; left: 0; top: 0; width: 0; height: 0; z-index: 100004; }
+.rw-cmenu .rw-radial-item { position: absolute; }
+.rw-cmenu .icon { display: flex; width: 22px; height: 22px; }
+.rw-cmenu .icon svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.rw-cmenu .icon svg .fill { fill: currentColor; stroke: none; }
+.rw-cmenu .rw-radial-toggle:not(.on) .icon { opacity: 0.7; }
+.rw-cmenu .rw-radial-toggle.on .face { background: rgba(74, 64, 36, 0.94); color: #ffe2a8; }
+.rw-cmenu .rw-radial-item:disabled { cursor: default; }
+.rw-cmenu .rw-radial-item:disabled .face { opacity: 0.35; }
+.rw-cmenu .rw-radial-item:disabled .lbl { opacity: 0.5; }
+
+/* touch: no double-tap zoom or long-press callouts on the controls, and no
+   panning or pinching the page while a finger drags a creature */
+#wallpaper, #desktop { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.rw-radial-hub, .rw-radial-item, .rw-panel-toggle, .rw-panel button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+@media (pointer: coarse) {
+  .rw-panel-toggle { width: 44px; height: 44px; }
+}
 .rw-radial-dial .gauge { position: absolute; inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); }
 .rw-radial-dial .gauge path { fill: none; stroke-width: 4; stroke-linecap: round; }
 .rw-radial-dial .gauge .track { stroke: rgba(255, 255, 255, 0.12); }

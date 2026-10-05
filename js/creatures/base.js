@@ -1765,10 +1765,23 @@
       return [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
     }
 
+    // Hunger, for the creature menu: the species that get hungry keep a
+    // "full for so long" timer (fullT) or, slugcats, a hunger level.
+    canHunger() {
+      return this.fullT !== undefined || this.hunger !== undefined;
+    }
+    makeHungry() {
+      if (this.fullT !== undefined) this.fullT = 0;
+      if (this.hunger !== undefined) this.hunger = 1;
+      if (this.meals !== undefined) this.meals = 0;
+    }
+
     // (AI state labels are drawn over everything by Ecosystem.drawLabels)
     drawDebug(ctx) {}
+    // its route: every creature's with debug.showPaths, or just this one's
+    // (showPath, from the creature menu)
     drawPath(ctx, pather) {
-      if (!this.eco.cfg.debug.showPaths || !pather || !pather.nodes) return;
+      if (!(this.eco.cfg.debug.showPaths || this.showPath) || !pather || !pather.nodes) return;
       ctx.strokeStyle = 'rgba(255,220,80,0.6)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();

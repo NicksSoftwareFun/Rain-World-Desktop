@@ -197,6 +197,7 @@
 
     bindPointer() {
       window.addEventListener('pointermove', (e) => {
+        if (!e.isPrimary) return;
         this.cursor.x = e.clientX;
         this.cursor.y = e.clientY;
         this.cursor.inside = true;
@@ -206,11 +207,21 @@
       // Presses on bare wallpaper (not a window, icon, taskbar or panel) can
       // pick up a creature (or drop food, if that's switched on); a release
       // anywhere lets go.
+      // (one finger at a time: a second one is ignored; a touch moves the
+      // "cursor" only while it's down, then it's gone, so nothing keeps
+      // reacting to where a finger last was)
       window.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        if (e.target.id === 'wallpaper' || e.target === this.root) this.clicks.push({ x: e.clientX, y: e.clientY });
+        if (e.button !== 0 || !e.isPrimary) return;
+        this.cursor.x = e.clientX;
+        this.cursor.y = e.clientY;
+        this.cursor.inside = true;
+        if (e.target.id === 'wallpaper' || e.target === this.root) this.clicks.push({ x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse' });
       });
-      const up = (e) => this.releases.push({ x: e.clientX, y: e.clientY });
+      const up = (e) => {
+        if (!e.isPrimary) return;
+        this.releases.push({ x: e.clientX, y: e.clientY });
+        if (e.pointerType !== 'mouse') this.cursor.inside = false;
+      };
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', up);
     }

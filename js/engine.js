@@ -70,9 +70,10 @@
       }
       return this._hand;
     }
-    // The creature (living or dead) whose body is nearest the press, if any.
-    // The creature under (x, y), if any.
-    creatureAt(x, y) {
+    // The creature (living or dead) whose body is nearest the press, if any:
+    // within `slop` world units of it (a finger gets more than a mouse).
+    creatureAt(x, y, slop) {
+      slop = slop || 10;
       const hand = this.hand;
       let best = null;
       let bd = Infinity;
@@ -80,7 +81,7 @@
         if (c.dead || c.leaving || c.alpha < 0.3 || c.grabbedBy === hand) continue;
         for (const p of c.hitParts()) {
           const d = Math.hypot(p.x - x, p.y - y) - p.r;
-          if (d < 10 && d < bd) {
+          if (d < slop && d < bd) {
             bd = d;
             best = c;
           }
@@ -375,18 +376,25 @@
       const c = g.cursor || { x: -9999, y: -9999, inside: false };
       this.eco.setCursor(c.x, c.y, !!c.inside, dt);
       // Press on a creature and hold or drag to pick it up (it hangs limp
-      // from the cursor); let go to drop it. A quick click instead shows its
-      // AI state for 15s (another click hides it). A press on empty wallpaper
-      // drops food if enabled.
+      // from the cursor); let go to drop it. A tap (a quick press that
+      // doesn't move) instead goes to onCreatureTap (the creature menu), or
+      // shows its AI state for 15s. A finger gets a bigger target and more
+      // time and room to call it a tap. A press on empty wallpaper drops
+      // food if enabled. onPress hears every press (the menu closes on one
+      // anywhere else).
       for (const k of g.clicks || []) {
-        const c = this.creatureAt(k.x, k.y);
-        if (c) this.press = { x: k.x, y: k.y, t: performance.now(), c };
+        const touch = !!k.touch;
+        const c = this.creatureAt(k.x, k.y, touch ? Math.max(10, 26 / this.zoom) : 10);
+        if (this.onPress) this.onPress(c);
+        if (c) this.press = { x: k.x, y: k.y, t: performance.now(), c, touch };
         else if (this.cfg.ecosystem.clickDropsFood) this.eco.dropFood(k.x, k.y);
       }
       const pr = this.press;
       if (pr) {
         const pt = g.pointer || c;
-        if (performance.now() - pr.t > 160 || Math.hypot(pt.x - pr.x, pt.y - pr.y) > 6) {
+        const hold = pr.touch ? 320 : 180;
+        const moved = (pr.touch ? 12 : 6) / this.zoom;
+        if (performance.now() - pr.t > hold || Math.hypot(pt.x - pr.x, pt.y - pr.y) > moved) {
           this.press = null;
           this.tryGrab(pr.x, pr.y);
         }
@@ -403,8 +411,10 @@
       }
       if ((g.releases || []).length) {
         if (this.press) {
-          this.eco.toggleLabel(this.press.c);
+          const tapped = this.press.c;
           this.press = null;
+          if (this.onCreatureTap) this.onCreatureTap(tapped);
+          else this.eco.toggleLabel(tapped);
         }
         this.dropHand();
       }

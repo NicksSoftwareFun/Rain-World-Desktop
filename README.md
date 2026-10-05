@@ -16,8 +16,10 @@ Everything is plain JavaScript + `<canvas>`, with no build step and no dependenc
   helper (below). (`index.html?desktop=1` puts a mock Windows desktop on top
   for testing that in a browser.)
   - Press **`** (backtick) or the ≡ button for the **ecosystem panel**.
+  - **Tap** a creature for its menu: kill, make hungry, show its path, show
+    its AI state (tap it again, or anywhere else, to close it).
   - **Drag** a creature (living or dead) to pick it up: it hangs limp from
-    the cursor and drops where you let go. (Clicking bare wallpaper to drop
+    the cursor and drops where you let go. Both work with a finger. (Clicking bare wallpaper to drop
     a dangle fruit is still available as a panel toggle, off by default.)
   - **Rest the cursor** near creatures: lizards stalk and snap at it, slugcats
     come and look at it, Daddy Long Legs reaches for it, Dropwigs drop on it.

@@ -640,7 +640,7 @@
       ctx.textBaseline = 'middle';
       for (const c of this.creatures) {
         if (c.dead) continue;
-        let a = all ? 1 : 0;
+        let a = all || c.labelPinned ? 1 : 0;
         if (c.labelUntil > this.t) a = Math.max(a, Math.min(1, (c.labelUntil - this.t) / (c.labelFade || 1.5)));
         if (a <= 0.01) continue;
         const m = c.mainPoint();
@@ -648,8 +648,10 @@
         const name = ((sp && sp.label) || c.species).toLowerCase();
         const text = `${name} \u00b7 ${c.corpse ? 'dead' : c.state}${c.swimming ? ' (swimming)' : ''}`;
         const w = ctx.measureText(text).width + 10;
+        // (below the body while its menu is open over it)
+        const below = !!c.menuOpen;
         const x = Math.round(m.x + 12);
-        const y = Math.round(m.y - 20);
+        const y = Math.round(m.y + (below ? 22 : -20));
         ctx.globalAlpha = a * c.alpha;
         ctx.fillStyle = 'rgba(8,10,10,0.72)';
         ctx.beginPath();
@@ -659,7 +661,8 @@
         ctx.fillStyle = 'rgba(232,226,200,0.95)';
         ctx.fillText(text, x + 5, y + 0.5);
         // a tick back to the body
-        ctx.fillRect(x - 1, y + 6, 1, Math.max(0, m.y - y - 10));
+        if (below) ctx.fillRect(x - 1, m.y + 4, 1, Math.max(0, y - 6 - m.y - 4));
+        else ctx.fillRect(x - 1, y + 6, 1, Math.max(0, m.y - y - 10));
       }
       ctx.restore();
     }

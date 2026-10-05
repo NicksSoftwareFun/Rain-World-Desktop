@@ -360,10 +360,25 @@ Ledge-end trickles (`drips.js`) end on the flood's surface and vanish once
 it's over the ledge end; drops splash on the surface, and beads don't form
 under water.
 
-A quick click on a creature (released within 160ms, without dragging)
-shows its AI state label for 15 s (`Ecosystem.toggleLabel`/`drawLabels`,
-drawn over everything so it can fade); another click fades it at once.
-Holding or dragging picks it up as before (`Engine.press`).
+A tap on a creature (released within 180 ms without moving; a finger gets
+320 ms, 12 px of wobble and a bigger target) opens the **creature menu**
+(`js/ui/creature-menu.js`, `RW.CreatureMenu`, via `Engine.onCreatureTap`):
+four 46 px buttons in an arc over it that follow it about (under it near
+the top of the screen): kill, make hungry (`Creature.makeHungry`: `fullT`
+to 0, or a slugcat's `hunger` up), its path (`showPath`) and its AI state
+(`labelPinned`, drawn below it while the menu's open). Path and AI state
+are per creature and stay on until switched off. Tapping it again, or a
+press anywhere else (`Engine.onPress`), closes the menu; so does dragging
+it. Holding or dragging picks it up (`Engine.press`), never opening the
+menu. Without a menu the tap falls back to the 15 s label
+(`Ecosystem.toggleLabel`).
+
+Touch: the mock desktop reports whether a press is a finger, follows one
+finger only, moves the "cursor" to where a finger goes down and drops it
+when the finger lifts (nothing stalks where a finger last was). The canvas
+has `touch-action: none` (no panning or pinch-zooming the page mid-drag)
+and no long-press callout; the buttons have `touch-action: manipulation`
+(no double-tap zoom), and the ≡ button grows to 44 px on touch screens.
 
 ## Windows side (`windows/`, `js/geometry/`)
 
