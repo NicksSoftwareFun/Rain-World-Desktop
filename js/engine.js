@@ -389,23 +389,28 @@
         if (c) this.press = { x: k.x, y: k.y, t: performance.now(), c, touch };
         else if (this.cfg.ecosystem.clickDropsFood) this.eco.dropFood(k.x, k.y);
       }
+      // (a pointer that hasn't reported a position yet sits far off screen:
+      // on a tablet the first tap can arrive before any move does, and
+      // reading that as a huge drag flung the creature off the map)
+      const ptr = g.pointer || c;
+      const pt = ptr && ptr.x > -1000 && ptr.y > -1000 ? ptr : null;
       const pr = this.press;
       if (pr) {
-        const pt = g.pointer || c;
         const hold = pr.touch ? 320 : 180;
         const moved = (pr.touch ? 12 : 6) / this.zoom;
-        if (performance.now() - pr.t > hold || Math.hypot(pt.x - pr.x, pt.y - pr.y) > moved) {
+        if (performance.now() - pr.t > hold || (pt && Math.hypot(pt.x - pr.x, pt.y - pr.y) > moved)) {
           this.press = null;
           this.tryGrab(pr.x, pr.y);
         }
       }
       const hand = this.hand;
       if (hand.holding) {
-        const pt = g.pointer || c;
-        hand.vx += ((pt.x - hand.x) / dt - hand.vx) * 0.3;
-        hand.vy += ((pt.y - hand.y) / dt - hand.vy) * 0.3;
-        hand.x = pt.x;
-        hand.y = pt.y;
+        if (pt) {
+          hand.vx += ((pt.x - hand.x) / dt - hand.vx) * 0.3;
+          hand.vy += ((pt.y - hand.y) / dt - hand.vy) * 0.3;
+          hand.x = pt.x;
+          hand.y = pt.y;
+        }
         const h = hand.holding;
         if (h.dead || h.leaving || h.grabbedBy !== hand) hand.holding = null;
       }

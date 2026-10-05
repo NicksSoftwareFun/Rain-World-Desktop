@@ -94,6 +94,25 @@ try {
         return { open: window.RW_APP.panel.creatureMenu.c === window.T, held: window.T.grabbedBy === window.RW_APP.engine.hand };
       });
     let p = await at();
+    // a first tap that arrives before the pointer has any position (as on
+    // an iPad): it must stay a tap, not fling the creature off the map
+    const first = await page.evaluate(([x, y]) => {
+      const P = window.RW_APP.provider;
+      P.cursor.x = P.cursor.y = -9999;
+      P.cursor.inside = false;
+      P.clicks.push({ x, y, touch: true });
+      window.RW_APP.step(1);
+      P.releases.push({ x, y });
+      window.RW_APP.step(10);
+      const m = window.T.mainPoint();
+      const e = window.RW_APP.engine;
+      const open = window.RW_APP.panel.creatureMenu.c === window.T;
+      window.RW_APP.panel.creatureMenu.close();
+      return { open, on: m.x > 0 && m.x < e.W && m.y > 0 && m.y < e.H };
+    }, [p.x, p.y]);
+    if (!first.on) fail('touch: a first tap (no pointer position yet) flung the creature off the map');
+    else if (!first.open) fail('touch: a first tap (no pointer position yet) did not open the menu');
+    p = await at();
     await page.touchscreen.tap(p.x, p.y);
     if (!(await state()).open) fail('touch: tapping a creature did not open its menu');
     const m = await page.evaluate(() => {
