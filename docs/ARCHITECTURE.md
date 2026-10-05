@@ -404,3 +404,17 @@ runs off round the far side after each shock (`Centipede.startRun`) and
 comes in again from there. Corpses fade toward grey as they lie
 (`Ecosystem.drawFaded`, a canvas filter on `corpseT`).
 
+Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
+behind everything that moves): wall cogs, machine housings, wall fans,
+pipe runs (rock to rock, a third of the props at most, thicker and lighter
+than the climbable poles, a dull valve wheel on one in three), hoses
+hanging from ceilings and junk piles on floors; each a soft shadow and a
+rim of light (brighter near the openings), and a little haze so it reads
+as further back. Foreground plants (`js/foliage.js`, `RW.Foliage`): the
+plant painters (`paintWaterPlants`, `paintAccents`, `paintBiolum`, and the
+batfly grass) draw through a recorder clump by clump (`rec.plant(x, y,
+hang)`); each clump becomes a crisp sprite drawn every frame in front of
+the creatures (before the water), sheared about its root: a damped spring
+pushed by the rain's wind (more in the downpour; kelp drifts in the
+current) and by anything moving through it. They block nothing.
+

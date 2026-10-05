@@ -1787,18 +1787,21 @@
     for (let y = 1; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         if (!solid(x, y) || solid(x, y - 1)) continue;
-        if (region === 'industrial' ? R() > 0.05 : region === 'shaded' ? true : R() > 0.07) continue;
+        if (region === 'industrial' ? R() > 0.034 : region === 'shaded' ? true : R() > 0.07) continue;
         const bx = (x + R()) * cell;
         const by = y * cell;
         if (fg) fg.plant(bx, by);
-        F.strokeStyle = accCol;
-        F.lineWidth = region === 'industrial' ? 3 : 1.4;
+        // (coral: a duller crimson, so it doesn't outshout the creatures)
+        F.strokeStyle = region === 'industrial' ? U.rgba(U.mix(U.mix(acc, '#7a6a70', 0.4), pal.mass, 0.3)) : accCol;
+        F.lineWidth = region === 'industrial' ? R(2, 3) : 1.4;
         if (region === 'industrial') {
           // coral: a branching fan, 3-5 cells tall
-          const nb = 5 + Math.floor(R() * 5);
+          const nb = 4 + Math.floor(R() * 6);
+          const sc = R(0.8, 1.2);
+          const spread = R(0.18, 0.3);
           for (let k = 0; k < nb; k++) {
-            const a = -Math.PI / 2 + (k - (nb - 1) / 2) * 0.24;
-            const len = R(1.5, 2.5) * cell;
+            const a = -Math.PI / 2 + (k - (nb - 1) / 2) * spread;
+            const len = R(1.3, 2.5) * cell * sc;
             F.beginPath();
             F.moveTo(bx, by);
             F.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
@@ -1878,19 +1881,30 @@
     const props = [];
     const taken = (x, y, r) => props.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + r + cell);
     const open = C * Rows;
-    const want = U.clamp(Math.round(open / 140), 4, 22);
+    const want = U.clamp(Math.round(open / 110), 6, 28);
+    let valves = 0;
     for (let tries = 0; tries < want * 30 && props.length < want; tries++) {
       const cx = 2 + Math.floor(R() * (C - 4));
       const cy = 2 + Math.floor(R() * (Rows - 4));
       if (solid(cx, cy)) continue;
       const roll = R();
-      if (roll < 0.35 && solid(cx, cy + 1)) {
+      if (roll < 0.3 && solid(cx, cy + 1)) {
         // a junk pile on the floor
-        const w = R(2.5, 5) * cell;
+        const w = R(3.75, 7.5) * cell;
         if (taken(cx * cell, (cy + 1) * cell, w / 2)) continue;
         props.push({ kind: 'junk', x: (cx + 0.5) * cell, y: (cy + 1) * cell, w, r: w / 2, seed: R(0, 1000) });
-      } else if (roll < 0.6 && room4(cx, cy, 2, 2)) {
-        const r = R(0.9, 2) * cell;
+      } else if (roll < 0.36 && solid(cx, cy - 1) && room4(cx, cy + 3, 1, 2)) {
+        // a hose or a cable hanging in a loop from the ceiling
+        if (taken(cx * cell, cy * cell, 2 * cell)) continue;
+        props.push({ kind: 'hose', x: (cx + 0.5) * cell, y: cy * cell, w: R(1.5, 4) * cell, h: R(2, 5) * cell, r: 2 * cell, seed: R(0, 1000) });
+      } else if (roll < 0.45 && room4(cx, cy, 2, 2)) {
+        // a wall-mounted fan in its housing
+        const r = R(1, 1.8) * cell;
+        if (taken(cx * cell, cy * cell, r)) continue;
+        props.push({ kind: 'fan', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, seed: R(0, 1000) });
+      } else if (roll < 0.62 && room4(cx, cy, 1, 1)) {
+        const r = R(0.7, 3) * cell;
+        if (r > 1.6 * cell && !room4(cx, cy, 3, 3)) continue;
         if (taken(cx * cell, cy * cell, r)) continue;
         props.push({ kind: 'cog', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, pair: R() < 0.35, seed: R(0, 1000) });
       } else if (roll < 0.82 && room4(cx, cy, 3, 2)) {
@@ -1899,7 +1913,9 @@
         if (taken(cx * cell, cy * cell, Math.max(w, h) / 2)) continue;
         props.push({ kind: 'machine', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, w, h, r: Math.max(w, h) / 2, seed: R(0, 1000) });
       } else {
-        // a pipe run: along the wall from rock to rock (horizontal or up)
+        // a pipe run: along the wall from rock to rock (horizontal or up);
+        // a third of the props at most
+        if (props.filter((q) => q.kind === 'pipe').length >= want / 3) continue;
         const vert = R() < 0.4;
         let a = vert ? cy : cx;
         let b = a;
@@ -1911,16 +1927,19 @@
           while (b < C - 1 && !solid(b + 1, cy)) b++;
         }
         if (b - a < 4 || b - a > 40) continue;
-        const pr = { kind: 'pipe', vert, x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, a: a * cell, b: (b + 1) * cell, t: R(4, 8), r: 6, seed: R(0, 1000) };
+        const pr = { kind: 'pipe', vert, x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, a: a * cell, b: (b + 1) * cell, t: R(6, 9), r: 6, seed: R(0, 1000), valve: valves++ % 3 === 0 };
         if (props.some((q) => q.kind === 'pipe' && q.vert === vert && Math.abs(vert ? q.x - pr.x : q.y - pr.y) < 3 * cell)) continue;
         props.push(pr);
       }
     }
     // colours: darker than the wall, a rusty accent, the lit rim
-    const base = U.mix(pal.interior, pal.mass, 0.55);
-    const deep = U.mix(pal.interior, pal.mass, 0.82);
-    const mid = U.mix(pal.interior, pal.mass, 0.35);
-    const rust = U.mix(pal.rust, pal.mass, 0.45);
+    // (lighter than the rock and a little hazed, so it reads as further
+    // back, never as something to stand on: depth by tone, as in the game)
+    const haze = (c) => U.mix(c, pal.fog || pal.interior, 0.12);
+    const base = haze(U.mix(pal.interior, pal.mass, 0.38));
+    const deep = haze(U.mix(pal.interior, pal.mass, 0.68));
+    const mid = haze(U.mix(pal.interior, pal.mass, 0.2));
+    const rust = haze(U.mix(pal.rust, pal.mass, 0.5));
     const draw = (l, q, shadow) => {
       const RR = U.mulberry32((q.seed * 997) >>> 0);
       const r = (a, b) => a + RR() * (b - a);
@@ -2011,6 +2030,44 @@
         l.moveTo(gx, gy);
         l.lineTo(gx + Math.cos(na) * gr * 0.9, gy + Math.sin(na) * gr * 0.9);
         l.stroke();
+      } else if (q.kind === 'fan') {
+        // a square housing, a ring, blades
+        const R_ = q.r;
+        l.fillStyle = C_(base);
+        l.fillRect(q.x - R_ * 1.15, q.y - R_ * 1.15, R_ * 2.3, R_ * 2.3);
+        if (shadow) return;
+        l.fillStyle = rim;
+        l.fillRect(q.x - R_ * 1.15, q.y - R_ * 1.15, R_ * 2.3, 1.2);
+        l.fillStyle = C_(deep);
+        l.beginPath();
+        l.arc(q.x, q.y, R_, 0, U.TAU);
+        l.fill();
+        l.fillStyle = C_(mid);
+        const nb = 5 + Math.floor(r(0, 3));
+        const a0 = r(0, U.TAU);
+        for (let i = 0; i < nb; i++) {
+          const a = a0 + (i / nb) * U.TAU;
+          l.beginPath();
+          l.moveTo(q.x, q.y);
+          l.arc(q.x, q.y, R_ * 0.9, a, a + (U.TAU / nb) * 0.42);
+          l.closePath();
+          l.fill();
+        }
+        l.fillStyle = C_(deep);
+        l.beginPath();
+        l.arc(q.x, q.y, R_ * 0.18, 0, U.TAU);
+        l.fill();
+      } else if (q.kind === 'hose') {
+        // hanging from the ceiling in a slack loop, a clamp at the top
+        l.strokeStyle = C_(deep);
+        l.lineWidth = r(2, 3.5);
+        l.beginPath();
+        l.moveTo(q.x, q.y);
+        l.bezierCurveTo(q.x, q.y + q.h * 1.3, q.x + q.w, q.y + q.h * 1.3, q.x + q.w, q.y + r(0, q.h * 0.3));
+        l.stroke();
+        if (shadow) return;
+        l.fillStyle = C_(mid);
+        l.fillRect(q.x - 3, q.y, 6, 3);
       } else if (q.kind === 'pipe') {
         const t = q.t;
         l.fillStyle = C_(base);
@@ -2023,23 +2080,25 @@
         // flanges every few cells, a valve wheel on one
         l.fillStyle = C_(deep);
         const len = q.b - q.a;
-        const step = r(2.5, 4.5) * cell;
+        const step = r(3, 4.5) * cell;
+        const fl = t * 0.3;
         for (let d = step * 0.5; d < len; d += step) {
-          if (q.vert) l.fillRect(q.x - t / 2 - 2, q.a + d, t + 4, 3);
-          else l.fillRect(q.a + d, q.y - t / 2 - 2, 3, t + 4);
+          if (q.vert) l.fillRect(q.x - t / 2 - fl, q.a + d, t + fl * 2, 3);
+          else l.fillRect(q.a + d, q.y - t / 2 - fl, 3, t + fl * 2);
         }
-        const vd = q.a + len * r(0.25, 0.75);
-        const vx = q.vert ? q.x + t / 2 + 5 : vd;
-        const vy = q.vert ? vd : q.y - t / 2 - 6;
-        l.strokeStyle = C_(rust);
-        l.lineWidth = 1.6;
-        l.beginPath();
-        l.arc(vx, vy, 4.5, 0, U.TAU);
-        l.moveTo(vx - 4.5, vy);
-        l.lineTo(vx + 4.5, vy);
-        l.moveTo(vx, vy - 4.5);
-        l.lineTo(vx, vy + 4.5);
-        l.stroke();
+        if (q.valve) {
+          // a valve wheel, small and dull (not something to pick up)
+          const vd = q.a + len * r(0.25, 0.75);
+          const vx = q.vert ? q.x + t / 2 + 4 : vd;
+          const vy = q.vert ? vd : q.y - t / 2 - 4;
+          l.strokeStyle = C_(U.mix(rust, base, 0.4));
+          l.lineWidth = 1.2;
+          l.beginPath();
+          l.arc(vx, vy, 3.2, 0, U.TAU);
+          l.moveTo(vx - 3.2, vy);
+          l.lineTo(vx + 3.2, vy);
+          l.stroke();
+        }
       } else {
         // a junk pile: the heap's silhouette, then the things in it
         const w = q.w;
@@ -2114,7 +2173,7 @@
             l.stroke();
           }
           l.fillStyle = rim;
-          l.fillRect(x0 + w * 0.3, q.y - hh * 0.95, w * 0.3, 1);
+          l.fillRect(x0 + w * 0.22, q.y - hh * 0.95, w * 0.5, 1.5);
         }
       }
     };

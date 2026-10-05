@@ -142,6 +142,7 @@
       if (!this.plants.length) return;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.88; // (a creature behind still shows through a little)
       for (const p of this.plants) {
         if (!p.img) continue;
         const s = p.hang ? -p.a : p.a;
