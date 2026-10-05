@@ -242,15 +242,15 @@
         title: 'Rain cycle',
         onChange: () => this.save(),
         items: [
-          { type: 'toggle', label: 'shelter', icon: '\u2302', title: 'Creatures shelter in dens during the downpour', get: () => R.shelterDuringDownpour, set: (v) => (R.shelterDuringDownpour = v) },
+          // a fresh cycle and the downpour on the inner ring, where the cycle
+          // is now on the diagonal past them, the dials outside
+          { type: 'action', label: 'clear', icon: '\u2600', title: 'Clear skies: start a fresh cycle', run: () => {
+            eng.weather.t = Math.ceil(eng.weather.t / cycle()) * cycle() + 1;
+          } },
           { type: 'action', label: 'downpour', icon: '\u21ca', title: 'Bring the downpour on now', run: () => {
             const w = eng.weather;
             w.t = Math.floor(w.t / cycle()) * cycle() + cycle() * (1 - R.downpourFraction * 0.95);
           } },
-          { type: 'action', label: 'clear', icon: '\u2600', title: 'Clear skies: start a fresh cycle', run: () => {
-            eng.weather.t = Math.ceil(eng.weather.t / cycle()) * cycle() + 1;
-          } },
-          { type: 'dial', label: 'cycle', title: 'Length of one rain cycle (minutes)', min: 1, max: 30, step: 0.5, get: () => R.cycleMinutes, set: (v) => (R.cycleMinutes = v), format: (v) => v + 'm' },
           // where the cycle is now, out of its full length: click to step on
           // to the next stage (calm, light rain, build-up, downpour)
           { type: 'action', label: 'now', title: 'Where the rain cycle is, out of its full length (click: on to the next stage)', icon: () => {
@@ -267,8 +267,9 @@
             const next = stops.find((q) => q > ph + 0.01);
             w.t = Math.floor(w.t / total) * total + next * total;
           } },
+          { type: 'dial', label: 'cycle', title: 'Length of one rain cycle (minutes)', min: 1, max: 30, step: 0.5, get: () => R.cycleMinutes, set: (v) => (R.cycleMinutes = v), format: (v) => v + 'm' },
           // (while it's being turned, a dotted line marks the height on the map)
-          { type: 'dial', label: 'flood', title: 'How high the water rises in the downpour (experimental maps)', min: 0, max: 0.95, step: 0.05, get: () => R.floodHeight ?? 0.75, set: (v) => (R.floodHeight = v), format: (v) => Math.round(v * 100) + '%', onDrag: () => (eng.floodPreviewUntil = performance.now() + 1500) },
+          { type: 'dial', label: 'flood', title: 'How high the water rises in the downpour (each new map picks 40-80%)', min: 0, max: 0.95, step: 0.05, get: () => R.floodHeight ?? 0.75, set: (v) => (R.floodHeight = v), format: (v) => Math.round(v * 100) + '%', onDrag: () => (eng.floodPreviewUntil = performance.now() + 1500) },
         ],
       });
       eng.domHud = true; // (the engine no longer draws its own on the canvas)

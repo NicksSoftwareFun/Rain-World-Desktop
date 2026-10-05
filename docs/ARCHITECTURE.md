@@ -340,10 +340,11 @@ time to the downpour) and clicking it opens a **corner radial menu**
 (`js/ui/radial.js`, `RW.RadialMenu`, reusable): items fan out round the
 corner, toggles and actions on the inner ring, dials (drag up/right, the
 wheel, or arrow keys; a gauge arc and the value) further out (an item's
-`ring` overrides that), more rings as needed; Escape, the hub or a click outside closes it. Shelter,
-downpour now, clear skies, a live "now" button (time into the
-cycle out of its length; a click skips to the next stage); cycle length and
-flood height (turning it shows the dotted line).
+`ring` overrides that), more rings as needed; Escape, the hub or a click outside closes it. Clear skies and
+downpour now, a live "now" button (time into the cycle out of its length;
+a click skips to the next stage); cycle length and flood height (turning
+it shows the dotted line). Each new map picks its own flood height, 40-80%
+from its seed (`Engine.init`); the dial overrides it until the next map.
 
 A second one, the **world menu**, sits top left behind a globe
 (`Panel.buildWorldMenu`): a new map on the inner ring, the world type

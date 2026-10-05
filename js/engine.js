@@ -146,6 +146,13 @@
       this.world.resize(this.W, this.H);
       if (!keepSeed || !this.seed) this.seed = cfg.world.seed || Math.floor(Math.random() * 1e9);
       const rnd = U.mulberry32(this.seed);
+      // Each new map floods to its own height in the downpour: 40-80% of the
+      // map, from its seed (the flood dial overrides it until the next map).
+      if (this.seed !== this.floodSeed) {
+        this.floodSeed = this.seed;
+        const fr = U.mulberry32(this.seed ^ 0x5bd1e995);
+        cfg.rain.floodHeight = Math.round((0.4 + 0.4 * fr()) * 20) / 20;
+      }
       const g = this.poll();
       const opts = { floor: this.floorOf(g.rects) };
       this.decor = cfg.world.layout === 'experimental' && RW.Rooms ? RW.Rooms.generate(this.W, this.H, cfg, rnd, opts) : RW.Background.generateDecor(this.W, this.H, cfg, rnd, opts);

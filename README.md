@@ -93,8 +93,8 @@ titles.
   the water), lizards paddle, centipedes scramble out. Rain only falls
   through the openings to the sky, each with a waterfall down one side
   that can knock creatures off walls and poles. In the downpour the water
-  rises to `rain.floodHeight` of the map (75%; the "water max height"
-  slider) and carries off the dead. Lizards hold territories fitted to the
+  rises to `rain.floodHeight` of the map (each new map picks 40-80%; the
+  cycle menu's flood dial changes it) and carries off the dead. Lizards hold territories fitted to the
   room's chambers; yellow lizards hunt in pairs.
 - **Dangle fruit** ripens on its vine and only drops when something hits it
   (a thrown rock or spear, or a creature barging into it). Fruit left lying
