@@ -1504,7 +1504,7 @@
           if (dim <= 0) continue;
           // (in colonies: much likelier next to one already started)
           const near = decor.biolum.some((q) => Math.abs(q.x - (x + 0.5) * cell) < cell * 2.5 && Math.abs(q.y - (y + 0.5) * cell) < cell * 2.5);
-          const k = dim * (near ? 1.6 : 0.25);
+          const k = dim * (near ? 1.8 : 0.6);
           let kind = null;
           if (solid(x, y - 1) && R() < 0.22 * k) kind = 'ceiling';
           else if (solid(x, y + 1) && R() < 0.1 * k) kind = 'plant';
