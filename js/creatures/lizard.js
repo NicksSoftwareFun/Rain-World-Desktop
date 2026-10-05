@@ -1911,18 +1911,26 @@
       this.drawHead(ctx, px);
       ctx.restore();
       this.drawPath(ctx, this.pather);
-      if (this.eco.cfg.debug.showPaths) {
-        // territory: a ring round the hangout, in the lizard's colour
+      if (this.eco.cfg.debug.showPaths || this.showPath) {
+        // territory (with its path, debug.showPaths or the creature menu's
+        // path + AI): a faint dashed oval in the lizard's colour, and its
+        // hangout marked
         const hp = this.homePos();
-        if (hp) {
-          ctx.strokeStyle = U.rgba(this.headColor, 0.9);
-          ctx.lineWidth = 1;
+        const z = hp && this.zone();
+        if (z) {
+          ctx.save();
           ctx.beginPath();
-          const z = this.zone();
           ctx.ellipse(z.cx, z.cy, z.rx, z.ry, 0, 0, U.TAU);
+          ctx.fillStyle = U.rgba(this.headColor, 0.07);
+          ctx.fill();
+          ctx.setLineDash([5, 4]);
+          ctx.strokeStyle = U.rgba(this.headColor, 0.85);
+          ctx.lineWidth = 1.2;
           ctx.stroke();
-          ctx.fillStyle = U.rgba(this.headColor, 0.8);
+          ctx.setLineDash([]);
+          ctx.fillStyle = U.rgba(this.headColor, 0.9);
           ctx.fillRect(hp.x - 2, hp.y - 2, 4, 4);
+          ctx.restore();
         }
       }
       this.drawDebug(ctx);

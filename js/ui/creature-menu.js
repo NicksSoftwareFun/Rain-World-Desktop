@@ -55,7 +55,7 @@
           run: (c) => c.makeHungry(),
         },
         {
-          key: 'watch', label: 'path + AI', title: 'Show where it is going and what it is doing (its AI state)', toggle: true,
+          key: 'watch', label: 'path + AI', title: 'Show where it is going and what it is doing (its AI state; a lizard\'s territory too)', toggle: true,
           ok: () => true,
           on: (c) => !!c.labelPinned,
           run: (c) => {

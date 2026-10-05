@@ -17,7 +17,8 @@ Everything is plain JavaScript + `<canvas>`, with no build step and no dependenc
   for testing that in a browser.)
   - Press **`** (backtick) or the ≡ button for the **ecosystem panel**.
   - **Tap** a creature for its menu: kill, make hungry, path + AI (its route
-    and what it's doing); tap it again, or anywhere else, to close it.
+    and what it's doing, and a lizard's territory); tap it again, or
+    anywhere else, to close it.
   - **Drag** a creature (living or dead) to pick it up: it hangs limp from
     the cursor and drops where you let go. Both work with a finger. (Clicking bare wallpaper to drop
     a dangle fruit is still available as a panel toggle, off by default.)

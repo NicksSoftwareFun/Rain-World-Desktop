@@ -367,7 +367,8 @@ three 46 px buttons in an arc over it that follow it about (under it near
 the top of the screen): kill, make hungry (`Creature.makeHungry`: `fullT`
 to 0, or a slugcat's `hunger` up), and path + AI: its route (`showPath`)
 and its AI state (`labelPinned`, drawn below it while the menu's open)
-together, per creature, on until switched off. Tapping it again, or a
+together, and for a lizard its territory too (a dashed oval and its
+hangout), per creature, on until switched off. Tapping it again, or a
 press anywhere else (`Engine.onPress`), closes the menu; so does dragging
 it. Holding or dragging picks it up (`Engine.press`), never opening the
 menu. Without a menu the tap falls back to the 15 s label
