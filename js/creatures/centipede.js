@@ -113,6 +113,25 @@
       if (g) this.pather.setGoal(g.x, g.y, true);
     }
 
+    // After a shock to something tough: off to a spot a good way round the
+    // other side of it (away from where it came in), quick, to come back
+    // at it from there.
+    startRun(prey, h) {
+      const W = this.W;
+      const a0 = Math.atan2(h.y - prey.y, h.x - prey.x);
+      let g = null;
+      for (let k = 0; k < 3 && !g; k++) {
+        g = Nav.randomValid(W, this.caps, prey.x, prey.y, 220, (cx, cy) => {
+          const x = W.centerX(cx);
+          const y = W.centerY(cy);
+          const d = Math.hypot(x - prey.x, y - prey.y);
+          return d > 110 && Math.abs(U.angleDiff(Math.atan2(y - prey.y, x - prey.x), a0)) > 0.9;
+        }, 30);
+      }
+      this.runGoal = g;
+      this.runT = g ? U.rand(1.4, 2.4) : 0.8;
+      this.shockCd = Math.max(this.shockCd, 0.6);
+    }
     think(dt) {
       const h = this.chain.pts[0];
       this.speed = this.p.speed || 55;
@@ -208,6 +227,19 @@
         } else {
           this.speed = this.p.huntSpeed || this.speed * 1.8;
           this.pather.interval = 0.5;
+          // Hit and run (something tough, a red lizard): after each shock it
+          // scurries off to the far side and comes in again from there.
+          if (this.runT > 0) {
+            this.runT -= dt;
+            this.stateT = 0;
+            const g = this.runGoal;
+            if (g) this.pather.setGoal(g.x, g.y);
+            if (!g || U.dist(h.x, h.y, g.x, g.y) < 14 || this.runT <= 0) {
+              this.runT = 0;
+              this.runGoal = null;
+            }
+            return;
+          }
           this.pather.setGoal(prey.x, prey.y);
           const hp = prey.hitParts()[0];
           if (U.dist(h.x, h.y, hp.x, hp.y) < 9 * this.size + hp.r * 0.5) {
@@ -218,6 +250,7 @@
                 this.shockCd = 1.4;
                 this.eco.burst(hp.x, hp.y, '#fff2a0', 10);
                 prey.takeHit(0.6 * U.rand(0.8, 1.2), this);
+                if (!prey.corpse) this.startRun(prey, h);
               }
               return;
             }

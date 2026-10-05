@@ -89,6 +89,8 @@
       if (species === 'lizard_green' || species === 'lizard_cyan') this.diet.push('lizard_blue');
       this.diet.push('centipede_medium'); // the wiki: lizards eat adult centipedes too
       this.diet.push('noodlefly_infant', 'noodlefly', 'squidcada'); // fliers, when they come low enough
+      // red lizards hunt the lesser lizards (the green's too big to bother)
+      if (p.red) this.diet.push('lizard_pink', 'lizard_blue', 'lizard_white', 'lizard_yellow', 'lizard_cyan');
       this.hp = 1; // fighting condition; recovers slowly
       this.home = null; // favourite hangout: { sid, ox } on top of a solid
       this.homeAwayT = 0;
@@ -268,6 +270,20 @@
         return;
       }
 
+      // Every lizard keeps clear of a red one: it hunts them. How close it
+      // lets one come depends on its bravery; a green, big enough to hold
+      // its ground, only gives way when it's right on top of it.
+      if (perceive && !this.p.red && !this.holding) {
+        const fear = this.species === 'lizard_green' ? 0.3 : 1;
+        const range = 300 * fear * (1.3 - 0.6 * pe.bravery) * this.L;
+        const red = this.nearestOf(['lizard_red'], range, (c) => !c.corpse && !c.holding && this.canSee(c.x, c.y, range));
+        if (red) {
+          if (this.rival) this.endRivalry(U.rand(4, 8));
+          this.setState('flee');
+          const g = this.fleeGoal(this.caps, red.x, red.y, 400);
+          if (g) this.pather.setGoal(g.x, g.y, true);
+        }
+      }
       if (perceive) {
         const threat = this.threatNear(200 * (1.3 - 0.6 * pe.bravery)); // the brave let danger come closer
         if (threat) {
@@ -1019,6 +1035,8 @@
     }
     endRivalry(cd) {
       this.cancelStrike();
+      this.backT = 0;
+      this.backPending = false;
       this.rival = null;
       this.prize = null;
       this.rivalCd = cd;
@@ -1092,7 +1110,29 @@
         return true;
       }
 
-      // fight: close in and snap; each bite staggers and wears the other down
+      // fight: close in and strike, then back off a few steps, still facing
+      // it, rearing and gaping, and go again: a chance for either to lose
+      // its nerve. (A red lizard barely gives ground: it stands and fights.)
+      if (this.backPending && this.lungeT <= 0 && this.windT <= 0) {
+        this.backPending = false;
+        this.backT = this.p.red ? U.rand(0.15, 0.3) : U.rand(0.9, 1.7) * (1.3 - 0.5 * this.pers.aggression);
+      }
+      if (this.backT > 0) {
+        this.backT -= dt;
+        this.pather.clear();
+        this.raise = 0.8;
+        this.jawTarget = 0.45 + 0.45 * Math.max(0, Math.sin(this.stateT * 9));
+        if (this.backT <= 0 && this.id < r.id) {
+          // squared up again: one may think better of it
+          const diff = this.resolve(r) - r.resolve(this) + U.rand(-0.15, 0.15);
+          if (Math.abs(diff) > 0.3 && Math.random() < 0.4) {
+            if (diff > 0) r.submitTo(this);
+            else this.submitTo(r);
+            return false;
+          }
+        }
+        return true;
+      }
       this.raise = 0.3;
       this.jawTarget = 0.5;
       this.speed = (this.p.huntSpeed || 90) * 0.8;
@@ -1102,6 +1142,7 @@
       if (d < (this.p.biteRange || 60) * L + 12 && this.lungeCd <= 0 && this.grip && this.windT <= 0 && this.lungeT <= 0) {
         this.lunge(rh.x, rh.y, r, false);
         this.lungeCd = U.rand(0.5, 1.1) * (1.3 - 0.5 * this.pers.aggression);
+        this.backPending = true;
       }
       if (this.stateT > 14 && this.id < r.id) {
         // a long scrap: whoever is worse off gives up
@@ -1479,6 +1520,19 @@
           // Deliberately stepping off a surface: don't let the hug pull us back.
           this.leavingSurface = node.type === Nav.FALL || (g && (dx / d) * g.nx + (dy / d) * g.ny > 0.6);
         }
+        if (this.backT > 0 && this.state === 'fight' && g && this.lungeT <= 0) {
+          // backing off: a slow step back along the body's line (the head
+          // shoves the body back the way it lies)
+          let bx = P[2].x - head.x;
+          let by = P[2].y - head.y;
+          const bn = bx * g.nx + by * g.ny;
+          bx -= bn * g.nx;
+          by -= bn * g.ny;
+          const bl = Math.hypot(bx, by) || 1;
+          const bs = (this.p.speed || 50) * 0.35;
+          dvx = (bx / bl) * bs;
+          dvy = (by / bl) * bs;
+        }
         if (this.leap || this.scramble) {
           // (gravity already applied or scrambling; no steering)
         } else if (g) {
@@ -1494,7 +1548,7 @@
 
       // On a surface the head never walks backwards into its own shoulders
       // (that folds the body up behind it); it has to turn round instead.
-      if (g && this.lungeT <= 0 && !this.leavingSurface) {
+      if (g && this.lungeT <= 0 && !this.leavingSurface && !(this.backT > 0 && this.state === 'fight')) {
         let fx = head.x - P[2].x;
         let fy = head.y - P[2].y;
         const fl = Math.hypot(fx, fy) || 1;

@@ -474,6 +474,17 @@
       }
     }
 
+    // A corpse's colour drains away as it lies there: down to about a
+    // quarter of its saturation over 40 s, and a little darker.
+    drawFaded(ctx, c) {
+      const f = U.smooth(U.clamp(c.corpseT / 40, 0, 1));
+      if (!('filter' in ctx) || f < 0.02) return c.draw(ctx);
+      ctx.save();
+      ctx.filter = `saturate(${(1 - 0.75 * f).toFixed(3)}) brightness(${(1 - 0.15 * f).toFixed(3)})`;
+      c.draw(ctx);
+      ctx.restore();
+    }
+
     // After the pixel snap: each translucent creature is drawn opaque on a
     // scratch layer, snapped there, then blended onto the sprite layer at its
     // see-through alpha. k is world units -> sprite pixels.
@@ -770,6 +781,7 @@
           c.draw(ctx);
           ctx.restore();
         } else if (c.ghostAlpha && c.ghostAlpha() < 0.99) this.late.push(c);
+        else if (c.corpse && c.corpseT > 0.5) this.drawFaded(ctx, c);
         else c.draw(ctx);
       }
       for (const it of this.items) if (over(it)) it.draw(ctx);
