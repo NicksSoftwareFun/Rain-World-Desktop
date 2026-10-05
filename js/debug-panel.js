@@ -181,11 +181,13 @@
         this.save();
         this.render();
       };
+      // ('ledges' covers the older tiers and scatter too)
+      const isType = (value) => Wc.layout === value || (value === 'ledges' && (Wc.layout === 'tiers' || Wc.layout === 'scatter'));
       const type = (value, label, icon, title) => ({
         type: 'toggle', ring: 1, label, icon, title,
-        get: () => Wc.layout === value,
+        get: () => isType(value),
         set: () => {
-          if (Wc.layout === value) return;
+          if (isType(value)) return;
           Wc.layout = value;
           eng.regenerate(false);
           eng.restartWildlife();
@@ -214,9 +216,8 @@
         title: 'World',
         items: [
           { type: 'action', ring: 0, label: 'new map', icon: '\u21bb', title: 'A new background: a fresh map of this type', run: () => eng.regenerate(true) },
-          type('tiers', 'tiers', '\u2630', 'Rows of ledges bridged by poles'),
-          type('scatter', 'scatter', '\u2058', 'Ledges anywhere'),
           type('experimental', 'rooms', '\u25a6', 'Carved like real Rain World rooms'),
+          type('ledges', 'ledges', '\u2630', 'Ledges and poles over open space: in rows, or scattered'),
           size('compact', 'S', 2),
           size('normal', 'M', 2),
           size('large', 'L', 2),
@@ -438,7 +439,7 @@
           this.slider('time of day (-1 = rain cycle)', Wc, 'timeOfDay', -1, 24, 0.25, () => (eng.lightT = 0)),
           this.select('max fps', Wc, 'maxFps', [60, 30]),
           // a new layout is a new world: a new map and everyone respawned
-          this.select('layout', Wc, 'layout', ['tiers', 'scatter', 'experimental'], () => {
+          this.select('layout', Wc, 'layout', ['experimental', 'ledges'].concat(Wc.layout === 'tiers' || Wc.layout === 'scatter' ? [Wc.layout] : []), () => {
             eng.regenerate(false);
             eng.restartWildlife();
           }),

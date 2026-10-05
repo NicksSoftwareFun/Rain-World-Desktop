@@ -51,7 +51,9 @@
     const bandBot = H - Math.max(140, H * 0.18);
     const overlaps = (a, pad) =>
       ledges.some((b) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y);
-    if (cfg.world.layout !== 'scatter') {
+    // ('ledges': rows or scattered, the map's own pick)
+    const scatter = cfg.world.layout === 'scatter' || (cfg.world.layout === 'ledges' && rnd() < 0.4);
+    if (!scatter) {
       // Tiers (the default): rows of ledges at a few shared heights, with gaps
       // between neighbours that horizontal poles can bridge and vertical poles
       // linking the rows.

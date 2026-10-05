@@ -347,9 +347,17 @@ flood height (turning it shows the dotted line).
 
 A second one, the **world menu**, sits top left behind a globe
 (`Panel.buildWorldMenu`): a new map on the inner ring, the world type
-(tiers, scatter, rooms = experimental) in the middle, the size (compact,
+(rooms = experimental, the default; ledges = `tiers` or `scatter`, each
+map picking one from its seed) in the middle, the size (compact,
 normal, large, XL) outside. A size picked there keeps the world type;
-everything saves and redraws the side panel to match.
+everything saves and redraws the side panel to match. (Saves from before
+rooms became the default, `cfg.rev` < 2, open on rooms once. The tests pin
+`?layout=tiers` unless a check picks its own.) A room fills the whole
+screen, so the taskbar never triggers the ground rebuild there.
+
+Ledge-end trickles (`drips.js`) end on the flood's surface and vanish once
+it's over the ledge end; drops splash on the surface, and beads don't form
+under water.
 
 A quick click on a creature (released within 160ms, without dragging)
 shows its AI state label for 15 s (`Ecosystem.toggleLabel`/`drawLabels`,

@@ -19,7 +19,7 @@
       pixelScale: 2.5, // 1 = full res, 1.5-3 = chunkier Rain World pixels
       cellSize: 20, // navigation grid cell (px). Rain World tiles are 20px.
       seed: 0, // 0 = new background every load
-      layout: 'tiers', // 'tiers': rows of ledges at shared heights, bridged by horizontal poles; 'scatter': anywhere; 'experimental': carved like real Rain World rooms (js/rooms.js)
+      layout: 'experimental', // 'experimental' (rooms): carved like real Rain World rooms (js/rooms.js); 'ledges': ledges over open space, each map either in rows ('tiers': at shared heights, bridged by horizontal poles) or 'scatter'ed anywhere (both still accepted on their own)
       region: 'auto', // experimental layout: 'auto' (a different one each map) or outskirts / shoreline / industrial / shaded
       decorLedges: 7, // wallpaper ledges creatures can use
       decorPoles: 4, // extra free-standing poles (more are added wherever a ledge needs one)
@@ -522,6 +522,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
+  RW.DEFAULT_CONFIG.rev = 2; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -530,7 +531,16 @@
     const cfg = RW.U.clone(RW.DEFAULT_CONFIG);
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) RW.U.deepMerge(cfg, JSON.parse(saved));
+      if (saved) {
+        const raw = JSON.parse(saved);
+        RW.U.deepMerge(cfg, raw);
+        // rev 2: rooms became the default and tiers/scatter merged into
+        // 'ledges'; an older save opens on rooms
+        if (!(raw.rev >= 2)) {
+          cfg.world.layout = 'experimental';
+          cfg.rev = 2;
+        }
+      }
     } catch (e) {
       /* storage blocked or corrupt — run on defaults */
     }

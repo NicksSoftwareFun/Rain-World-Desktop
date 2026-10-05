@@ -52,6 +52,7 @@
   const cfg = RW.loadConfig();
   if (q.get('seed')) cfg.world.seed = +q.get('seed');
   if (q.get('palette')) cfg.world.palette = q.get('palette');
+  if (q.get('layout')) cfg.world.layout = q.get('layout'); // (the tests pin one)
 
   const desktopRoot = document.getElementById('desktop');
   let provider;

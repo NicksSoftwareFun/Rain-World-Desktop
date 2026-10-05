@@ -74,8 +74,9 @@ titles.
   poles) smaller; smaller zooms in so everything is bigger. The ledge, pole
   and fruit plant counts are densities: they scale with the map's area, and
   the tiered layout adds a row of ledges for about every 140 px of height.
-- **World menu** (the globe, top left): the world type (tiers, scatter or
-  rooms), the size (compact, normal, large, XL) and a new map.
+- **World menu** (the globe, top left): the world type (rooms, the default,
+  or ledges: rows of ledges or scattered ones, the map's pick), the size
+  (compact, normal, large, XL) and a new map.
 - **Rain**: cycle length and whether creatures take shelter in dens during
   the downpour. The cycle runs itself: it opens dripping from the last
   storm, the drips die away into a calm, then light rain starts, builds on

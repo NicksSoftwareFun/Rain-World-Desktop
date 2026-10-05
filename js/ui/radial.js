@@ -180,16 +180,16 @@
       const ringOf = (i) => i.ring ?? (i.type === 'dial' ? 1 : 0);
       const keys = [...new Set(this.items.map(ringOf))].sort((a, b) => a - b);
       const groups = keys.map((k) => this.items.filter((i) => ringOf(i) === k));
-      let r = this.hubSize / 2 + 72;
+      let r = this.hubSize / 2 + 54;
       for (const g of groups) {
         let rest = g.slice();
         while (rest.length) {
           const size = rest[0].type === 'dial' ? 64 : 50;
           // (room for each item and its label along the arc)
-          const fit = Math.max(1, Math.floor((r * (a1 - a0)) / (size + 22)) + 1);
+          const fit = Math.max(1, Math.floor((r * (a1 - a0)) / (size + 14)) + 1);
           rings.push({ r, size, items: rest.slice(0, fit) });
           rest = rest.slice(fit);
-          r += size + 34;
+          r += size + 20;
         }
       }
       for (const ring of rings) {
@@ -200,7 +200,7 @@
           this.place(it._el, Math.cos(a) * ring.r, Math.sin(a) * ring.r, ring.size);
         });
       }
-      const outer = rings.length ? rings[rings.length - 1].r + 70 : 160;
+      const outer = rings.length ? rings[rings.length - 1].r + 60 : 150;
       this.place(this.shade, 0, 0, outer * 2);
     }
 

@@ -86,13 +86,14 @@
       this.flow = flow === undefined ? 1 : flow; // how hard the ledge ends pour (0 = dry)
       if (world.version !== this.version) this.rebuild(world, decor);
       const H = world.h;
+      const wet = world.hasWater();
       for (const src of this.sources(world)) {
         if (src.chain) {
           const sway = Math.sin(t * 0.6 + src.chain.phase) * 6;
           src.x = src.chain.x + sway;
         }
-        // A covered source (another window over it) doesn't drip.
-        src.hidden = world.isSolidPt(src.x, src.y + 1);
+        // A covered source (another window over it, or the flood) doesn't drip.
+        src.hidden = world.isSolidPt(src.x, src.y + 1) || (wet && world.waterDepth(src.x, src.y + 2) >= 0);
         if (src.hidden || amount <= 0) continue;
         src.t += dt * src.speed * amount;
         if (src.t >= 1) {
@@ -106,7 +107,12 @@
         d.vx += (wind * 0.15 - d.vx) * dt;
         d.y += d.vy * dt;
         d.x += d.vx * dt;
-        if (world.isSolidPt(d.x, d.y)) {
+        const dep = wet ? world.waterDepth(d.x, d.y) : -1;
+        if (dep >= 0) {
+          // into the water: a splash on its surface
+          this.splash(d.x, d.y - dep, Math.min(1, d.vy / 900) * 0.6, true);
+          d.dead = true;
+        } else if (world.isSolidPt(d.x, d.y)) {
           // find the surface we hit
           let sy = d.y;
           for (let k = 0; k < 30 && world.isSolidPt(d.x, sy); k++) sy -= 1;
@@ -125,6 +131,21 @@
         }
         const hit = world.raycast(tr.x, tr.y, tr.x, H + 5);
         tr.land = hit ? hit.y : H;
+        // The flood: the stream ends on its surface, and once it's over the
+        // ledge end there's no stream at all.
+        if (wet) {
+          if (world.waterDepth(tr.x, tr.y + 3) >= 0) {
+            tr.land = null;
+            continue;
+          }
+          for (let y = tr.y + 4; y < tr.land; y += 4) {
+            const dep = world.waterDepth(tr.x, y);
+            if (dep >= 0) {
+              tr.land = y - dep;
+              break;
+            }
+          }
+        }
         if (Math.random() < dt * 14 * tr.flow * this.flow * Math.max(0.3, amount)) this.splash(tr.x + U.rand(-1, 1), tr.land, 0.5, true);
       }
 

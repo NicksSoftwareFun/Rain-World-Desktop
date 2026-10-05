@@ -17,11 +17,13 @@ export function launch() {
 // paused: nothing moves until the test calls engine.tick / RW_APP.step.
 // `seed` fixes the generated map; creature behaviour is still random.
 export async function openPrototype(browser, opts = {}) {
-  const { seed, width = 1920, height = 1080 } = opts;
+  // (checks run on the tiered layout unless they pick another: the site
+  // itself opens on rooms)
+  const { seed, width = 1920, height = 1080, layout = 'tiers' } = opts;
   const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(pathToFileURL(path.join(root, 'index.html')).href + '?paused=1' + (seed ? '&seed=' + seed : ''));
+  await page.goto(pathToFileURL(path.join(root, 'index.html')).href + '?paused=1&layout=' + layout + (seed ? '&seed=' + seed : ''));
   await page.waitForFunction(() => window.RW_APP);
   return { page, errors };
 }

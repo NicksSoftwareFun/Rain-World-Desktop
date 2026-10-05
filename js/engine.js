@@ -343,8 +343,9 @@
       this.updateLight(dt);
       const g = this.poll();
       // (on a real desktop the taskbar is reported a moment after start: once
-      // it is, the ground gets rebuilt to sit on it)
-      if (this.decor && Math.abs(this.floorOf(g.rects) - this.decor.floor) > 4 && !this.refloorT) {
+      // it is, the ground gets rebuilt to sit on it; a room fills the whole
+      // screen whatever the taskbar does)
+      if (this.decor && !this.decor.room && Math.abs(this.floorOf(g.rects) - this.decor.floor) > 4 && !this.refloorT) {
         this.refloorT = 1;
         setTimeout(() => {
           this.regenerate(false);
