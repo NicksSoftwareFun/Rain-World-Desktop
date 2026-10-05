@@ -590,6 +590,7 @@
         RW.Rooms.paintJunk(l, decor, pal, R);
         RW.Rooms.paintAccents(l, decor, pal, R);
         RW.Rooms.paintWaterPlants(l, decor, pal, R);
+        RW.Rooms.paintBiolum(l, decor);
         for (const p of decor.poles) drawPole(l, p, pal);
         for (const b of decor.beams || []) drawBeam(l, b, pal);
         for (const d of decor.dens) if (!d.sky) drawDenStatic(l, d, pal);

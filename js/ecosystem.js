@@ -398,7 +398,9 @@
     consume(prey, by) {
       if (!prey || prey.dead) return;
       const m = prey.mainPoint();
-      this.burst(m.x, m.y, prey.bloodColor || '#2a1418', 10);
+      // (a big meal makes a big mess; a big eater a bit more)
+      const k = prey.bulk() * (by && by.bulk ? 0.8 + 0.2 * by.bulk() : 1);
+      this.burst(m.x, m.y, prey.bloodColor || '#2a1418', 10, k);
       prey.grabbedBy = null;
       prey.remove();
       if (by && by.holding === prey) by.holding = null;
@@ -413,11 +415,16 @@
       this.stats.eaten++;
     }
 
-    burst(x, y, color, n) {
+    // A spray of n particles; k scales it with the size of what it came
+    // from (more of them, flung further, bigger, lasting longer).
+    burst(x, y, color, n, k) {
+      k = U.clamp(k || 1, 0.4, 3.5);
+      const sk = Math.sqrt(k);
+      n = Math.round(n * k);
       for (let i = 0; i < n; i++) {
         const a = U.rand(0, U.TAU);
-        const s = U.rand(30, 140);
-        this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, life: U.rand(0.4, 0.9), t: 0, color, size: U.rand(1.5, 3) });
+        const s = U.rand(30, 140) * sk;
+        this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, life: U.rand(0.4, 0.9) * (0.8 + 0.2 * k), t: 0, color, size: U.rand(1.5, 3) * sk });
       }
     }
 

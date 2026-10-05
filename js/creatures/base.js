@@ -948,7 +948,7 @@
       if (this.hp === undefined) this.hp = 1;
       this.hp -= power / (this.p.toughness || 1);
       const m = this.mainPoint();
-      this.eco.burst(m.x, m.y, this.bloodColor || '#2a1418', 5);
+      this.eco.burst(m.x, m.y, this.bloodColor || '#2a1418', 5, this.bulk());
       if (from && 'vx' in this) {
         const dx = m.x - from.x;
         const dy = m.y - from.y;
@@ -1594,7 +1594,7 @@
     // until a predator carries it off and swallows it.
     die(n) {
       const m = this.mainPoint();
-      this.eco.burst(m.x, m.y, this.bloodColor || '#2a1418', n || 12);
+      this.eco.burst(m.x, m.y, this.bloodColor || '#2a1418', n || 12, this.bulk());
       this.kill();
     }
     kill() {
@@ -1769,11 +1769,23 @@
 
     // Hunger, for the creature menu: the species that get hungry keep a
     // "full for so long" timer (fullT) or, slugcats, a hunger level.
+    // (noodleflies: an adult hunts once its huntCd runs out)
     canHunger() {
-      return this.fullT !== undefined || this.hunger !== undefined;
+      return this.fullT !== undefined || this.hunger !== undefined || (this.huntCd !== undefined && !!(this.diet && this.diet.length));
+    }
+    // How big it is, for scaling sprays (about 1 for a mid-sized lizard):
+    // the length of its body chain; a Daddy Long Legs is simply big.
+    bulk() {
+      if (this.species === 'daddy') return 2.6;
+      const pts = (this.spine && this.spine.pts) || (this.chain && this.chain.pts);
+      if (!pts) return 0.5;
+      let len = 0;
+      for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      return U.clamp(len / 60, 0.4, 3);
     }
     makeHungry() {
       if (this.fullT !== undefined) this.fullT = 0;
+      if (this.huntCd !== undefined) this.huntCd = 0;
       if (this.hunger !== undefined) this.hunger = 1;
       if (this.meals !== undefined) this.meals = 0;
     }

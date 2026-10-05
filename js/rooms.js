@@ -1200,6 +1200,20 @@
       const R = U.mulberry32((rnd() * 4294967296) >>> 0);
       const g = new Grid(C, Rows);
       const pickArch = () => REGIONS[region].archetypes[Math.floor(R() * REGIONS[region].archetypes.length)];
+      // A map of several rooms reads best as a bunker with an open roof:
+      // the top row open to the sky (light and rain pouring in), the rooms
+      // below it closed in (mostly), as the region builds them.
+      const OPEN = ['skyShaft', 'cruciform', 'ruins'];
+      const CLOSED = ['citadel', 'stacked'];
+      const pickFor = (j) => {
+        const own = REGIONS[region].archetypes;
+        const want = j === 0 ? OPEN : CLOSED;
+        if (j > 0 && R() < 0.25) return pickArch(); // (now and then, anything)
+        let mine = own.filter((a) => want.includes(a));
+        if (j === 0 && region === 'shaded') mine = ['ruins', 'ruins', 'cruciform']; // (wide open to the sky, mostly)
+        const from = mine.length ? mine : j === 0 ? [region === 'shaded' ? 'ruins' : 'skyShaft'] : [region === 'shaded' ? 'citadel' : 'stacked'];
+        return from[Math.floor(R() * from.length)];
+      };
       const layout = roomGrid(C, Rows, R);
       const arch = pickArch();
       const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region], rooms: layout.rooms.length };
@@ -1211,7 +1225,7 @@
         for (const rm of layout.rooms) {
           const sub = new SubGrid(g, rm.x0, rm.y0, rm.x1 - rm.x0 + 1, rm.y1 - rm.y0 + 1);
           const lf = { poles: [], beams: [], blocks: [], pits: [], region, style: STYLE[region] };
-          const a = pickArch();
+          const a = layout.ny > 1 ? pickFor(rm.j) : pickArch();
           rm.arch = a;
           const ri = ARCHETYPES[a](sub, R, lf);
           if (!info || rm.j === layout.ny - 1) info = ri;
@@ -1332,11 +1346,17 @@
     lm.width = C;
     lm.height = Rows;
     const lx = lm.getContext('2d');
+    // (harsh: bright right by the openings, falling off fast, and the deep
+    // insides darker than the room's own colour)
+    room.lightDist = dist;
+    const lit = U.mix(pal.sky, pal.light, 0.4);
+    const deep = U.mix(pal.interior, pal.mass, 0.3);
     for (let y = 0; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         const d = dist[y * C + x];
-        const t = d < 0 ? 0 : Math.pow(U.clamp(1 - d / 14, 0, 1), 1.3);
-        lx.fillStyle = U.rgba(U.mix(pal.interior, pal.sky, t));
+        const t = d < 0 ? 0 : Math.pow(U.clamp(1 - d / 12, 0, 1), 1.7);
+        const near = d < 0 ? 0 : U.clamp(1 - d / 22, 0, 1);
+        lx.fillStyle = U.rgba(U.mix(U.mix(deep, pal.interior, near), lit, t));
         lx.fillRect(x, y, 1, 1);
       }
     }
@@ -1432,6 +1452,66 @@
       }
     } else if (region === 'shaded') {
       for (let i = 0; i < 5; i++) glow(R(0, W), R(H * 0.3, H), 14, pal.glow, 0.5);
+    }
+
+    // Shafts of daylight down through the open top: slanting, stopped by
+    // the rock, strongest in a few distinct beams.
+    const slant = (R() < 0.5 ? -1 : 1) * R(0.15, 0.4);
+    const ph = R(0, 10);
+    const beam = U.mix(pal.light, '#ffffff', 0.35);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let x = 0; x < C; x++) {
+      if (cells[x] === 1) continue;
+      let y = 0;
+      let cx = x + 0.5;
+      while (y < Rows) {
+        const ix = Math.floor(cx);
+        if (ix < 0 || ix >= C || cells[y * C + ix] === 1) break;
+        y++;
+        cx += slant;
+      }
+      const len = y * cell;
+      if (len < cell * 2) continue;
+      const str = 0.12 + 0.88 * Math.pow(0.5 + 0.5 * Math.sin(x * 0.5 + ph) * Math.sin(x * 0.17 + ph * 2), 3);
+      const gr = ctx.createLinearGradient(0, 0, 0, len);
+      gr.addColorStop(0, U.rgba(beam, 0.42 * str));
+      gr.addColorStop(0.55, U.rgba(beam, 0.17 * str));
+      gr.addColorStop(1, U.rgba(beam, 0));
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.moveTo(x * cell, 0);
+      ctx.lineTo((x + 1) * cell, 0);
+      ctx.lineTo((x + 1) * cell + slant * len, len);
+      ctx.lineTo(x * cell + slant * len, len);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Shaded Citadel: pale blue bioluminescence in the dark: fungus on the
+    // back walls and hanging off the ceilings, glowing plants on the floors.
+    // (placed here, haloes painted here behind everything; the growths
+    // themselves are drawn in front by paintAccents)
+    decor.biolum = [];
+    if (region === 'shaded') {
+      const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
+      for (let y = 1; y < Rows - 1; y++) {
+        for (let x = 1; x < C - 1; x++) {
+          if (solid(x, y)) continue;
+          const d = dist[y * C + x];
+          const dim = d < 0 ? 1 : U.clamp((d - 4) / 10, 0, 1); // (it grows in the dark)
+          if (dim <= 0) continue;
+          let kind = null;
+          if (solid(x, y - 1) && R() < 0.22 * dim) kind = 'ceiling';
+          else if (solid(x, y + 1) && R() < 0.1 * dim) kind = 'plant';
+          else if ((solid(x - 1, y) || solid(x + 1, y)) && R() < 0.07 * dim) kind = 'wall';
+          else if (R() < 0.006 * dim) kind = 'wall';
+          if (!kind) continue;
+          const b = { kind, x: (x + R(0.15, 0.85)) * cell, y: kind === 'ceiling' ? y * cell : kind === 'plant' ? (y + 1) * cell : (y + R(0.2, 0.8)) * cell, seed: R(0, 1000), side: solid(x - 1, y) ? -1 : 1 };
+          decor.biolum.push(b);
+          glow(b.x, kind === 'ceiling' ? b.y + 5 : kind === 'plant' ? b.y - 12 : b.y, R(14, 24), '#7fd4ff', 0.3);
+        }
+      }
     }
   }
 
@@ -1764,6 +1844,84 @@
   // Plant life round the water: reeds and cattails crowding the banks,
   // kelp ribbons swaying up from the bottom, moss on the wet rock. (On a
   // pit map, round the pits' rims: that's where the flood wells up.)
+  // The Shaded Citadel's bioluminescence (placed by paintBackdrop, with its
+  // haloes): pale blue fungus bracketing the ceilings with glowing threads
+  // hanging off them, speckled patches on the walls, and glowing plants on
+  // the floors: curved stalks with bulbs.
+  function paintBiolum(l, decor) {
+    const core = '#e2f8ff';
+    const glowC = '#8fdcff';
+    const stem = 'rgba(70, 130, 160, 0.85)';
+    for (const b of decor.biolum || []) {
+      const R = U.mulberry32((b.seed * 1000) >>> 0);
+      const r = (a, c) => a + R() * (c - a);
+      if (b.kind === 'ceiling') {
+        // bracket caps along the underside, threads hanging from them
+        const n = 2 + Math.floor(R() * 3);
+        for (let i = 0; i < n; i++) {
+          const x = b.x + r(-7, 7);
+          const w = r(3, 7);
+          l.fillStyle = glowC;
+          l.beginPath();
+          l.ellipse(x, b.y, w, r(1.6, 2.8), 0, 0, Math.PI);
+          l.fill();
+          l.fillStyle = core;
+          l.fillRect(x - w * 0.5, b.y, w, 1);
+          if (R() < 0.7) {
+            const len = r(3, 13);
+            l.fillStyle = stem;
+            l.fillRect(x + r(-2, 2), b.y + 2, 1, len);
+            l.fillStyle = core;
+            l.fillRect(x - 0.5 + r(-2, 2), b.y + 1 + len, 2, 2);
+          }
+        }
+      } else if (b.kind === 'wall') {
+        // a speckled patch, a few tiny caps sticking out of it
+        const n = 4 + Math.floor(R() * 6);
+        for (let i = 0; i < n; i++) {
+          l.fillStyle = R() < 0.4 ? core : glowC;
+          const s = R() < 0.3 ? 2 : 1;
+          l.fillRect(b.x + r(-6, 6), b.y + r(-6, 6), s, s);
+        }
+        const caps = 1 + Math.floor(R() * 3);
+        for (let i = 0; i < caps; i++) {
+          const x = b.x + r(-4, 4);
+          const y = b.y + r(-4, 4);
+          l.fillStyle = stem;
+          l.fillRect(x, y, 1, 3);
+          l.fillStyle = glowC;
+          l.beginPath();
+          l.ellipse(x + 0.5, y, r(1.8, 3), 1.4, 0, Math.PI, U.TAU);
+          l.fill();
+        }
+      } else {
+        // a plant: a few curved stalks with glowing bulbs at the tips
+        const n = 1 + Math.floor(R() * 3);
+        for (let i = 0; i < n; i++) {
+          const h = r(10, 26);
+          const lean = r(-6, 6);
+          const x0 = b.x + r(-4, 4);
+          l.strokeStyle = stem;
+          l.lineWidth = 1.2;
+          l.beginPath();
+          l.moveTo(x0, b.y);
+          l.quadraticCurveTo(x0 + lean * 0.2, b.y - h * 0.6, x0 + lean, b.y - h);
+          l.stroke();
+          l.fillStyle = glowC;
+          l.beginPath();
+          l.arc(x0 + lean, b.y - h, r(1.6, 2.6), 0, U.TAU);
+          l.fill();
+          l.fillStyle = core;
+          l.fillRect(x0 + lean - 0.5, b.y - h - 0.5, 1.5, 1.5);
+          if (R() < 0.6) {
+            l.fillStyle = glowC;
+            l.fillRect(x0 + lean * 0.45 + 1, b.y - h * 0.5, 2, 2);
+          }
+        }
+      }
+    }
+  }
+
   function paintWaterPlants(l, decor, pal, R0) {
     const R = either(R0);
     const room = decor.room;
@@ -2303,5 +2461,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();

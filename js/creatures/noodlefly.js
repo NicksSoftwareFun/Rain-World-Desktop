@@ -896,7 +896,7 @@
             const m = c.mainPoint();
             this.feed = { t: 0, ox: m.x - tip.x, oy: m.y - tip.y };
             this.eatT = 0;
-            this.eco.burst(tip.x, tip.y, c.bloodColor || '#2a1418', 6);
+            this.eco.burst(tip.x, tip.y, c.bloodColor || '#2a1418', 6, c.bulk());
             this.vengeance = null;
             this.target = null;
             this.vx *= 0.2;
