@@ -1509,7 +1509,127 @@
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
+    fanFrames(canvas);
   }
 
-  RW.Background = { generateDecor, paint, compose, Weather, Light };
+  // The wall fans' turning blades. Painted, a fan is an empty housing; here
+  // each gets a loop of frames of its blades (one blade's turn, which looks
+  // the same as a whole turn), coloured from the finished picture under them
+  // (the wall's shade, grain and vignette carry through), and a cover: the
+  // poles and anything else in the play layer in front of it, put back over
+  // the blades each frame.
+  const FAN_FRAMES = 10;
+  function fanFrames(canvas) {
+    const B = canvas._bg;
+    B.fans = [];
+    const props = (B.decor.props || []).filter((q) => q.kind === 'fan' && q.nb);
+    if (!props.length) return;
+    const k = 1 / B.ps;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const pctx = B.play.getContext('2d', { willReadFrequently: true });
+    for (const q of props) {
+      const x0 = Math.floor((q.x - q.r) * k) - 1;
+      const y0 = Math.floor((q.y - q.r) * k) - 1;
+      const w = Math.ceil(2 * q.r * k) + 3;
+      const h = w;
+      if (x0 < 0 || y0 < 0 || x0 + w > canvas.width || y0 + h > canvas.height) continue;
+      const base = ctx.getImageData(x0, y0, w, h);
+      const play = pctx.getImageData(x0, y0, w, h).data;
+      // the blades a shade lighter than the hole behind them
+      const bl = U.hex(q.blade);
+      const ho = U.hex(q.hole);
+      const ratio = [0, 1, 2].map((i) => (bl[i] + 6) / (ho[i] + 6));
+      const mask = document.createElement('canvas');
+      mask.width = w;
+      mask.height = h;
+      const m = mask.getContext('2d', { willReadFrequently: true });
+      const frames = [];
+      for (let f = 0; f < FAN_FRAMES; f++) {
+        m.setTransform(1, 0, 0, 1, 0, 0);
+        m.clearRect(0, 0, w, h);
+        m.setTransform(k, 0, 0, k, -x0, -y0);
+        m.fillStyle = '#fff';
+        const step = U.TAU / q.nb;
+        for (let i = 0; i < q.nb; i++) {
+          const a = q.a0 + (f / FAN_FRAMES) * step + i * step;
+          m.beginPath();
+          m.moveTo(q.x, q.y);
+          m.arc(q.x, q.y, q.r * 0.9, a, a + step * 0.42);
+          m.closePath();
+          m.fill();
+        }
+        // (the hub stays the hole's colour)
+        m.globalCompositeOperation = 'destination-out';
+        m.beginPath();
+        m.arc(q.x, q.y, q.r * 0.18, 0, U.TAU);
+        m.fill();
+        m.globalCompositeOperation = 'source-over';
+        const md = m.getImageData(0, 0, w, h).data;
+        const out = new ImageData(w, h);
+        const o = out.data;
+        for (let i = 0; i < o.length; i += 4) {
+          if (md[i + 3] < 128) continue;
+          for (let c = 0; c < 3; c++) o[i + c] = Math.min(255, base.data[i + c] * ratio[c]);
+          o[i + 3] = 255;
+        }
+        const fc = document.createElement('canvas');
+        fc.width = w;
+        fc.height = h;
+        fc.getContext('2d').putImageData(out, 0, 0);
+        frames.push(fc);
+      }
+      // the cover: the finished picture wherever the play layer has
+      // something (a pole across the fan)
+      let cover = null;
+      const cv = new ImageData(w, h);
+      for (let i = 0; i < play.length; i += 4) {
+        if (play[i + 3] < 128) continue;
+        cv.data[i] = base.data[i];
+        cv.data[i + 1] = base.data[i + 1];
+        cv.data[i + 2] = base.data[i + 2];
+        cv.data[i + 3] = 255;
+        cover = cv;
+      }
+      let cc = null;
+      if (cover) {
+        cc = document.createElement('canvas');
+        cc.width = w;
+        cc.height = h;
+        cc.getContext('2d').putImageData(cover, 0, 0);
+      }
+      B.fans.push({ x0, y0, frames, cover: cc, nb: q.nb, spin: q.spin });
+    }
+  }
+  // Each frame, straight after the background: t in seconds.
+  function drawFans(ctx, canvas, t) {
+    const B = canvas._bg;
+    if (!B || !B.fans || !B.fans.length) return;
+    for (const f of B.fans) {
+      const u = t * f.spin * f.nb;
+      const i = Math.floor((u - Math.floor(u)) * FAN_FRAMES) % FAN_FRAMES;
+      ctx.drawImage(f.frames[i], f.x0, f.y0);
+      if (f.cover) ctx.drawImage(f.cover, f.x0, f.y0);
+    }
+  }
+
+  // A hanging chain, in whole art pixels (px: world units to one): rings
+  // and side-on links in turn.
+  function drawChain(ctx, c, col, px) {
+    ctx.fillStyle = col;
+    const x = Math.round(c.x / px) * px;
+    const y0 = c.y0 || 0;
+    const n = Math.max(2, Math.floor(c.len / (3 * px)));
+    for (let i = 0; i < n; i++) {
+      const y = y0 + i * 3 * px;
+      if (i % 2) ctx.fillRect(x, y, px, 4 * px);
+      else {
+        ctx.fillRect(x - px, y, 3 * px, px);
+        ctx.fillRect(x - px, y + 3 * px, 3 * px, px);
+        ctx.fillRect(x - px, y, px, 4 * px);
+        ctx.fillRect(x + px, y, px, 4 * px);
+      }
+    }
+  }
+
+  RW.Background = { generateDecor, paint, compose, drawFans, drawChain, Weather, Light };
 })();

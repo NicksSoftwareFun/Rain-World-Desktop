@@ -1,13 +1,18 @@
-// Foreground plants: reeds, kelp, vines, tufts, coral, glowing bulbs, the
-// batfly grass. Drawn in front of the creatures, they sway with the rain (a
-// little in light rain, hard in the downpour) and get bumped aside by
-// anything that pushes through them; they never block anything.
+// The foreground: plants (reeds, kelp, vines, tufts, coral, glowing bulbs,
+// the batfly grass), hanging chains and the cables slung between walls.
+// Drawn in front of the creatures, they sway with the rain (a little in
+// light rain, hard in the downpour) and get bumped aside by anything that
+// pushes through them; they never block anything. Each casts a soft shadow
+// onto the wall behind, down and to the right like the background props',
+// which moves with it.
 //
 // The plant code paints each clump through a recorder (fol.rec) just as it
 // would onto a canvas, calling rec.plant(x, y, hang) first to say where the
-// clump is rooted (hang: rooted at the top, a vine hanging down). Each clump
-// is then drawn once onto its own little crisp sprite, and every frame it's
-// drawn bent about its root: a shear, which is one drawImage a plant.
+// clump is rooted (hang: rooted at the top, a vine hanging down; opts.swag:
+// a cable slung between two points, swinging about the line between them).
+// Each clump is then drawn once onto its own little crisp sprite, and every
+// frame it's drawn bent about its root: a shear, which is one drawImage a
+// plant (two with its shadow).
 (function () {
   'use strict';
   const RW = window.RW;
@@ -46,16 +51,25 @@
     }
     begin(x, y, hang, opts) {
       const o = opts || {};
+      const sw = o.swag || null;
       this.cur = {
-        x, y, hang: !!hang,
-        // how readily it moves: underwater kelp and hanging vines are slack
-        give: o.give || (hang ? 1.25 : 1),
+        x, y, hang: !!hang || !!sw,
+        // the line it bends about: through (x, y), level, or along a
+        // cable's two ends
+        m: sw ? (sw.y1 - sw.y0) / (sw.x1 - sw.x0 || 1) : 0,
+        swag: sw,
+        // how readily it moves: underwater kelp and hanging vines are slack,
+        // a cable held at both ends stiffer
+        give: o.give || (sw ? 0.5 : hang ? 1.25 : 1),
         wet: !!o.wet,
+        tip: o.tip || null, // (told how far its bottom has swung: a chain's drips follow it)
+        len: o.len || 0,
         ops: [], state: { lineWidth: 1 },
         x0: x, y0: y, x1: x, y1: y,
         a: 0, v: 0, phase: Math.random() * 10,
       };
       this.plants.push(this.cur);
+      return this.cur;
     }
     extend(c, m, a) {
       const w = (c.state.lineWidth || 1) + 2;
@@ -74,7 +88,8 @@
 
     // Each plant onto its own crisp sprite at the art-pixel scale (k: art
     // pixels per world unit).
-    build(k) {
+    //   shadow: the colour of the shadows (the room's darkest)
+    build(k, shadow) {
       if (this.built === k) return;
       this.built = k;
       this.cur = null;
@@ -98,6 +113,19 @@
         d.height = h;
         d.getContext('2d').drawImage(c, 0, 0);
         p.img = d;
+        // its shadow: the same shape, flat (none under water)
+        p.shadow = null;
+        if (shadow && !p.wet) {
+          const sd = document.createElement('canvas');
+          sd.width = w;
+          sd.height = h;
+          const sx = sd.getContext('2d');
+          sx.drawImage(d, 0, 0);
+          sx.globalCompositeOperation = 'source-in';
+          sx.fillStyle = shadow;
+          sx.fillRect(0, 0, w, h);
+          p.shadow = sd;
+        }
       }
     }
 
@@ -129,15 +157,31 @@
         for (let i = 0; i < pts.length; i += 3) {
           const x = pts[i];
           const y = pts[i + 1];
-          if (x > p.x0 - 3 && x < p.x1 + 3 && y > p.y0 - 3 && y < p.y1 + 3) push += pts[i + 2];
+          if (!(x > p.x0 - 3 && x < p.x1 + 3 && y > p.y0 - 3 && y < p.y1 + 3)) continue;
+          if (p.swag) {
+            // (a cable: only right at it, not anywhere under it)
+            const w = p.swag;
+            const u = (x - w.x0) / (w.x1 - w.x0 || 1);
+            if (u < 0 || u > 1 || Math.abs(y - (U.lerp(w.y0, w.y1, u) + 4 * u * (1 - u) * w.sag)) > 8) continue;
+          }
+          push += pts[i + 2];
         }
         const target = sway * g;
         p.v += ((target - p.a) * 26 - p.v * 5) * dt + U.clamp(push * 0.0009 * g, -0.12, 0.12);
         p.a = U.clamp(p.a + p.v * dt, -0.6, 0.6);
+        if (p.tip) p.tip.dx = p.a * p.len;
       }
     }
 
-    // Bent about the root: x shifts in proportion to the distance from it.
+    // Bent about the root: x shifts in proportion to the distance from its
+    // root line (ox, oy: an offset in art pixels, for the shadows).
+    place(ctx, p, k, ox, oy) {
+      const s = p.hang ? -p.a : p.a;
+      const rx = p.x * k;
+      const ry = p.y * k;
+      // x' = x + s * (ry - y) + s * m * (x - rx): leaning away from the root
+      ctx.setTransform(1 + s * p.m, 0, -s, 1, s * (ry - p.m * rx) + ox, oy);
+    }
     draw(ctx, k) {
       if (!this.plants.length) return;
       ctx.save();
@@ -145,11 +189,24 @@
       ctx.globalAlpha = 0.88; // (a creature behind still shows through a little)
       for (const p of this.plants) {
         if (!p.img) continue;
-        const s = p.hang ? -p.a : p.a;
-        const ry = p.y * k;
-        // x' = x + s * (ry - y): leaning away from the root
-        ctx.setTransform(1, 0, -s, 1, s * ry, 0);
+        this.place(ctx, p, k, 0, 0);
         ctx.drawImage(p.img, Math.round(p.x0 * k) - 1, Math.round(p.y0 * k) - 1);
+      }
+      ctx.restore();
+    }
+    // The shadows, on the wall: drawn before the creatures (which pass
+    // between the plant and its shadow).
+    drawShadows(ctx, k) {
+      if (!this.plants.length) return;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.38;
+      const ox = Math.max(1, Math.round(2.5 * k));
+      const oy = Math.max(1, Math.round(4 * k));
+      for (const p of this.plants) {
+        if (!p.shadow) continue;
+        this.place(ctx, p, k, ox, oy);
+        ctx.drawImage(p.shadow, Math.round(p.x0 * k) - 1, Math.round(p.y0 * k) - 1);
       }
       ctx.restore();
     }

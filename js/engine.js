@@ -206,16 +206,25 @@
     }
     paintBackground() {
       RW.Background.paint(this.bgCanvas, this.W, this.H, this.ps / this.zoom, this.pal, this.decor, this.seed % 100000, this.light);
-      // the foreground plants (a room's): the batfly grass joins them, and
-      // each is drawn onto its sprite at this scale
-      this.foliage = this.decor.foliage || null;
+      // the foreground (a room's plants and cables, painted with it): the
+      // batfly grass and the hanging chains join it, and each is drawn onto
+      // its sprite at this scale
+      const d = this.decor;
+      if (!d.room) d.foliage = RW.Foliage ? new RW.Foliage() : null;
+      this.foliage = d.foliage || null;
       if (this.foliage) {
+        const rec = this.foliage.rec;
         for (const g of this.eco.grass) {
-          this.foliage.rec.plant(g.x, g.y);
-          this.eco.drawGrass(this.foliage.rec, g);
+          rec.plant(g.x, g.y);
+          this.eco.drawGrass(rec, g);
+        }
+        const col = U.rgba(U.mix(this.pal.near, this.pal.fog, 0.15));
+        for (const c of d.chains || []) {
+          rec.plant(c.x, c.y0 || 0, true, { give: 0.9, tip: c, len: c.len });
+          RW.Background.drawChain(rec, c, col, this.ps / this.zoom);
         }
         this.eco.grassInFoliage = true;
-        this.foliage.build(this.zoom / this.ps);
+        this.foliage.build(this.zoom / this.ps, U.rgba(this.pal.mass || this.pal.dark));
       } else this.eco.grassInFoliage = false;
     }
     // The light for now: the rain cycle's clock (or the preview hour); null
@@ -446,10 +455,12 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(this.bgCanvas, 0, 0);
+      RW.Background.drawFans(ctx, this.bgCanvas, this.eco.t);
       const k = this.zoom / this.ps;
       ctx.setTransform(k, 0, 0, k, 0, 0);
       this.weather.drawFog(ctx, this.pal);
-      this.weather.drawChains(ctx, this.decor, this.pal, this.eco.t);
+      if (this.foliage) this.foliage.drawShadows(ctx, k);
+      else this.weather.drawChains(ctx, this.decor, this.pal, this.eco.t);
       // Creatures go on their own layer, snapped to hard pixel edges.
       const sc = this.spriteCtx;
       sc.setTransform(1, 0, 0, 1, 0, 0);

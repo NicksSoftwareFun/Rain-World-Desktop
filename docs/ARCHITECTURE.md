@@ -410,11 +410,21 @@ pipe runs (rock to rock, a third of the props at most, thicker and lighter
 than the climbable poles, a dull valve wheel on one in three), hoses
 hanging from ceilings and junk piles on floors; each a soft shadow and a
 rim of light (brighter near the openings), and a little haze so it reads
-as further back. Foreground plants (`js/foliage.js`, `RW.Foliage`): the
-plant painters (`paintWaterPlants`, `paintAccents`, `paintBiolum`, and the
-batfly grass) draw through a recorder clump by clump (`rec.plant(x, y,
-hang)`); each clump becomes a crisp sprite drawn every frame in front of
-the creatures (before the water), sheared about its root: a damped spring
-pushed by the rain's wind (more in the downpour; kelp drifts in the
-current) and by anything moving through it. They block nothing.
+as further back. The wall fans turn: painted as an empty housing, each
+gets a loop of blade frames coloured from the finished background under
+it, and a cover of the play layer in front (poles), drawn every frame
+straight after the background (`Background.drawFans`, built in `compose`).
+The foreground (`js/foliage.js`, `RW.Foliage`): the plant painters
+(`paintWaterPlants`, `paintAccents`, `paintBiolum`, and the batfly grass),
+the cables slung between walls (`opts.swag`: they swing about the line
+between their ends and are bumped only right at the cable) and the
+hanging chains (`Background.drawChain`, whole art pixels; their drips
+follow the swinging tip) draw through a recorder clump by clump
+(`rec.plant(x, y, hang, opts)`); each clump becomes a crisp sprite drawn
+every frame in front of the creatures (before the water), sheared about
+its root: a damped spring pushed by the rain's wind (more in the
+downpour; kelp drifts in the current) and by anything moving through it.
+They block nothing. Each casts a flat shadow onto the wall (none under
+water), drawn behind the creatures and moving with it. The Ledges layout
+gets one too (its grass and chains).
 

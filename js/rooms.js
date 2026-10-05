@@ -1822,8 +1822,8 @@
     const anchors = [];
     for (let y = 1; y < Rows - 4; y++) for (let x = 1; x < C - 1; x++) if (solid(x, y) && (!solid(x + 1, y) || !solid(x - 1, y) || !solid(x, y + 1))) anchors.push([x, y]);
     const nCab = region === 'shaded' ? 1 : 2 + Math.floor(R() * 3);
-    l.strokeStyle = U.rgba(U.mix(pal.mass, pal.near, 0.3));
-    l.lineWidth = 1.6;
+    // (in the foreground: swinging, bumped, casting a shadow)
+    const cabCol = U.rgba(U.mix(pal.mass, pal.near, 0.3));
     for (let k = 0, tries = 0; k < nCab && tries < 300 && anchors.length; tries++) {
       const [ax, ay] = anchors[Math.floor(R() * anchors.length)];
       const [bx, by] = anchors[Math.floor(R() * anchors.length)];
@@ -1842,10 +1842,13 @@
         if (solid(Math.floor(x / cell), Math.floor(y / cell))) clear = false;
       }
       if (!clear) continue;
-      l.beginPath();
-      l.moveTo(x0, y0);
-      l.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 + sag * 2, x1, y1);
-      l.stroke();
+      if (fg) fg.plant(x0, y0, true, { swag: { x0, y0, x1, y1, sag } });
+      F.strokeStyle = cabCol;
+      F.lineWidth = 1.6;
+      F.beginPath();
+      F.moveTo(x0, y0);
+      F.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 + sag * 2, x1, y1);
+      F.stroke();
       k++;
     }
   }
@@ -2042,21 +2045,13 @@
         l.beginPath();
         l.arc(q.x, q.y, R_, 0, U.TAU);
         l.fill();
-        l.fillStyle = C_(mid);
-        const nb = 5 + Math.floor(r(0, 3));
-        const a0 = r(0, U.TAU);
-        for (let i = 0; i < nb; i++) {
-          const a = a0 + (i / nb) * U.TAU;
-          l.beginPath();
-          l.moveTo(q.x, q.y);
-          l.arc(q.x, q.y, R_ * 0.9, a, a + (U.TAU / nb) * 0.42);
-          l.closePath();
-          l.fill();
-        }
-        l.fillStyle = C_(deep);
-        l.beginPath();
-        l.arc(q.x, q.y, R_ * 0.18, 0, U.TAU);
-        l.fill();
+        // (the blades turn: drawn every frame over the empty housing, see
+        // Background.drawFans)
+        q.nb = 5 + Math.floor(r(0, 3));
+        q.a0 = r(0, U.TAU);
+        q.spin = r(0.15, 0.6) * (RR() < 0.5 ? -1 : 1); // turns a second
+        q.blade = mid;
+        q.hole = deep;
       } else if (q.kind === 'hose') {
         // hanging from the ceiling in a slack loop, a clamp at the top
         l.strokeStyle = C_(deep);

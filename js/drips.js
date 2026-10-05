@@ -89,8 +89,9 @@
       const wet = world.hasWater();
       for (const src of this.sources(world)) {
         if (src.chain) {
-          const sway = Math.sin(t * 0.6 + src.chain.phase) * 6;
-          src.x = src.chain.x + sway;
+          // (from its tip, wherever it has swung to: see RW.Foliage)
+          const c = src.chain;
+          src.x = c.x + (c.dx !== undefined ? c.dx : Math.sin(t * 0.6 + c.phase) * 6);
         }
         // A covered source (another window over it, or the flood) doesn't drip.
         src.hidden = world.isSolidPt(src.x, src.y + 1) || (wet && world.waterDepth(src.x, src.y + 2) >= 0);
