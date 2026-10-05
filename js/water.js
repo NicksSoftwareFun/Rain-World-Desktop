@@ -150,7 +150,9 @@
       // (never below where the pool sits anyway)
       const high = Math.min(this.highRow, this.baseRow);
       const want = this.floodFor(weather, rc);
-      this.flood += (want - this.flood) * U.approach(want > this.flood ? 1.5 : 0.4, dt);
+      // (and once the downpour's over it goes quickly, so the room's pipes
+      // are clear again for everything coming back out)
+      this.flood += (want - this.flood) * U.approach(want > this.flood ? 1.5 : 1.4, dt);
       // the level the flood is at, and the water's own top
       this.body = this.vol > 0.5 || this.flood > 0.001 ? this.findBody() : null;
       const row = U.lerp(this.baseRow, high, this.flood);
@@ -158,7 +160,7 @@
       this.targetRow = row;
       const rate = (this.open / 40) * dt; // (fast: the room fills in well under a minute)
       if (level > row + 0.5) this.pour(rate);
-      else if (level < row - 0.5 || (this.flood < 0.02 && this.vol > this.vbase + 0.5)) this.drain(rate * 0.8);
+      else if (level < row - 0.5 || (this.flood < 0.02 && this.vol > this.vbase + 0.5)) this.drain(rate * 3);
       // a few rounds a tick, so it levels out about as fast as water does
       for (let k = 0; k < 5; k++) this.step();
       this.level();

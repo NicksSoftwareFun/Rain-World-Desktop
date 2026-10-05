@@ -129,6 +129,21 @@
       // Adults: shock what we catch, then eat it.
       if (this.holding) {
         const prey = this.holding;
+        // (too cramped here to coil round it: dragging it somewhere roomier)
+        if (this.dragTo) {
+          this.setState('drag');
+          this.dragT = (this.dragT || 0) + dt;
+          if (!prey.corpse && this.dragT > 0.7) prey.kill();
+          this.pather.interval = 1;
+          this.pather.setGoal(this.dragTo.x, this.dragTo.y);
+          const arrived = Math.hypot(h.x - this.dragTo.x, h.y - this.dragTo.y) < this.W.cell * 2.5 || (this.dragT > 1.5 && this.pather.nodes && this.pather.complete && this.pather.done());
+          if (arrived || this.dragT > 9) {
+            this.dragTo = null;
+            this.dragT = 0;
+            this.pather.clear();
+          }
+          return;
+        }
         this.setState('eat');
         this.pather.clear();
         this.eatT += dt;
@@ -137,6 +152,8 @@
           this.eco.consume(prey, this);
           this.holding = null;
           this.eatT = 0;
+          this.coilTries = 0;
+          this.noCoil = false;
           this.fullT = this.p.aggressive ? U.rand(8, 18) : U.rand(40, 80);
         }
         return;
@@ -268,7 +285,7 @@
       // Medium and large ones ball up round what they're eating: the body
       // wound into a coil with the catch in the middle, slowly turning,
       // squeezing and writhing, legs twitching.
-      if (this.holding && this.state === 'eat' && this.size >= 1.5) {
+      if (this.holding && this.state === 'eat' && this.size >= 1.5 && !this.noCoil) {
         this.stepCoil(dt);
         return;
       }
@@ -433,9 +450,12 @@
         const g = this.W.nearestSurface(h.x, h.y, 40 * S, this.maskNoPole);
         const bx = g ? h.x - g.nx * Math.max(0, g.d - 4 * S) : h.x;
         const by = g ? h.y - g.ny * Math.max(0, g.d - 4 * S) : h.y;
-        this.coil = { cx: bx + ux * (R + 3 * S), cy: by + uy * (R + 3 * S), R, th: Math.atan2(h.y - by - uy * R, h.x - bx - ux * R), dir: U.sign(), squeeze: 0, sqT: U.rand(0.6, 1.6) };
+        this.coil = { cx: bx + ux * (R + 3 * S), cy: by + uy * (R + 3 * S), R, th: Math.atan2(h.y - by - uy * R, h.x - bx - ux * R), dir: U.sign(), squeeze: 0, sqT: U.rand(0.6, 1.6), t: 0, err: 0 };
+        // no room for the ring here: off somewhere roomier with it first
+        if (this.coilRoom(this.coil.cx, this.coil.cy, R) < 0.85) return this.cramped();
       }
       const co = this.coil;
+      co.t += dt;
       // a slow turn, now and then a tightening squeeze
       co.th += co.dir * dt * 0.9;
       co.sqT -= dt;
@@ -445,6 +465,7 @@
       }
       co.squeeze = Math.max(0, co.squeeze - dt * 2.2);
       let th = co.th;
+      let errSum = 0;
       const k = U.approach(7, dt);
       for (let i = 0; i < n; i++) {
         // winding inward a little, each turn pulsing out of step with the next
@@ -454,12 +475,56 @@
         P[i].x += (tx - P[i].x) * k;
         P[i].y += (ty - P[i].y) * k;
         this.W.collideCircle(P[i], 3 * S); // squashed against a wall, not through it
+        errSum += Math.hypot(tx - P[i].x, ty - P[i].y);
         P[i].px = P[i].x;
         P[i].py = P[i].y;
         if (i < n - 1) th -= (co.dir * this.chain.seg[i]) / Math.max(4, r);
       }
+      co.err += (errSum / n - co.err) * U.approach(3, dt);
       this.vx = this.vy = 0;
       this.phase += dt * 14; // legs scrabbling at it
+      // can't get round it (the walls keep the body off the ring): give up
+      // here and take it somewhere else
+      if (co.t > 1.2 && co.err > 2.5 * S) this.cramped();
+    }
+    // How much of a coil ring round (cx, cy) is open air (0 to 1).
+    coilRoom(cx, cy, R) {
+      const W = this.W;
+      const S = this.size;
+      let open = 0;
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * U.TAU;
+        const x = cx + Math.cos(a) * R;
+        const y = cy + Math.sin(a) * R;
+        if (!W.isSolidPt(x, y) && !W.isSolidPt(x + Math.cos(a) * 3 * S, y + Math.sin(a) * 3 * S)) open++;
+      }
+      return open / 24;
+    }
+    // Too cramped to coil: drag the catch to a nearby floor with room for
+    // the ring and try again there (a few times; then just eat it here).
+    cramped() {
+      this.coil = null;
+      this.coilTries = (this.coilTries || 0) + 1;
+      if (this.coilTries > 2) {
+        this.noCoil = true;
+        return;
+      }
+      const W = this.W;
+      const S = this.size;
+      const h = this.chain.pts[0];
+      const R = this.chain.seg.reduce((a, b) => a + b, 0) / (U.TAU * 1.25);
+      const spot = Nav.randomValid(W, this.caps, h.x, h.y, 320, (cx, cy) => {
+        if (!W.solid(cx, cy + 1) || (W.passageAt && W.passage(cx, cy) >= 0)) return false;
+        if (Math.hypot(W.centerX(cx) - h.x, W.centerY(cy) - h.y) < R * 1.5) return false;
+        return this.coilRoom(W.centerX(cx), (cy + 1) * W.cell - R - 3 * S, R) >= 0.95;
+      }, 80);
+      if (!spot) {
+        this.noCoil = true;
+        return;
+      }
+      this.dragTo = { x: spot.x, y: spot.y };
+      this.dragT = 0;
+      this.eatT = 0;
     }
 
     // Drawn after the game's sprites: a row of square-ish armour plates,

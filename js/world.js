@@ -449,6 +449,8 @@
       }
       if (mask.poles) {
         for (const p of this.poles) {
+          // (mask.poleX: only the pole there, e.g. the one a path climbs)
+          if (mask.poleX !== undefined && Math.abs(p.x - mask.poleX) > this.cell * 0.6) continue;
           const qy = U.clamp(y, p.y1, p.y2);
           const dx = x - p.x;
           const dy = y - qy;

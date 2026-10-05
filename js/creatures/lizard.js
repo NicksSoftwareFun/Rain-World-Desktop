@@ -534,8 +534,9 @@
       const P = this.spine.pts;
       this.noteWet(P[2]);
       const d = this.depthOf(P[2]);
-      // (just hauled out: not swimming for a moment, unless it fell back in)
-      if (this.swimCd > 0 && d < 8) {
+      // (just hauled out: not swimming for a moment, while the body follows
+      // the head out; unless the head itself fell back in)
+      if (this.swimCd > 0 && this.depthOf(P[0]) < 4) {
         this.swimCd -= dt;
         return (this.swimming = false);
       }
@@ -587,6 +588,7 @@
           this.swimming = false;
           head.x += this.vx * dt;
           head.y += this.vy * dt;
+          this.spine.follow(1); // (the body comes with it)
           return;
         }
       }
@@ -1340,7 +1342,13 @@
       // Only cling to a pole when the path is actually using it; otherwise a
       // pole base pushes the lizard sideways and it can't walk past.
       const pn = this.pather.current();
-      const mask = pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1) ? this.mask : this.maskNoPole;
+      // (and only that pole: between two poles a cell or two apart, the
+      // nearer one would pull it off the one its path climbs)
+      let mask = this.maskNoPole;
+      if (pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1)) {
+        mask = this.maskOnePole || (this.maskOnePole = Object.assign({}, this.mask));
+        mask.poleX = W.centerX(pn.cx);
+      }
       let g = W.nearestSurface(head.x, head.y, 22 * L, mask);
       if (!g) g = W.nearestSurface(P[3].x, P[3].y, 20 * L, mask);
       if (this.dropT > 0) {

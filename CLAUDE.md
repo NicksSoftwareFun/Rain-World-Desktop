@@ -109,9 +109,18 @@ junk decor, oval lizard territories and yellow lizard packs. Then: floods to 75%
 (`rain.floodHeight` slider) poured into the main body only, corpse sweep at
 the peak, batflies die in water, small creatures drown, only slugcats dive,
 land-first targets, open map edges and pit shafts unwalkable, waterfalls
-push and knock creatures loose. Next (owner's ask): a UX pass (panel,
-creature labels on click, rain settings in a radial menu off the cycle
-timer). The `bodies` check is
+push and knock creatures loose. Then the UX pass (floating panel, click a
+creature for its label, rain settings in a radial menu off the bottom-left
+cycle timer), inlet pipes so every room floods, centipedes dragging prey
+somewhere roomier to coil, lizards gripping only the pole their path climbs,
+the jump-cache fix (stale jumps across maps), a faster map checker
+(`Nav.reachSets`), no burrowing out of floods (drown instead), fast drain,
+Daddy Long Legs killable by ~10 spears.
+
+**Testing (owner's ask, 2026-10-05):** test less. See tests/README.md, "When
+to run what": syntax check + one targeted script while working, only the
+checks for the systems touched before a commit, the full suite only before
+a release (artifact publish) or after a cross-cutting change. The `bodies` check is
 occasionally noisy (lizard hairpins), and so is `fruit` (a burst of
 knocks can leave 7 loose fruit against a limit of 6; it fails without
 these changes too).

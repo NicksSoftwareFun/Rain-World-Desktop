@@ -35,6 +35,7 @@
 
   const jumpCache = new Map(); // capsKey -> Map(cellIndex -> [idx, cost, idx, cost...])
   let jumpCacheVersion = -1;
+  let jumpCacheWorld = null; // (a new map's world starts its versions over: key on the world too)
 
   function ensure(size) {
     if (!gs || gs.length !== size) {
@@ -136,9 +137,10 @@
   }
 
   function jumpEdges(W, cx, cy, c) {
-    if (jumpCacheVersion !== W.version) {
+    if (jumpCacheVersion !== W.version || jumpCacheWorld !== W) {
       jumpCache.clear();
       jumpCacheVersion = W.version;
+      jumpCacheWorld = W;
     }
     let m = jumpCache.get(c.key);
     if (!m) {
@@ -233,6 +235,127 @@
     return null;
   }
 
+  // Every move from cell (cx, cy) for a creature with caps c:
+  // emit(index, cost, type) for each (walking, crawling, falling, jumping).
+  function edges(W, cx, cy, c, emit) {
+    const cols = W.cols;
+    const inTunnel = !c.fly && W.passageAt && W.passage(cx, cy) >= 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (!W.inBounds(nx, ny) || !valid(W, nx, ny, c)) continue;
+        // into, along and out of a passage: straight steps only, crawled
+        if (inTunnel || (!c.fly && W.passageAt && W.passage(nx, ny) >= 0)) {
+          if (dx && dy) continue;
+          emit(ny * cols + nx, 1.5, TUNNEL);
+          continue;
+        }
+        if (dx && dy && W.solid(cx + dx, cy) && W.solid(cx, cy + dy)) continue;
+        let cost = dx && dy ? 1.414 : 1;
+        if (c.swim && wet(W, nx, ny)) {
+          cost *= c.swim; // (swimming: as a swimmer likes it)
+        } else if (!c.fly) {
+          if (!W.solid(nx, ny + 1)) {
+            if (c.poles && W.pole(nx, ny)) cost *= c.poleCost || 1.2;
+            else if (W.solid(nx, ny - 1) && !W.solid(nx - 1, ny) && !W.solid(nx + 1, ny)) cost *= c.ceilCost || 2;
+            else cost *= c.wallCost || 1.4;
+          }
+        } else if (c.surfacePenalty) {
+          const sd = W.surfDist(nx, ny);
+          if (sd > c.surfacePenalty) cost += (sd - c.surfacePenalty) * 2;
+        }
+        emit(ny * cols + nx, cost, WALK);
+      }
+    }
+
+    if (!c.fly && c.fall) {
+      for (let side = -1; side <= 1; side++) {
+        const sx2 = cx + side;
+        const sy2 = side === 0 ? cy + 1 : cy;
+        if (!W.inBounds(sx2, sy2) || W.solid(sx2, sy2) || valid(W, sx2, sy2, c)) continue;
+        let y = sy2;
+        let land = -1;
+        for (let k = 0; k < MAX_FALL && y < W.rows; k++, y++) {
+          if (W.solid(sx2, y + 1)) {
+            land = y;
+            break;
+          }
+          if (k > 1 && valid(W, sx2, y, c)) {
+            land = y;
+            break;
+          }
+        }
+        if (land > cy) emit(land * cols + sx2, (2 + (land - sy2) * 0.3) * (c.fallCost || 1), FALL);
+      }
+    }
+
+    if (c.jumpX > 0 || c.ceilLeap > 0) {
+      const list = jumpEdges(W, cx, cy, c);
+      for (let k = 0; k < list.length; k += 2) {
+        // (no leaping into water, or out of it: swim)
+        if (W.water && (wet(W, list[k] % cols, (list[k] / cols) | 0) || wet(W, cx, cy))) continue;
+        emit(list[k], list[k + 1], JUMP);
+      }
+    }
+  }
+
+  // Which cells can be reached from (x, y), and which can reach it, for
+  // caps c: one sweep over every move on the map (the map checker's test of
+  // whether dens connect, far cheaper than a search per pair).
+  function reachSets(W, x, y, c) {
+    const start = nearestValid(W, x, y, c, 2);
+    const N = W.cols * W.rows;
+    const fwd = new Uint8Array(N);
+    const back = new Uint8Array(N);
+    if (!start) return { fwd, back, cellOf: () => -1 };
+    // every move, both ways
+    const from = [];
+    const to = [];
+    for (let cy = 0; cy < W.rows; cy++) {
+      for (let cx = 0; cx < W.cols; cx++) {
+        if (!valid(W, cx, cy, c)) continue;
+        const ci = cy * W.cols + cx;
+        edges(W, cx, cy, c, (ni) => {
+          from.push(ci);
+          to.push(ni);
+        });
+      }
+    }
+    const adj = (src, dst) => {
+      const head = new Int32Array(N + 1);
+      for (const a of src) head[a + 1]++;
+      for (let i = 0; i < N; i++) head[i + 1] += head[i];
+      const fill = head.slice(0, N);
+      const list = new Int32Array(src.length);
+      for (let k = 0; k < src.length; k++) list[fill[src[k]]++] = dst[k];
+      return { head, list };
+    };
+    const sweep = (g, mark, s0) => {
+      const q = [s0];
+      mark[s0] = 1;
+      for (let h = 0; h < q.length; h++) {
+        const i = q[h];
+        for (let k = g.head[i]; k < g.head[i + 1]; k++) {
+          const j = g.list[k];
+          if (!mark[j]) {
+            mark[j] = 1;
+            q.push(j);
+          }
+        }
+      }
+    };
+    const s0 = start.cy * W.cols + start.cx;
+    sweep(adj(from, to), fwd, s0);
+    sweep(adj(to, from), back, s0);
+    const cellOf = (px, py) => {
+      const n = nearestValid(W, px, py, c, 2);
+      return n ? n.cy * W.cols + n.cx : -1;
+    };
+    return { fwd, back, cellOf };
+  }
+
   // Returns {nodes, complete} or null. nodes excludes the start cell; each
   // node's type says how to get there from the previous one (WALK/FALL/JUMP).
   function findPath(W, sx, sy, gx, gy, c, maxNodes) {
@@ -296,66 +419,7 @@
         heapPush(ni, ng + h(ni));
       };
 
-      const inTunnel = !c.fly && W.passageAt && W.passage(cx, cy) >= 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (!dx && !dy) continue;
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (!W.inBounds(nx, ny) || !valid(W, nx, ny, c)) continue;
-          // into, along and out of a passage: straight steps only, crawled
-          if (inTunnel || (!c.fly && W.passageAt && W.passage(nx, ny) >= 0)) {
-            if (dx && dy) continue;
-            relax(ny * cols + nx, 1.5, TUNNEL);
-            continue;
-          }
-          if (dx && dy && W.solid(cx + dx, cy) && W.solid(cx, cy + dy)) continue;
-          let cost = dx && dy ? 1.414 : 1;
-          if (c.swim && wet(W, nx, ny)) {
-            cost *= c.swim; // (swimming: as a swimmer likes it)
-          } else if (!c.fly) {
-            if (!W.solid(nx, ny + 1)) {
-              if (c.poles && W.pole(nx, ny)) cost *= c.poleCost || 1.2;
-              else if (W.solid(nx, ny - 1) && !W.solid(nx - 1, ny) && !W.solid(nx + 1, ny)) cost *= c.ceilCost || 2;
-              else cost *= c.wallCost || 1.4;
-            }
-          } else if (c.surfacePenalty) {
-            const sd = W.surfDist(nx, ny);
-            if (sd > c.surfacePenalty) cost += (sd - c.surfacePenalty) * 2;
-          }
-          relax(ny * cols + nx, cost, WALK);
-        }
-      }
-
-      if (!c.fly && c.fall) {
-        for (let side = -1; side <= 1; side++) {
-          const sx2 = cx + side;
-          const sy2 = side === 0 ? cy + 1 : cy;
-          if (!W.inBounds(sx2, sy2) || W.solid(sx2, sy2) || valid(W, sx2, sy2, c)) continue;
-          let y = sy2;
-          let land = -1;
-          for (let k = 0; k < MAX_FALL && y < W.rows; k++, y++) {
-            if (W.solid(sx2, y + 1)) {
-              land = y;
-              break;
-            }
-            if (k > 1 && valid(W, sx2, y, c)) {
-              land = y;
-              break;
-            }
-          }
-          if (land > cy) relax(land * cols + sx2, (2 + (land - sy2) * 0.3) * (c.fallCost || 1), FALL);
-        }
-      }
-
-      if (c.jumpX > 0 || c.ceilLeap > 0) {
-        const list = jumpEdges(W, cx, cy, c);
-        for (let k = 0; k < list.length; k += 2) {
-          // (no leaping into water, or out of it: swim)
-          if (W.water && (wet(W, list[k] % cols, (list[k] / cols) | 0) || wet(W, cx, cy))) continue;
-          relax(list[k], list[k + 1], JUMP);
-        }
-      }
+      edges(W, cx, cy, c, relax);
     }
 
     // Reconstruct to the goal, or to the closest point we could reach.
@@ -413,5 +477,5 @@
     return (cache[key] = { version: W.version, all, stand });
   }
 
-  RW.Nav = { WALK, FALL, JUMP, TUNNEL, wet, findPath, nearestValid, randomValid, valid, standable, capsKey, validCells };
+  RW.Nav = { WALK, FALL, JUMP, TUNNEL, wet, findPath, edges, reachSets, nearestValid, randomValid, valid, standable, capsKey, validCells };
 })();

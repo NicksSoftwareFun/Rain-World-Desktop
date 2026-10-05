@@ -1114,6 +1114,7 @@
   // for a pole-climbing lizard. Unreachable platforms get a ladder down to the
   // floor below them where there's a clear column; then it's checked again.
   const CHECK_CAPS = { walls: false, ceil: false, poles: true, fall: true, jumpX: 3, jumpUp: 2, leapPoles: true, wallCost: 1.3, swim: 2 };
+  CHECK_CAPS.key = RW.Nav.capsKey(CHECK_CAPS); // (the jump cache is keyed on it)
   function scratchWorld(decor, W, H, cell) {
     const w = new RW.World(cell);
     w.resize(W, H);
@@ -1128,24 +1129,40 @@
     const p = RW.Nav.findPath(w, from.x, from.y - 4, to.x, to.y - 4, CHECK_CAPS, 30000);
     return !!(p && p.complete);
   }
+  // (measured from the den that connects to the most others: one tucked
+  // away in a cut-off pocket would make the whole map look unreachable)
   function check(decor, W, H, cell) {
     const pipes = decor.dens.filter((d) => !d.sky);
     if (pipes.length < 2) return { ok: false, w: null };
     const w = scratchWorld(decor, W, H, cell);
-    const d0 = pipes[0];
-    const bad = pipes.filter((d, i) => i > 0 && !(reach(w, d0, d) && reach(w, d, d0)));
-    return { ok: !bad.length, bad, w };
+    let best = null;
+    for (const d0 of pipes.slice(0, 3)) {
+      // (one sweep: everything reachable from it, and everything that can reach it)
+      const rs = RW.Nav.reachSets(w, d0.x, d0.y - 4, CHECK_CAPS);
+      const both = (d) => {
+        const i = rs.cellOf(d.x, d.y - 4);
+        return i >= 0 && rs.fwd[i] && rs.back[i];
+      };
+      const bad = pipes.filter((d) => d !== d0 && !both(d));
+      if (!best || bad.length < best.bad.length) best = { d0, bad };
+      if (!bad.length) break;
+    }
+    decor.hubDen = best.d0;
+    return { ok: !best.bad.length, bad: best.bad, w };
   }
   // Ladders from unreachable platforms down to the floor beneath them.
   function addLadders(g, f, decor, W, H, cell) {
     const w = scratchWorld(decor, W, H, cell);
-    const d0 = decor.dens.find((d) => !d.sky);
+    const d0 = decor.hubDen || decor.dens.find((d) => !d.sky);
     if (!d0) return 0; // (no dens at all: nothing to connect; the map is re-rolled)
     let added = 0;
+    const cap = 6 + 7 * ((f.rooms || 1) - 1); // (a big map has more to join up)
+    const rs = RW.Nav.reachSets(w, d0.x, d0.y - 4, CHECK_CAPS);
     for (const p of platforms(g)) {
-      if (p.x1 - p.x0 < 1 || added > 6) continue;
+      if (p.x1 - p.x0 < 1 || added > cap) continue;
       const mid = { x: ((p.x0 + p.x1) / 2 + 0.5) * cell, y: (p.y + 1) * cell };
-      if (reach(w, d0, mid) && reach(w, mid, d0)) continue;
+      const mi = rs.cellOf(mid.x, mid.y - 4);
+      if (mi >= 0 && rs.fwd[mi] && rs.back[mi]) continue;
       for (const cx of [p.x0 - 1, p.x1 + 1, p.x0, p.x1]) {
         if (cx < 1 || cx >= g.C - 1) continue;
         // from beside the platform (or through its end) straight down to a floor
@@ -1177,7 +1194,9 @@
     const Rows = Math.floor(floor / cell);
     const region = pickRegion(cfg, rnd);
     let best = null;
-    for (let tries = 0; tries < 12; tries++) {
+    // (a big map takes a while to check: fewer re-rolls, then the nearest miss)
+    const maxTries = W * H > 2.5e6 ? 5 : 12;
+    for (let tries = 0; tries < maxTries; tries++) {
       const R = U.mulberry32((rnd() * 4294967296) >>> 0);
       const g = new Grid(C, Rows);
       const pickArch = () => REGIONS[region].archetypes[Math.floor(R() * REGIONS[region].archetypes.length)];
@@ -1248,20 +1267,28 @@
         decor.dens = dens;
         res = check(decor, W, H, cell);
       }
-      for (let round = 0; !res.ok && round < 3; round++) {
+      for (let round = 0; !res.ok && round < Math.min(5, 2 + layout.rooms.length); round++) {
+        const hub = decor.hubDen;
         if (!addLadders(g, f, decor, W, H, cell)) break;
         const dens = decor.dens;
         decor = buildDecor(g, f, cell, W, H, region, U.mulberry32(7));
         decor.dens = dens; // (keep the same dens)
+        decor.hubDen = hub;
         res = check(decor, W, H, cell);
       }
       decor.tries = tries + 1;
       decor.ok = res.ok;
       if (res.ok) return decor;
-      if (!best) best = decor;
+      // (the nearest miss so far, with the dens that didn't connect)
+      // (no list at all: fewer than two dens, the worst miss)
+      const missed = res.bad ? res.bad.length : 999;
+      if (!best || missed < best.missed) best = { decor, bad: res.bad || [], missed };
     }
-    // nothing passed: the first one, with just the dens that connect
-    return best;
+    // nothing passed: the nearest miss, keeping only the dens that connect
+    // (nothing comes out of, or heads for, a pipe in a cut-off pocket)
+    const d = best.decor;
+    d.dens = d.dens.filter((q) => !best.bad.includes(q));
+    return d;
   }
 
   // ---- painting ----------------------------------------------------------------

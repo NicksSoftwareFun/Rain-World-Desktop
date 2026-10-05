@@ -1177,7 +1177,7 @@
       const slant = this.slant;
       const sh = this.shelter;
       const room = this.decor && this.decor.room;
-      if (sh && sh.version === world.version && Math.abs(sh.slant - slant) < 0.01 && sh.H === H && sh.room === room) return;
+      if (sh && sh.world === world && sh.version === world.version && Math.abs(sh.slant - slant) < 0.01 && sh.H === H && sh.room === room) return;
       const step = 3;
       const x0min = -slant * H - 20;
       const n = Math.ceil((world.w - x0min) / step) + 2;
@@ -1201,7 +1201,7 @@
           }
           hits[i] = hit;
         }
-        this.shelter = { version: world.version, slant, H, step, x0min, hits, room };
+        this.shelter = { world, version: world.version, slant, H, step, x0min, hits, room };
         return;
       }
       // (thin horizontal poles don't shelter anything: rain falls past them)
@@ -1219,7 +1219,7 @@
         }
         hits[i] = hit;
       }
-      this.shelter = { version: world.version, slant, H, step, x0min, hits, room: null };
+      this.shelter = { world, version: world.version, slant, H, step, x0min, hits, room: null };
     }
 
     // Open tops (a room's openings to the sky): water pours in down one

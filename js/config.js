@@ -286,6 +286,7 @@
           reach: 250,
           speed: 42,
           bodyRadius: 24,
+          toughness: 6, // as tough as a red lizard or a large centipede: ~10 spears
         },
       },
       dropwig: {

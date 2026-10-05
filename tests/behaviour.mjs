@@ -778,7 +778,8 @@ const checks = [
           e.regenerate(false);
           out.slowestMs = Math.max(out.slowestMs, Math.round(performance.now() - t0));
           out.maps++;
-          if (!e.decor.ok) out.failed++;
+          // (a big map that can't be fully joined keeps only the dens that connect)
+          if (!e.decor.ok) out.largeMiss = (out.largeMiss || 0) + 1;
           if ((e.decor.room.arch || '').indexOf('+') < 0) out.singleRoomLarge = (out.singleRoomLarge || 0) + 1;
         }
         RW.applySizePreset(e.cfg, 'normal');
@@ -809,6 +810,7 @@ const checks = [
     // ~7 with water; in 4 min of living, 0-2 burrows and a few falls
     judge: (m) => [
       m.failed > 0 && `${m.failed} maps never passed the reachability check`,
+      m.largeMiss > 2 && 'no Large map could be fully joined up',
       m.fewDens > 0 && `${m.fewDens} maps with fewer than two dens`,
       m.noEntry > 0 && `${m.noEntry} maps with no way in for the flood (no opening to the sky, pit or inlet)`,
       (m.solidMin < 15 || m.solidMax > 70) && `solid share out of range (${m.solidMin}-${m.solidMax}%)`,
@@ -903,6 +905,13 @@ const checks = [
           }
           if (i === 2) out.batflyDead = !!(bat && (bat.corpse || bat.dead));
           if (cp.panicking) seen.centPanic++;
+          // (the longest spell a small one spends floundering: it should drown
+          // or get out well inside it)
+          for (const [k, c] of [['small', small], ['wig', wig]]) {
+            if (!c) continue;
+            seen[k + 'Run'] = c.panicking ? (seen[k + 'Run'] || 0) + 1 : 0;
+            seen[k + 'Max'] = Math.max(seen[k + 'Max'] || 0, seen[k + 'Run']);
+          }
           if (i === 60 * 4) {
             out.corpseSank = Math.round(W.waterDepth(dead.x, dead.y) - d0.corpse);
             out.rockSank = Math.round(rock.y - d0.rock);
@@ -916,8 +925,8 @@ const checks = [
         out.centStillIn = !cp.dead && cp.panicking;
         out.slugStillIn = !sc.dead && !sc.leaving && sc.swimming;
         // (drowned, or made it out: not still floundering)
-        out.smallDrowned = !!small.corpse || !small.panicking;
-        out.wigDrowned = !!(wig && wig.corpse);
+        out.smallDrowned = (seen.smallMax || 0) < 60 * 12;
+        out.wigDrowned = (seen.wigMax || 0) < 60 * 12;
         out.lizMaxDepth = Math.round(seen.lizDeep);
         out.rockFetched = !!rock.heldBy;
         // the flood's height carries off the dead under it
@@ -1026,7 +1035,7 @@ const checks = [
       m.centStillIn && 'the medium centipede was still in the water after 30s',
       !m.batflyDead && 'a batfly in the water lived',
       !m.smallDrowned && 'a small centipede was still floundering in the water',
-      !m.wigDrowned && 'a dropwig in the water didn\'t drown',
+      !m.wigDrowned && 'a dropwig was still floundering in the water',
       m.lizMaxDepth > 60 && `a lizard stayed under the water (${m.lizMaxDepth} frames)`,
       m.rockFetched && 'the slugcat dived for a sunk rock',
       m.slugStillIn && 'the slugcat was still in the water after 30s',

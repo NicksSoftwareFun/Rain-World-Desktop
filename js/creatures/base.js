@@ -362,7 +362,20 @@
       // (never while something's holding it: the hand or a jaw wins)
       if (!this.isFlier && !this.grabbedBy && this.W.passages && this.W.passages.length && this.tryTunnel()) return false;
       // No den reachable from here: slip away quietly rather than wait forever.
-      if (this.state === 'leave' && this.stateT > (this.isFlier ? 60 : 30)) this.leave();
+      // (not while the flood's up: then it's a pipe or nothing)
+      if (this.state === 'leave' && this.stateT > (this.isFlier ? 60 : 30) && !this.flooding()) this.leave();
+      // Caught in the flood with no way out: it can only last so long in the
+      // water (a slugcat swims a good deal longer than anything else).
+      if (!this.isFlier && this.flooding() && (this.swimming || this.panicking)) {
+        this.floodT = (this.floodT || 0) + dt;
+        if (this.floodT > (this.species === 'slugcat' ? 70 : 35)) {
+          this.floodT = 0;
+          this.kill();
+          return false;
+        }
+      } else {
+        this.floodT = 0;
+      }
       // Arrived at a pipe (nothing left to walk) but not quite close enough
       // for its own "in we go" check: in we go.
       if (this.state === 'leave' && !this.leaving && (this.isFlier ? this.stateT > 2 : this.pather && this.pather.goal && this.pather.done() && this.stateT > 0.5)) {
@@ -537,8 +550,12 @@
     // Stuck too long (or walled in): dig down into the surface underfoot and
     // disappear. The surface clips the creature as it sinks (see
     // Ecosystem.draw), with a little dirt kicked up.
-    burrowAway() {
+    // force: walled in solid with no way out at all (always allowed)
+    burrowAway(force) {
       if (this.burrow || this.dead) return;
+      // (no slipping away underground while the flood's up: find a pipe, or
+      // drown trying)
+      if (!force && this.flooding()) return;
       if (this.holding) this.release();
       if (this.grabbedBy) return; // not while something has hold of it
       const W = this.W;
@@ -1151,6 +1168,11 @@
     }
 
     // ---- water ----
+    // Is the downpour's flood up?
+    flooding() {
+      const S = this.W.waterSim;
+      return !!S && S.flood > 0.05;
+    }
     // How far below the surface a point is (-1: dry).
     depthOf(pt) {
       const S = this.W.waterSim;
@@ -1641,7 +1663,7 @@
         const m = this.mainPoint();
         const exit = this.findExit(m.x, m.y);
         if (!exit) {
-          this.burrowAway();
+          this.burrowAway(true);
           return true;
         }
         if (this.holding) this.release();

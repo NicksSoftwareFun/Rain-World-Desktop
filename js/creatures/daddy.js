@@ -134,9 +134,45 @@
     onRockHit() {
       this.flinch();
     }
-    onSpearHit() {
+    // A spear wounds it (rocks only make it flinch): it takes about as many
+    // as a red lizard or a large centipede to bring down.
+    onSpearHit(w) {
       this.flinch();
+      if (this.hp === undefined) this.hp = 1;
+      this.hp -= 0.6 / (this.p.toughness || 6);
+      this.eco.burst(w.x, w.y, '#1a1418', 4);
+      if (this.hp <= 0) {
+        this.die(18);
+        return 'drop';
+      }
       return 'embed';
+    }
+    // Dead: the legs let go and the body drops, the legs draping after it.
+    limp(dt) {
+      const W = this.W;
+      const b = this.body;
+      for (const t of this.tentacles) if (t.state !== 'seek') t.release();
+      this.vy += GRAV * dt;
+      this.vx *= Math.pow(0.3, dt);
+      b.x += this.vx * dt;
+      b.y += this.vy * dt;
+      const c = W.collideCircle(b, this.R * 0.7);
+      if (c) {
+        const vn = this.vx * c.nx + this.vy * c.ny;
+        if (vn < 0) {
+          this.vx -= vn * c.nx;
+          this.vy -= vn * c.ny;
+        }
+        this.vx *= 0.8;
+      }
+      for (const t of this.tentacles) {
+        const P = t.chain.pts;
+        P[0].x = P[0].px = b.x;
+        P[0].y = P[0].py = b.y;
+        t.chain.verlet(1, 0.9, 0, 600, dt);
+        t.chain.follow(1);
+        t.chain.collide(W, 2, 1);
+      }
     }
     shiftAll(dx, dy) {
       this.carry(dx, dy);
@@ -236,7 +272,8 @@
 
     update(dt) {
       if (!this.tick(dt)) {
-        for (const t of this.tentacles) this.updateTentacle(t, dt);
+        // (dead, the legs just hang: see limp)
+        if (!this.corpse) for (const t of this.tentacles) this.updateTentacle(t, dt);
         return;
       }
       if (this.grabbedBy) {

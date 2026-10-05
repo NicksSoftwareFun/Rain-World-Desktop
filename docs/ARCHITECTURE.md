@@ -246,7 +246,11 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   creatures that hate it (`hatesWater`: centipedes, dropwigs) thrash for the
   nearest dry footing (`waterPanic`, `nearestDry`); the small and weak
   (`drowns`: dropwigs, small centipedes) flounder slowly, slip under and
-  drown after ~7 s unless they make it out. Slugcats swim like
+  drown after ~7 s unless they make it out. While the flood is up nothing
+  slips away underground or fades out short of a den (`flooding()`): it's
+  a pipe or nothing, and anything left in the flood water too long drowns
+  (35 s; a slugcat 70 s). The flood drains in about ten seconds once the
+  downpour is over, so the pipes are clear for everything coming back. Slugcats swim like
   otters (`Slugcat.swim`: quick surging strokes at the surface, head up,
   arms pulling and legs kicking, tail sculling; a dive straight down when
   the path goes under, breaststroke and frog kick under water, ~10s of
@@ -280,10 +284,16 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
 - **Dens** sit on floors, away from water and off blocks; **sky dens** (`sky: true`, not
   drawn) are the openings along the top edge: only fliers use them, to
   spawn (mostly) and to leave (`openDens(flier)`, `denMouth` points up).
-- **Checking**: a scratch world and A* for a pole-climbing lizard between
-  every pair of pipe dens; a pit that cuts the map gets a bridge bar, an
+- **Checking**: a scratch world and one reachability sweep (`Nav.reachSets`:
+  every move on the map, forward and reversed) for a pole-climbing lizard
+  from the best-connected pipe den (the first three tried): every pipe den
+  must be reachable both ways; a pit that cuts the map gets a bridge bar, an
   unreachable platform gets a ladder down to the floor; failing that, up
-  to 12 re-rolls (`decor.ok`).
+  to 12 re-rolls (5 on a big map, with more ladder rounds) (`decor.ok`).
+  If none passes, the nearest miss is used with only the dens that connect.
+  (Nav's jump cache is keyed on the world object as well as its version: a
+  new map's world starts its versions over, and stale jumps from another
+  map sent creatures leaping through walls.)
 - **Painting** (`Background.paint` hands over to `paintRoom`): a light map
   (the region's dim interior colour, the sky colour only within ~14 cells
   of an opening, smoothed up from one pixel per cell), backdrop silhouettes
