@@ -84,7 +84,10 @@ titles.
   rises in the downpour (welling up out of the pits on a map without a
   pool) and drains after; slugcats swim (and dive for fruit growing under
   the water), lizards paddle, centipedes scramble out. Rain only falls
-  through the openings to the sky. Lizards hold territories fitted to the
+  through the openings to the sky, each with a waterfall down one side
+  that can knock creatures off walls and poles. In the downpour the water
+  rises to `rain.floodHeight` of the map (75%; the "water max height"
+  slider) and carries off the dead. Lizards hold territories fitted to the
   room's chambers; yellow lizards hunt in pairs.
 - **Dangle fruit** ripens on its vine and only drops when something hits it
   (a thrown rock or spear, or a creature barging into it). Fruit left lying

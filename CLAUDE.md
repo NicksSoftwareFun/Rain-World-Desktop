@@ -105,7 +105,13 @@ Large/XL experimental maps with ledges (`roomGrid`, `connectH`/`connectV`,
 (`Ecosystem.maxPopulation`). Then water (js/water.js: rising and
 draining with the downpour, swimming, sea fruit, dark muted underwater),
 rain only through openings plus open-top waterfalls, waterside plants and
-junk decor, oval lizard territories and yellow lizard packs. The `bodies` check is
+junk decor, oval lizard territories and yellow lizard packs. Then: floods to 75% of the map
+(`rain.floodHeight` slider) poured into the main body only, corpse sweep at
+the peak, batflies die in water, small creatures drown, only slugcats dive,
+land-first targets, open map edges and pit shafts unwalkable, waterfalls
+push and knock creatures loose. Next (owner's ask): a UX pass (panel,
+creature labels on click, rain settings in a radial menu off the cycle
+timer). The `bodies` check is
 occasionally noisy (lizard hairpins), and so is `fruit` (a burst of
 knocks can leave 7 loose fruit against a limit of 6; it fails without
 these changes too).

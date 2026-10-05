@@ -37,7 +37,7 @@ without page errors, populate, and react to geometry changes.
 | `corpses` | lizards never contesting a scavenged corpse, corpses left untaken |
 | `throws` | spears, rocks or spines thrown steeper than 30 degrees, slugcats eating corpses they didn't kill, backflips without a down-throw |
 | `experimental` | Rain World room maps that cut dens off, never have pits or water, take too long to build, or that creatures get stuck in or keep falling out of |
-| `water` | floods that don't rise with the downpour (or out of the pits) or don't drain after; slugcats, lizards or centipedes stuck in the water; corpses or rocks floating, fruit sinking; rain falling inside rock; slugcats not diving for sea fruit |
+| `water` | floods short of 75% of the map at the downpour's height or not draining after; corpses left under the flood; slugcats or medium centipedes stuck in the water, small centipedes and dropwigs not drowning, batflies surviving it, lizards diving; corpses or rocks floating, fruit sinking, sunk rocks fetched; rain falling inside rock; waterfalls knocking nothing; slugcats not diving for sea fruit |
 | `packs` | yellow lizards coming out alone, fighting each other, splitting their territory or never hunting together |
 | `presets` | defaults, ledge rows growing with map size, nests, pixel scales, wildlife restart |
 

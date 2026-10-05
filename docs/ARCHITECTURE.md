@@ -164,7 +164,14 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   included), so rain only gets in through the openings; each opening to
   the sky has a waterfall down one side (`skyFalls`/`drawSkyFalls`: 4px of
   trickle in light rain, ~26px in the downpour, spray where it lands on
-  rock or the water's surface; drawn only, it adds no water).
+  rock or the water's surface; `updateFalls` keeps their spans in
+  `fallSpans`). Anything passing through one is pushed down, and now and
+  then knocked off the wall or pole it clings to (`waterfallPush`,
+  `knockLoose`), more so the harder it rains. Where a room is open to the
+  sky or out of a side, the screen's edge is open air (`World.setOpenings`
+  splits the border; `solid()` is open there), and pit-shaft walls and
+  faces looking off the screen give no grip (`nearestSurface`), so nothing
+  walks along an invisible edge or down a pit.
 
 ## Experimental layout (`js/rooms.js`)
 
@@ -204,12 +211,23 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   cellular automaton on the nav cells (each holds an amount, a little over 1
   under pressure; down, then level out sideways, then up when squeezed; 5
   rounds a tick, ~0.03ms). It's blocked by the room's own rock (thin bars
-  let it through) and passages. The rain drives it: the flood follows the
-  downpour (`flood`, lagging it), a pool rising by up to 16% of the open
-  cells' worth (poured over its surface) and spilling over lips into the
-  next hollow, then draining back to where it started; a pit map with no
-  pool wells up out of the pits (poured into the top of what's in each
-  shaft) and drains back down them. `World.inWater`/`waterDepth`/
+  let it through) and passages. The rain drives it (`floodFor`): nothing in
+  the light rain; rising hard from when creatures start making for
+  shelter (`rain.shelterWarnSeconds` before the downpour); full through the
+  downpour; draining after. Full is `rain.floodHeight` of the map's height
+  (0.75: the panel's "water max height" slider, which shows a dotted line
+  at that height while dragged). The water is poured (about the open
+  cells' worth / 40 a second) into the main body's surface (`findBody`:
+  what's connected to where it comes from) until that body's top
+  (`levelRow`) reaches the target row, so a separate chamber only fills
+  once the main body spills over into it. It comes from the pool's
+  surface; on a dry map with pits, up out of the pits (into the top of
+  what's welled up in each shaft); otherwise (mode `rain`) where the open
+  tops' waterfalls land, or, in a room closed to the sky, seeping up
+  through the lowest floor. `level()` shares the level of water resting on
+  something along each row (the automaton alone leaves a fast-filling
+  room's surface sloped). At the flood's height the corpses under it are
+  carried off (`Ecosystem`, once a downpour). `World.inWater`/`waterDepth`/
   `waterCell`/`hasWater` ask it (scratch worlds fall back to the rects).
   Drawn over the creatures: everything under the surface is desaturated,
   multiplied toward the water's tint and lifted a touch (never black), then
@@ -217,13 +235,22 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   spills, spray where they land.
 - **In the water** (`base.js`): `Nav.valid` lets swimmers (`caps.swim`, a
   cost multiplier: slugcat 3, lizards 4) anywhere in it; everything else
-  keeps out (no jumps into or out of it either). Limp creatures float up to
+  keeps out (no jumps into or out of it either). Only divers (`caps.dive`:
+  slugcats) path below the top row of the water; lizards keep to the
+  surface, so nothing else dives to flee or to reach a pipe. A den under
+  the flood is shut (`openDens`). Things under the water (sunk rocks and
+  spears, corpses, fruit, downed prey) aren't worth a dive: creatures go
+  for what's on land (or floating). Batflies keep up off the water and die
+  the moment they touch it. Limp creatures float up to
   lie along the surface, corpses sink slowly (`waterLimp`, `floatBody`);
   creatures that hate it (`hatesWater`: centipedes, dropwigs) thrash for the
-  nearest dry footing (`waterPanic`, `nearestDry`). Slugcats swim like
+  nearest dry footing (`waterPanic`, `nearestDry`); the small and weak
+  (`drowns`: dropwigs, small centipedes) flounder slowly, slip under and
+  drown after ~7 s unless they make it out. Slugcats swim like
   otters (`Slugcat.swim`: quick surging strokes at the surface, head up,
   arms pulling and legs kicking, tail sculling; a dive straight down when
-  the path goes under, ~10s of breath; out with a hop or onto a pole) but
+  the path goes under, breaststroke and frog kick under water, ~10s of
+  breath; out with a hop or onto a pole) but
   would rather stay dry (no resting in it). Lizards paddle clumsily
   (`Lizard.swim`: half speed in jerky surges, head held up, legs churning,
   a wobble; slow dives; no lunges, only a snap at prey in reach). Rocks and
