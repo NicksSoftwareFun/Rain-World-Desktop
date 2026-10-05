@@ -139,6 +139,7 @@
       this.decor = cfg.world.layout === 'experimental' && RW.Rooms ? RW.Rooms.generate(this.W, this.H, cfg, rnd, opts) : RW.Background.generateDecor(this.W, this.H, cfg, rnd, opts);
       this.world.setStatic(this.decor.ledges.concat(this.decor.beams || []), this.decor.poles);
       this.world.setPits(this.decor.pits);
+      this.world.setOpenings(...this.openings());
       this.world.setWater(this.decor.water);
       this.world.setPassages(this.decor.passages);
       this.world.setDynamic(g.rects);
@@ -151,6 +152,21 @@
       this.eco.weather = this.weather;
       this.eco.setDecor(this.decor);
       this.applyPalette();
+    }
+
+    // A room's openings in its outer wall (see World.setOpenings).
+    openings() {
+      const room = this.decor && this.decor.room;
+      const W = this.world;
+      if (!room || room.C !== W.cols) return [null, null, null];
+      const top = new Uint8Array(W.cols);
+      for (let x = 0; x < room.C; x++) top[x] = room.cells[x] !== 1 ? 1 : 0;
+      const side = (x) => {
+        const a = new Uint8Array(W.rows);
+        for (let y = 0; y < room.R; y++) a[y] = room.cells[y * room.C + x] !== 1 ? 1 : 0;
+        return a;
+      };
+      return [top, room.open === 'left' ? side(0) : null, room.open === 'right' ? side(room.C - 1) : null];
     }
 
     applyPalette() {
@@ -355,7 +371,7 @@
       }
       if ((g.releases || []).length) this.dropHand();
       this.weather.update(dt, this.cfg, this.W, this.H, this.world);
-      if (this.world.waterSim) this.world.waterSim.update(dt, this.weather.intensity);
+      if (this.world.waterSim) this.world.waterSim.update(dt, this.weather, this.cfg.rain);
       this.eco.update(dt);
     }
 
@@ -395,6 +411,17 @@
       }
       if (cfg.rain.enabled && cfg.rain.showCycleHud) this.weather.drawHud(ctx, this.W, this.H, this.pal);
       if (cfg.debug.showGrid) this.drawGrid(ctx);
+      // the water max height slider being dragged: a dotted line at the
+      // height the flood will reach
+      if (this.floodPreviewUntil && performance.now() < this.floodPreviewUntil) {
+        const y = Math.round(this.H * (1 - (+cfg.rain.floodHeight || 0)));
+        const a = Math.min(1, (this.floodPreviewUntil - performance.now()) / 500);
+        ctx.fillStyle = U.rgba(U.mix((this.pal && this.pal.water) || '#6a8aa0', '#ffffff', 0.7), 0.9 * a);
+        const dash = 8 / (this.zoom / this.ps);
+        for (let x = 0; x < this.W; x += dash * 2) ctx.fillRect(x, y - 1, dash, 2);
+        ctx.font = `${Math.round(12 / (this.zoom / this.ps))}px monospace`;
+        ctx.fillText(`water max ${Math.round((+cfg.rain.floodHeight || 0) * 100)}%`, 12, y - 6);
+      }
       if (cfg.debug.showFps) {
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.font = '12px monospace';

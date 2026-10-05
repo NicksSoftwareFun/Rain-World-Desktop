@@ -43,6 +43,7 @@
         jumpUp: p.jumpUp || 5,
         poleCost: 1.1,
         swim: 3, // (a fine swimmer, but it likes to keep dry)
+        dive: true, // (and the only one that goes under)
       };
       this.grav = GRAV;
       this.pather = new RW.Pather(this, this.caps);
@@ -283,6 +284,14 @@
       this.head.y += dy;
       this.tail.shift(dx, dy);
     }
+    knockLoose() {
+      if (this.pole) {
+        this.pole = null;
+        this.jumping = false;
+        this.grounded = false;
+      }
+      this.vy = Math.max(this.vy, 80);
+    }
     onUnburrowed() {
       super.onUnburrowed();
       this.pole = null;
@@ -443,7 +452,7 @@
 
       // Prey knocked down by a rock: go and pick it up.
       if (perceive && this.hunger > 0.3 && this.state !== 'forage' && this.wants('meat')) {
-        let downed = this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1);
+        let downed = this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1 && this.W.waterDepth(c.x, c.y) < 6);
         if (!downed) {
           // (a corpse only if we killed it: no scavenging)
           const c = this.nearestCorpse(['batfly', 'centipede', 'noodlefly_infant'], 320);
@@ -739,6 +748,7 @@
       for (const it of this.eco.items) {
         if (!(it instanceof RW.Weapon) || !this.canTake(it)) continue;
         if (it.claimedBy && it.claimedBy !== this) continue;
+        if (this.W.waterDepth(it.x, it.y) >= 0) continue; // (one on land, not one sunk in the water)
         if (it === this.ignoreWeapon && this.ignoreWeaponT > 0) continue;
         const d = U.dist(it.x, it.y, hip.x, hip.y) - (it.kind === 'spear' ? 120 : 0) - (it.skewer && it.thrower === this && this.hunger > 0.3 ? 150 : 0);
         if (d < bs) {
@@ -947,6 +957,7 @@
         if (!(it instanceof RW.Fruit)) continue;
         if (it.dead || it.heldBy || (it.claimedBy && it.claimedBy !== this)) continue;
         if (it === this.ignoreFood && this.ignoreFoodT > 0) continue;
+        if (this.W.waterDepth(it.x, it.y) > 6) continue; // (on land, or floating; never down under)
         const d = U.dist2(it.x, it.y, this.hip.x, this.hip.y);
         if (d < bd) {
           bd = d;
@@ -1277,11 +1288,13 @@
       if (!W.waterSim || !W.waterSim.active()) return (this.swimming = false);
       const hip = this.hip;
       this.noteWet(hip);
-      if (this.swimCd > 0) {
+      const d = this.depthOf(hip);
+      // (just hopped out: not swimming for a moment, unless it fell back in)
+      if (this.swimCd > 0 && d < 8) {
         this.swimCd -= dt;
         return (this.swimming = false);
       }
-      const d = this.depthOf(hip);
+      this.swimCd = 0;
       const was = this.swimming;
       this.swimming = d > (was ? -1 : 4) && !(this.pole && d < 14);
       if (this.swimming && !was) {
@@ -1655,12 +1668,27 @@
         dx /= dl;
         dy /= dl;
         const c = this.swimPh || 0;
-        for (const k of [0, Math.PI]) {
-          const s = Math.sin(c + k);
-          const co = Math.cos(c + k);
-          const side = k ? -1 : 1;
-          hands.push({ x: hd.x + dx * (1 + s * 6) - dy * (co * 3 + side), y: hd.y + dy * (1 + s * 6) + dx * (co * 3 + side) + 3 });
-          feet.push({ x: hip.x - dx * (7 + s * 2) - dy * side * (2 + co * 3), y: hip.y - dy * (7 + s * 2) + dx * side * (2 + co * 3) });
+        if (this.diving && this.depthOf(hip) > 6) {
+          // under water: breaststroke. Both arms shoot forward together,
+          // sweep out and back to the chest (the pull is the surge), tuck in
+          // and shoot forward again; the legs frog-kick in time.
+          const sh = shoulder;
+          const fwd = 1 + 7 * Math.cos(c);
+          const out = 1.5 + 4 * Math.max(0, Math.sin(c));
+          for (const side of [1, -1]) {
+            hands.push({ x: sh.x + dx * fwd - dy * side * out, y: sh.y + dy * fwd + dx * side * out });
+            const kick = 2 + 3.5 * Math.max(0, -Math.sin(c));
+            feet.push({ x: hip.x - dx * (6 + 3 * Math.cos(c)) - dy * side * kick, y: hip.y - dy * (6 + 3 * Math.cos(c)) + dx * side * kick });
+          }
+        } else {
+          // at the surface: paddling, the arms in turn
+          for (const k of [0, Math.PI]) {
+            const s = Math.sin(c + k);
+            const co = Math.cos(c + k);
+            const side = k ? -1 : 1;
+            hands.push({ x: hd.x + dx * (1 + s * 6) - dy * (co * 3 + side), y: hd.y + dy * (1 + s * 6) + dx * (co * 3 + side) + 3 });
+            feet.push({ x: hip.x - dx * (7 + s * 2) - dy * side * (2 + co * 3), y: hip.y - dy * (7 + s * 2) + dx * side * (2 + co * 3) });
+          }
         }
       } else if (this.pole) {
         // hugging the pole, hand over hand

@@ -277,6 +277,8 @@
           this.slider('cycle (min)', R, 'cycleMinutes', 1, 30, 0.5),
           this.slider('light rain', R, 'drizzle', 0, 1, 0.01),
           this.slider('drips', R, 'drips', 0, 2, 0.05),
+          // (while it's being dragged, a dotted line marks the height on the map)
+          this.slider('water max height', R, 'floodHeight', 0, 0.95, 0.05, () => (eng.floodPreviewUntil = performance.now() + 1500)),
           this.toggleCtl('rain curtains', R, 'curtains'),
           this.toggleCtl('shelter in dens during downpour', R, 'shelterDuringDownpour'),
           this.toggleCtl('cycle timer', R, 'showCycleHud'),

@@ -353,6 +353,7 @@
         }
         this.panicking = false;
         this.dryGoal = null;
+        this.drownT = 0;
       }
       // Passages: crawling through one, or about to (the path runs into one)
       if (this.tunnel && this.grabbedBy) this.tunnel = null;
@@ -878,6 +879,7 @@
       for (const c of this.eco.creatures) {
         if (!c.corpse || c.dead || c.grabbedBy || c.alpha < 0.5 || c === this) continue;
         if (!species.some((s) => (s.endsWith('*') ? c.species.startsWith(s.slice(0, -1)) : s === c.species))) continue;
+        if (this.W.waterDepth(c.x, c.y) > 6) continue; // (sunk: not worth a dive)
         const d = U.dist2(m.x, m.y, c.x, c.y);
         if (d < bd) {
           bd = d;
@@ -1141,6 +1143,12 @@
     }
     limp(dt) {}
     onRecovered() {}
+    // Knocked off whatever it's clinging to (a waterfall's weight, say): it
+    // lets go for a moment and drops.
+    knockLoose() {
+      this.dropT = Math.max(this.dropT || 0, 0.5);
+      if ('vx' in this) this.vy = Math.max(this.vy, 80);
+    }
 
     // ---- water ----
     // How far below the surface a point is (-1: dry).
@@ -1212,10 +1220,23 @@
       let tx = g ? g.x : lead.x;
       let ty = (surf === null ? lead.y : surf) + 1;
       if (g && Math.abs(g.x - lead.x) < W.cell * 1.6 && g.y < ty + W.cell) ty = g.y; // up and out
+      // The small and weak (dropwigs, small centipedes) can't keep up: they
+      // struggle, slip under, and drown within a few seconds.
+      if (this.drowns) {
+        this.drownT = (this.drownT || 0) + dt;
+        ty += Math.min(30, this.drownT * 6); // going under
+        if (this.drownT > 1.5 && Math.random() < dt * 6) this.eco.burst(lead.x, (surf === null ? lead.y : surf) + 2, 'rgba(220,235,255,0.7)', 1); // bubbles
+        if (this.drownT > 7) {
+          this.drownT = 0;
+          this.panicking = false;
+          this.kill();
+          return false;
+        }
+      }
       const dx = tx - lead.x;
       const dy = ty - lead.y;
       const d = Math.hypot(dx, dy) || 1;
-      const sp = U.clamp((this.p.speed || 60) * 0.55, 30, 70) * (0.4 + Math.abs(Math.sin(this.age * 9)));
+      const sp = U.clamp((this.p.speed || 60) * (this.drowns ? 0.25 : 0.55), 15, 70) * (0.4 + Math.abs(Math.sin(this.age * (this.drowns ? 14 : 9))));
       const st = Math.min(d, sp * dt);
       this.pipeMove((dx / d) * st, (dy / d) * st, dt);
       const ch = this.spine || this.chain;

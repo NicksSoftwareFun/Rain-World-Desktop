@@ -27,6 +27,7 @@
       // instead of all trekking to the screen edges to climb
       this.caps = { walls: true, ceil: true, poles: false, fall: true, wallCost: 1.1, ceilCost: 1.0, ceilLeap: 9 };
       this.hatesWater = true;
+      this.drowns = true;
       this.grav = GRAV;
       this.mask = { floor: true, walls: true, ceil: true, poles: false };
       this.pather = new RW.Pather(this, this.caps);

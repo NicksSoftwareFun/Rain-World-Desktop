@@ -80,13 +80,14 @@
 
     roostSpot() {
       const f = this.flock;
-      if (f.roost && !this.W.isSolidPt(f.roost.x, f.roost.y)) return f.roost;
+      const dry = (o) => this.W.waterDepth(o.x, o.y + 6) < 0; // (never down by the water)
+      if (f.roost && !this.W.isSolidPt(f.roost.x, f.roost.y) && dry(f.roost)) return f.roost;
       const opts = [];
       for (const g of this.eco.grass) opts.push({ x: g.x, y: g.y - g.h * 0.8 });
       // home: the nest is the favourite roost
       for (const n of this.eco.openNests()) if (!this.W.isSolidPt(n.x, n.y + 18)) for (let k = 0; k < 4; k++) opts.push({ x: n.x, y: n.y + 18 });
       for (const p of this.W.poles) opts.push({ x: p.x, y: p.y1 - 2 });
-      const valid = opts.filter((o) => !this.W.isSolidPt(o.x, o.y));
+      const valid = opts.filter((o) => !this.W.isSolidPt(o.x, o.y) && dry(o));
       f.roost = valid.length ? U.pick(valid) : null;
       return f.roost;
     }
@@ -102,6 +103,12 @@
         p.y = hp.y;
         this.flap += dt * (this.grabbedBy.isHand || this.corpse ? 3 : 50); // limp in the hand
         this.struggle(dt);
+        return;
+      }
+      // Water is death to a batfly: in it goes, and that's that.
+      if (W.waterSim && W.waterDepth(p.x, p.y) >= 0) {
+        this.noteWet(p);
+        this.kill();
         return;
       }
       const maxSp = this.p.speed || 110;
@@ -200,6 +207,16 @@
         const d = U.dist(p.x, p.y, t.x, t.y) || 1;
         ax += ((p.x - t.x) / d) * 900;
         ay += ((p.y - t.y) / d) * 900;
+      }
+      // keep well up off the water
+      if (W.waterSim) {
+        for (const dy of [12, 24, 40]) {
+          if (W.waterDepth(p.x + this.vx * 0.15, p.y + dy + Math.max(0, this.vy) * 0.15) >= 0) {
+            ay -= 1400 * (1 - dy / 60);
+            if (this.vy > 0) this.vy *= 0.85;
+            break;
+          }
+        }
       }
       // keep off walls and away from screen edges
       const s = W.nearestSurface(p.x, p.y, 30, null);

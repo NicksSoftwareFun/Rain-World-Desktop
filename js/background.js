@@ -1137,6 +1137,8 @@
       }
       this.curtainsOn = rc.enabled && rc.curtains !== false;
       this.cfgRain = !!rc.enabled;
+      if (world) this.world = world;
+      this.updateFalls();
 
       const want = Math.floor(this.intensity * 520);
       while (this.drops.length < want) this.drops.push(this.newDrop(W, H, true));
@@ -1244,32 +1246,49 @@
       }
       return (this.falls = out);
     }
+    // Where each waterfall is this frame: [{x0, x1, bot, k}] (for drawing,
+    // and for knocking creatures about: Ecosystem.waterfallPush).
+    updateFalls() {
+      const falls = this.cfgRain && this.world ? this.skyFalls() : [];
+      const out = [];
+      if (falls.length) {
+        const room = this.decor.room;
+        const { C, cell, cells } = room;
+        const S = this.world.waterSim;
+        const k = this.intensity;
+        const w = Math.round(4 + 22 * k);
+        for (const f of falls) {
+          // down to the first rock, or the water
+          const cx = U.clamp(Math.floor(f.x / cell), 0, C - 1);
+          let bot = room.R * cell;
+          for (let cy = 0; cy < room.R; cy++) {
+            if (cells[cy * C + cx] === 1) {
+              bot = cy * cell;
+              break;
+            }
+            const s = S ? S.surfaceY(f.x, (cy + 0.6) * cell) : null;
+            if (s !== null) {
+              bot = s;
+              break;
+            }
+          }
+          const x0 = Math.round(f.side > 0 ? f.x : f.x - w);
+          out.push({ x0, x1: x0 + w, bot, k, f });
+        }
+      }
+      this.fallSpans = out;
+    }
     drawSkyFalls(ctx, pal) {
-      const falls = this.skyFalls();
-      if (!falls.length || !this.world) return;
-      const room = this.decor.room;
-      const { C, cell, cells } = room;
-      const S = this.world.waterSim;
+      const spans = this.fallSpans || [];
+      if (!spans.length) return;
       const k = this.intensity;
-      const w = Math.round(4 + 22 * k);
       const a = 0.3 + 0.45 * k;
       const col = U.mix(pal.rain, '#ffffff', 0.25);
-      for (const f of falls) {
-        // down to the first rock, or the water
-        const cx = U.clamp(Math.floor(f.x / cell), 0, C - 1);
-        let bot = room.R * cell;
-        for (let cy = 0; cy < room.R; cy++) {
-          if (cells[cy * C + cx] === 1) {
-            bot = cy * cell;
-            break;
-          }
-          const s = S ? S.surfaceY(f.x, (cy + 0.6) * cell) : null;
-          if (s !== null) {
-            bot = s;
-            break;
-          }
-        }
-        const x0 = Math.round(f.side > 0 ? f.x : f.x - w);
+      for (const span of spans) {
+        const f = span.f;
+        const bot = span.bot;
+        const w = span.x1 - span.x0;
+        const x0 = span.x0;
         ctx.fillStyle = U.rgba(col, a * 0.5);
         ctx.fillRect(x0, 0, w, bot);
         // the water's streaks running down it

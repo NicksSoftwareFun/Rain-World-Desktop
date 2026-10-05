@@ -26,6 +26,7 @@
       this.vy = 0;
       this.caps = { walls: true, ceil: true, poles: true, fall: true, wallCost: 1.1, ceilCost: 1.3 };
       this.hatesWater = true; // (insects: out of it as fast as they can)
+      this.drowns = this.size <= 1; // (a small one hasn't the strength: it struggles and goes under)
       this.grav = GRAV;
       this.mask = { floor: true, walls: true, ceil: true, poles: true };
       this.maskNoPole = { floor: true, walls: true, ceil: true, poles: false };

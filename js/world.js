@@ -68,6 +68,36 @@
       this.borders = keep;
       this.dirty = true;
     }
+    // Openings in a room's outer wall (experimental maps): where the room is
+    // open to the sky or out of a side, the screen's edge is open air, not
+    // an invisible wall to cling to and walk along. top: 1 per open column;
+    // left/right: 1 per open row (or null).
+    setOpenings(top, left, right) {
+      this.openTop = top || null;
+      this.openLeft = left || null;
+      this.openRight = right || null;
+      const B = 400;
+      const c = this.cell;
+      const keep = this.borders.filter((b) => !/^edge-(top|left|right)/.test(b.id));
+      // runs of closed cells along an edge, as border pieces
+      const pieces = (open, n, mk) => {
+        let start = -1;
+        let k = 0;
+        for (let i = 0; i <= n; i++) {
+          const closed = i < n && !(open && open[i]);
+          if (closed && start < 0) start = i;
+          if (!closed && start >= 0) {
+            keep.push(mk(start === 0 ? -B : start * c, i === n ? n * c + B : i * c, k++));
+            start = -1;
+          }
+        }
+      };
+      pieces(top, this.cols, (a, b, k) => ({ id: 'edge-top-' + k, kind: 'edge', x: a, y: -B, w: b - a, h: B }));
+      pieces(left, this.rows, (a, b, k) => ({ id: 'edge-left-' + k, kind: 'edge', x: -B, y: a, w: B, h: b - a }));
+      pieces(right, this.rows, (a, b, k) => ({ id: 'edge-right-' + k, kind: 'edge', x: this.w, y: a, w: B, h: b - a }));
+      this.borders = keep;
+      this.dirty = true;
+    }
     // Passages: one-cell tunnels through the rock, [{cells: [[cx, cy]...],
     // a: [cx, cy], b: [cx, cy]}] (a and b: the open cells at each end).
     // Creatures crawl through them as through a pipe (Creature.tunnelStep).
@@ -273,6 +303,10 @@
     solid(cx, cy) {
       // (below a pit there's nothing at all)
       if (cy >= this.rows && cx >= 0 && cx < this.cols && this.pitCols && this.pitCols[cx]) return false;
+      // (nor above an opening to the sky, or beyond an open side)
+      if (cy < 0 && cx >= 0 && cx < this.cols && this.openTop && this.openTop[cx]) return false;
+      if (cx < 0 && cy >= 0 && cy < this.rows && this.openLeft && this.openLeft[cy]) return false;
+      if (cx >= this.cols && cy >= 0 && cy < this.rows && this.openRight && this.openRight[cy]) return false;
       if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return true;
       return (this.grid[cy * this.cols + cx] & SOLID) !== 0;
     }
@@ -405,6 +439,11 @@
         const type = ny < -0.5 ? 'floor' : ny > 0.5 ? 'ceil' : 'walls';
         if (!mask[type]) continue;
         if (this.isSolidPt(qx + nx * 1.5, qy + ny * 1.5)) continue; // covered by another solid
+        // nothing to cling to facing off the screen, or down a pit shaft
+        const ax = qx + nx * 2;
+        const ay = qy + ny * 2;
+        if (ax < 0 || ay < 0 || ax > this.w || ay > this.h) continue;
+        if (this.pitCols && type === 'walls' && this.inPit(Math.floor(ax / this.cell), Math.floor(ay / this.cell))) continue;
         bd = Math.abs(d);
         best = { x: qx, y: qy, nx, ny, d, id: s.id, type };
       }

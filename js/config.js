@@ -39,6 +39,7 @@
       downpourFraction: 0.12, // final part of the cycle that is a downpour
       shelterDuringDownpour: true, // creatures retreat into dens when the rain hits
       shelterWarnSeconds: 45, // ...starting this long before it, and come back out after
+      floodHeight: 0.75, // how high the water rises in the downpour, as a share of the map's height (experimental maps)
       drizzle: 0.24, // light rain outside the downpour (0-1)
       waterfallsFrom: 0.35, // rain heavier than this sends water pouring off ledge ends
       drips: 0.7, // water dripping from window/icon/ledge undersides (0 = none)

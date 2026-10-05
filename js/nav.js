@@ -94,7 +94,8 @@
   }
   function valid(W, cx, cy, c) {
     if (W.solid(cx, cy)) return false;
-    if (wet(W, cx, cy)) return !!c.swim && !c.fly;
+    // (below the top row only for divers: slugcats; the rest keep to the surface)
+    if (wet(W, cx, cy)) return !!c.swim && !c.fly && (!!c.dive || !wet(W, cx, cy - 1));
     if (c.fly) return true;
     if (W.pitCols && W.inPit(cx, cy)) return false; // (nor down a pit, for anything else)
     if (W.passageAt && W.passage(cx, cy) >= 0) return true; // (anything that walks can crawl a passage)
@@ -388,7 +389,7 @@
   }
 
   function capsKey(c) {
-    return [c.fly ? 1 : 0, c.walls ? 1 : 0, c.ceil ? 1 : 0, c.poles ? 1 : 0, c.fall ? 1 : 0, c.jumpX | 0, c.jumpUp | 0, c.leapPoles ? 1 : 0, c.ceilLeap | 0, c.swim || 0].join(',');
+    return [c.fly ? 1 : 0, c.walls ? 1 : 0, c.ceil ? 1 : 0, c.poles ? 1 : 0, c.fall ? 1 : 0, c.jumpX | 0, c.jumpUp | 0, c.leapPoles ? 1 : 0, c.ceilLeap | 0, c.swim || 0, c.dive ? 1 : 0].join(',');
   }
 
   // Every cell a creature with these caps can be in (and the standable ones),

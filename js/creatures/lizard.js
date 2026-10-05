@@ -335,7 +335,8 @@
       if (perceive && this.fullT <= 0) {
         const vision = this.p.vision || 300;
         if (this.giveUpT > 0) this.giveUpT -= 0.25;
-        const prey = this.nearestOf(this.diet, vision, (c) => !c.grabbedBy && !(this.giveUpT > 0 && c === this.gaveUpOn) && c.nearGround(45 * this.L) && this.canSee(c.x, c.y, vision));
+        // (not something down under the water: a lizard won't dive for it)
+        const prey = this.nearestOf(this.diet, vision, (c) => !c.grabbedBy && !(this.giveUpT > 0 && c === this.gaveUpOn) && c.nearGround(45 * this.L) && this.canSee(c.x, c.y, vision) && this.W.waterDepth(c.x, c.y) < 14);
         if (prey) {
           if (this.state !== 'hunt') this.noticeT = 0.45 * (1.4 - pe.aggression); // freeze and stare before the charge
           this.prey = prey;
@@ -532,14 +533,17 @@
       if (!this.W.waterSim || !this.W.waterSim.active()) return (this.swimming = false);
       const P = this.spine.pts;
       this.noteWet(P[2]);
-      if (this.swimCd > 0) {
+      const d = this.depthOf(P[2]);
+      // (just hauled out: not swimming for a moment, unless it fell back in)
+      if (this.swimCd > 0 && d < 8) {
         this.swimCd -= dt;
         return (this.swimming = false);
       }
-      const d = this.depthOf(P[2]);
+      this.swimCd = 0;
       const was = this.swimming;
       this.swimming = was ? d >= 0 : d > 5;
       if (this.swimming && !was) {
+        if (this.vy > 0) this.vy *= 0.25; // (the water takes a plunge: no sinking deep)
         this.leap = null;
         this.scramble = null;
         this.leapWind = 0;
@@ -569,16 +573,12 @@
       if (surf === null) surf = head.y;
       this.swimPh = (this.swimPh || 0) + dt * 5.5;
       const sp = (this.speed || 60) * 0.5;
+      // (lizards keep to the surface: they never dive)
       let tx = head.x;
-      let ty = surf - 3 * L;
-      let dive = false;
+      const ty = surf - 3 * L;
       if (node) {
         tx = node.x;
         const dry = !W.waterCell(node.cx, node.cy);
-        if (!dry && node.y > surf + cell) {
-          ty = node.y;
-          dive = true;
-        }
         if (dry && node.y < surf + cell && Math.abs(node.x - head.x) < cell * 1.6) {
           // the bank: a heave up and out onto it
           this.vy = -Math.sqrt(2 * GRAV * Math.max(16, head.y - node.y + 16 * L));
@@ -595,7 +595,7 @@
       const dy = ty - head.y;
       const d = Math.hypot(dx, dy) || 1;
       let wvx = Math.abs(dx) > 4 ? (dx / d) * sp * surge : 0;
-      let wvy = dive ? (dy / d) * sp * 0.7 * surge : U.clamp(dy * 4, -120, 90);
+      let wvy = U.clamp(dy * 4, -120, 90);
       wvy += Math.sin(this.swimPh * 0.7) * 14;
       const k = U.approach(2.5, dt);
       this.vx += (wvx - this.vx) * k;

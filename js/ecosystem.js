@@ -145,6 +145,8 @@
       return this.dens.filter((d) => {
         if (d.sky) return !!flier;
         const p = this.denSpawnPoint(d);
+        // (a den gone under the flood is shut until it drains)
+        if (W.waterSim && W.waterDepth(p.x, p.y) >= 0) return false;
         return !W.solid(W.cellX(p.x), W.cellY(p.y)) && !W.isSolidPt(p.x, p.y) && !W.isSolidPt(p.x, p.y - 14);
       });
     }
@@ -521,14 +523,28 @@
 
       for (const p of this.plants) p.update(dt);
       const Wd = this.world;
+      const falls = this.weather && this.weather.fallSpans;
       for (const c of this.creatures) {
         c.update(dt);
         // (in the water: see Creature.waterLimp, waterPanic and each
         // swimmer's own swim)
+        if (falls && falls.length) this.waterfallPush(c, falls, dt);
         // anything that has fallen or been flung far out of the world is gone
         if (c.y > Wd.h + 500 || c.y < -500 || c.x < -500 || c.x > Wd.w + 500 || !isFinite(c.x) || !isFinite(c.y)) c.remove();
       }
       for (const it of this.items) it.update(dt);
+      // The flood at its height carries off the dead under it: a passive
+      // clean-up of the map, once a downpour.
+      const S = Wd.waterSim;
+      const pouring = !!(this.weather && this.weather.downpour);
+      if (S && pouring && S.flood > 0.95) {
+        if (!this.floodSwept) {
+          this.floodSwept = true;
+          for (const c of this.creatures) if (c.corpse && !c.grabbedBy && Wd.waterDepth(c.x, c.y) >= 0) c.remove();
+        }
+      } else if (!pouring) {
+        this.floodSwept = false;
+      }
 
       for (const c of this.creatures) {
         if (c.dead && c.holding) c.release();
@@ -547,6 +563,29 @@
         p.y += p.vy * dt;
       }
       this.particles = this.particles.filter((p) => p.t < p.life);
+    }
+
+    // A waterfall (an open top's, see Weather.updateFalls) bears down on
+    // anything passing through it: pushed down, and now and then knocked
+    // off the wall or pole it's clinging to, more so the heavier the rain.
+    waterfallPush(c, falls, dt) {
+      if (c.dead || c.corpse || c.grabbedBy || c.leaving || c.tunnel || c.piping || c.unpiping || c.burrow) return;
+      const m = c.mainPoint();
+      for (const f of falls) {
+        if (m.x < f.x0 - 3 || m.x > f.x1 + 3 || m.y < 0 || m.y > f.bot) continue;
+        const force = (220 + 520 * f.k) * (c.isFlier ? 0.6 : 1) / Math.sqrt(Math.max(0.5, c.mass || 1));
+        if ('vy' in c) c.vy += force * dt;
+        if ('vx' in c) c.vx *= Math.pow(0.5, dt);
+        c.underFallT = (c.underFallT || 0) + dt;
+        if (!c.isFlier && c.underFallT > 0.15 && Math.random() < dt * (0.3 + 1.1 * f.k)) {
+          c.knockLoose();
+          this.fallKnocks = (this.fallKnocks || 0) + 1;
+          c.underFallT = 0;
+          this.burst(m.x, m.y, U.rgba(U.mix((this.palette && this.palette.rain) || '#ffffff', '#ffffff', 0.4)), 4);
+        }
+        return;
+      }
+      c.underFallT = 0;
     }
 
     // Draw order roughly follows Rain World's layering: big background

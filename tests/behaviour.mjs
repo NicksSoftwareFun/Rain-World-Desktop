@@ -819,7 +819,7 @@ const checks = [
   },
   {
     name: 'water',
-    about: 'water rises with the downpour (out of the pits on a dry map) and drains after; slugcats and lizards swim and climb out, centipedes scramble out; corpses and rocks sink, fruit floats; rain only falls through a room\'s openings; a slugcat dives for sea fruit',
+    about: 'water rises with the downpour (out of the pits on a dry map) and drains after; slugcats swim and dive, lizards paddle at the surface, medium centipedes scramble out, small ones and dropwigs drown, batflies die in it, nothing dives for a sunk rock; corpses and rocks sink, fruit floats; rain only falls through a room\'s openings; a slugcat dives for sea fruit',
     run: (page) =>
       page.evaluate(() => {
         const e = RW_APP.engine;
@@ -836,14 +836,25 @@ const checks = [
           }
           return null;
         };
-        // floods, driven straight (40s of downpour, 90s after)
-        for (const mode of ['pool', 'pit']) {
+        // floods, driven straight through the run-up to the downpour and
+        // the downpour, then 90s after it
+        const rc = Object.assign({}, e.cfg.rain, { enabled: true, floodHeight: 0.75 });
+        for (const mode of ['pool', 'pit', 'rain']) {
           const w = find(mode, mode === 'pool' ? 40 : 0);
           if (!w) continue;
-          for (let i = 0; i < 60 * 40; i++) w.update(1 / 60, 1);
-          const peak = w.vol;
-          for (let i = 0; i < 60 * 90; i++) w.update(1 / 60, 0);
-          out[mode] = { rise: +((peak - w.vbase) / w.extra).toFixed(2), left: +((w.vol - w.vbase) / w.extra).toFixed(2) };
+          // (as in a real cycle: 45s of creatures heading for shelter, then
+          // 30s of the downpour)
+          const wx = { downpour: false, toDownpour: 45, fallSpans: [] };
+          for (let i = 0; i < 60 * 75; i++) {
+            wx.toDownpour = Math.max(0, 45 - i / 60);
+            wx.downpour = wx.toDownpour <= 0;
+            w.update(1 / 60, wx, rc);
+          }
+          const peakRow = w.levelRow();
+          Object.assign(wx, { downpour: false, toDownpour: 999 });
+          for (let i = 0; i < 60 * 90; i++) w.update(1 / 60, wx, rc);
+          // peak: rows short of the 75% line; after: how far above its usual level
+          out[mode] = { short: +(peakRow - w.rows * 0.25).toFixed(1), left: Math.max(0, w.baseRow - w.levelRow()) };
         }
         // creatures dropped in a pool
         const w = find('pool', 90);
@@ -858,27 +869,42 @@ const checks = [
         const x1 = Math.max(...L.map((r) => r.x + r.w));
         const mid = (x0 + x1) / 2;
         const sc = e.eco.spawn('slugcat', mid - 40, top + 8);
+        sc.hunger = 0; // (not after any sea fruit: it should simply get out)
         const lz = e.eco.spawn('lizard_pink', mid + 20, top + 8);
-        const cp = e.eco.spawn('centipede', mid + 60, top + 8);
+        const cp = e.eco.spawn('centipede_medium', mid + 60, top + 8);
+        const small = e.eco.spawn('centipede', mid - 10, top + 8);
+        const wig = e.eco.spawn('dropwig', mid + 40, top + 8);
+        const bat = e.eco.spawn('batfly', mid + 5, top + 24);
+        for (const c of [small, wig, bat]) if (c) c.alpha = 1;
         const dead = e.eco.spawn('lizard_green', mid - 70, top + 4);
         dead.kill();
         const W = e.world;
         const rock = new RW.Weapon(e.eco, 'rock', mid, top + 4);
-        rock.pickupCd = 999; // (not for the slugcat to carry off)
         e.eco.items.push(rock);
         const fruit = new RW.Fruit(e.eco, mid + 30, top + 30);
         e.eco.items.push(fruit);
-        const seen = { slugSwam: 0, lizSwam: 0, centPanic: 0 };
+        const seen = { slugSwam: 0, lizSwam: 0, centPanic: 0, lizDeep: 0 };
         const d0 = { corpse: W.waterDepth(dead.x, dead.y), rock: rock.y, fruit: W.waterDepth(fruit.x, fruit.y) };
         for (let i = 0; i < 60 * 30; i++) {
           e.tick(1 / 60);
           if (sc.swimming) seen.slugSwam++;
-          if (lz.swimming) seen.lizSwam++;
+          if (lz.swimming) {
+            seen.lizSwam++;
+            // (after the splash of going in: does it ever swim down?)
+            // (a dunk falling back in is fine; staying under isn't: the
+            // longest spell with its head over a cell down)
+            if (i > 240) {
+              seen.deepRun = W.waterDepth(lz.spine.pts[0].x, lz.spine.pts[0].y) > 20 ? (seen.deepRun || 0) + 1 : 0;
+              seen.lizDeep = Math.max(seen.lizDeep, seen.deepRun);
+            }
+          }
+          if (i === 2) out.batflyDead = !!(bat && (bat.corpse || bat.dead));
           if (cp.panicking) seen.centPanic++;
           if (i === 60 * 4) {
             out.corpseSank = Math.round(W.waterDepth(dead.x, dead.y) - d0.corpse);
             out.rockSank = Math.round(rock.y - d0.rock);
             out.fruitDepth = Math.round(W.waterDepth(fruit.x, fruit.y));
+            fruit.dead = true; // (measured: not something to keep the slugcat about)
           }
         }
         out.slugSwam = seen.slugSwam > 0;
@@ -886,6 +912,19 @@ const checks = [
         out.centPanicked = seen.centPanic > 0;
         out.centStillIn = !cp.dead && cp.panicking;
         out.slugStillIn = !sc.dead && !sc.leaving && sc.swimming;
+        // (drowned, or made it out: not still floundering)
+        out.smallDrowned = !!small.corpse || !small.panicking;
+        out.wigDrowned = !!(wig && wig.corpse);
+        out.lizMaxDepth = Math.round(seen.lizDeep);
+        out.rockFetched = !!rock.heldBy;
+        // the flood's height carries off the dead under it
+        const body = e.eco.spawn('lizard_pink', mid, top + 30);
+        body.kill();
+        e.weather.downpour = true;
+        W.waterSim.flood = 1;
+        e.eco.update(1 / 60);
+        out.swept = body.dead === true && !e.eco.creatures.includes(body);
+        e.weather.downpour = false;
         // rain in a room: no drop inside rock
         e.cfg.rain.enabled = true;
         e.weather.t = 0;
@@ -907,10 +946,33 @@ const checks = [
         }
         out.drops = drops;
         out.dropsInRock = inRock;
+        // a waterfall in the downpour knocks creatures off what they cling to
+        const drizzle = e.cfg.rain.drizzle;
+        e.cfg.rain.drizzle = 1;
+        let fk = null;
+        for (const seed of [1, 5, 9, 3, 12]) {
+          e.seed = seed;
+          e.regenerate(false);
+          e.eco.creatures.length = 0;
+          e.weather.update(1 / 60, e.cfg, e.W, e.H, e.world);
+          const sp = e.weather.fallSpans[0];
+          if (!sp || sp.bot < 120) continue;
+          for (let k = 0; k < 5; k++) {
+            const c = e.eco.spawn('lizard_blue', (sp.x0 + sp.x1) / 2, 30 + (k * (sp.bot - 60)) / 5);
+            c.alpha = 1;
+          }
+          e.eco.fallKnocks = 0;
+          for (let i = 0; i < 60 * 6; i++) e.tick(1 / 60);
+          fk = e.eco.fallKnocks;
+          break;
+        }
+        e.cfg.rain.drizzle = drizzle;
+        out.fallKnocks = fk;
         e.cfg.rain.enabled = false;
         // sea fruit: a hungry slugcat swims down and picks it
         let plucked = null;
-        for (let s = 1; s < 400 && plucked === null; s++) {
+        let tries = 0;
+        for (let s = 1; s < 400 && !plucked && tries < 3; s++) {
           e.seed = s;
           e.regenerate(false);
           const sp = e.eco.plants.find((q) => q.under);
@@ -932,6 +994,7 @@ const checks = [
               best = { x, y };
             }
           }
+          tries++;
           const s2 = e.eco.spawn('slugcat', best.x, best.y);
           s2.hunger = 0.9;
           s2.armed = true;
@@ -951,19 +1014,25 @@ const checks = [
     judge: (m) => [
       !m.pool && 'no pool map found',
       !m.pit && 'no pit map found',
-      m.pool && m.pool.rise < 0.6 && `the pool hardly rose in the downpour (${m.pool.rise})`,
-      m.pool && m.pool.left > 0.15 && `the pool didn't drain back after it (${m.pool.left})`,
-      m.pit && m.pit.rise < 0.6 && `no flood welled up from the pits (${m.pit.rise})`,
-      m.pit && m.pit.left > 0.15 && `the pit flood didn't drain away (${m.pit.left})`,
+      ...['pool', 'pit', 'rain'].map((k) => m[k] && m[k].short > 1.5 && `the ${k} flood stopped ${m[k].short} rows short of 75% of the map`),
+      ...['pool', 'pit', 'rain'].map((k) => m[k] && m[k].left > 1 && `the ${k} flood didn't drain away (${m[k].left} rows up)`),
+      m.swept !== true && 'corpses under the flood weren\'t cleared at its height',
       !m.slugSwam && 'the slugcat never swam',
       !m.lizSwam && 'the lizard never swam',
       !m.centPanicked && 'the centipede didn\'t mind the water',
-      m.centStillIn && 'the centipede was still in the water after 30s',
+      m.centStillIn && 'the medium centipede was still in the water after 30s',
+      !m.batflyDead && 'a batfly in the water lived',
+      !m.smallDrowned && 'a small centipede was still floundering in the water',
+      !m.wigDrowned && 'a dropwig in the water didn\'t drown',
+      m.lizMaxDepth > 60 && `a lizard stayed under the water (${m.lizMaxDepth} frames)`,
+      m.rockFetched && 'the slugcat dived for a sunk rock',
       m.slugStillIn && 'the slugcat was still in the water after 30s',
       !(m.corpseSank > 5) && `the corpse didn't sink (${m.corpseSank}px)`,
       !(m.rockSank > 5) && `the rock didn't sink (${m.rockSank}px)`,
       !(m.fruitDepth < 8) && `the fruit didn't float up (${m.fruitDepth}px deep)`,
       m.drops < 20 && 'too few raindrops to check',
+      m.fallKnocks === null && 'no map with a waterfall to check',
+      m.fallKnocks === 0 && 'nothing got knocked about by a waterfall',
       // (a stray one at a rock corner is rounding: rain lines are 3px apart)
       m.dropsInRock > m.drops * 0.01 && `${m.dropsInRock} raindrops falling inside rock`,
       m.seaFruitPlucked !== true && 'the slugcat never picked the sea fruit',

@@ -66,11 +66,23 @@
         }
       }
       this.vbase = this.sum();
-      this.mode = this.vbase > 0.5 ? 'pool' : this.sources.length ? 'pit' : 'none';
+      // a pool rises; a dry map with pits floods up out of them; any other
+      // room fills from the rain pouring in through its openings (if it has
+      // none, it stays dry)
+      this.mode = this.vbase > 0.5 ? 'pool' : this.sources.length ? 'pit' : decor && decor.room ? 'rain' : 'none';
       let open = 0;
       for (let i = 0; i < n; i++) if (!this.block[i]) open++;
-      // the most a downpour adds, in cells' worth
-      this.extra = this.mode === 'none' ? 0 : U.clamp(open * (this.mode === 'pool' ? 0.16 : 0.15), 40, 2000);
+      this.open = open;
+      // where the water sits normally (a row), and the flood's high mark: a
+      // quarter of the way down from the top (75% of the map under water)
+      this.baseRow = this.rows;
+      for (let i = 0; i < n; i++) {
+        if (this.base[i] > 0.3) {
+          this.baseRow = (i / this.cols) | 0;
+          break;
+        }
+      }
+      this.highRow = Math.round(this.rows * 0.25); // (rain.floodHeight sets it: see update)
       this.vol = this.vbase;
       this.flood = 0;
       this.top = this.topRow();
@@ -105,20 +117,49 @@
       return this.mode !== 'none' || this.vol > 0.5;
     }
 
-    // dt: seconds; rain: the weather's intensity (0 to 1).
-    update(dt, rain) {
+    // How far the flood should have come (0 to 1) for this moment in the
+    // rain cycle: nothing in the light rain; rising hard from when the
+    // creatures start making for shelter; full through the downpour; then
+    // it drains away.
+    floodFor(weather, rc) {
+      if (!weather || !rc || !rc.enabled) return 0;
+      const warn = rc.shelterWarnSeconds ?? 45;
+      if (weather.downpour) return 1;
+      if (weather.toDownpour < warn) return 0.85 * (1 - weather.toDownpour / Math.max(1, warn));
+      return 0;
+    }
+    // The top of the water: the first row holding a settled, full cell.
+    // (of the main body, when there is one)
+    levelRow() {
+      const m = this.m;
+      const C = this.cols;
+      const b = this.body;
+      for (let i = this.top * C; i < m.length; i++) if (m[i] >= 0.9 && !this.block[i] && (!b || b[i])) return (i / C) | 0;
+      return this.rows;
+    }
+    // dt: seconds; weather: the Weather (where the rain cycle is, and the
+    // open tops' waterfalls); rc: the rain settings.
+    update(dt, weather, rc) {
       if (!this.active()) return;
       this.t += dt;
       if (this.W.version !== this.version) this.refreshBlock();
-      // the flood follows the downpour, lagging a little behind it
-      const want = U.smooth(U.clamp((rain - 0.45) / 0.55, 0, 1));
-      this.flood += (want - this.flood) * U.approach(0.5, dt);
-      const target = this.vbase + this.extra * this.flood;
-      const diff = target - this.vol;
-      if (diff > 0.5) this.pour(Math.min(diff, (this.extra / 22) * dt));
-      else if (diff < -0.5) this.drain(Math.min(-diff, (this.extra / 35) * dt));
+      this.weather = weather;
+      if (rc && rc.floodHeight !== undefined) this.highRow = this.rows * (1 - U.clamp(+rc.floodHeight, 0, 0.98));
+      // (never below where the pool sits anyway)
+      const high = Math.min(this.highRow, this.baseRow);
+      const want = this.floodFor(weather, rc);
+      this.flood += (want - this.flood) * U.approach(want > this.flood ? 1.5 : 0.4, dt);
+      // the level the flood is at, and the water's own top
+      this.body = this.vol > 0.5 || this.flood > 0.001 ? this.findBody() : null;
+      const row = U.lerp(this.baseRow, high, this.flood);
+      const level = this.levelRow();
+      this.targetRow = row;
+      const rate = (this.open / 40) * dt; // (fast: the room fills in well under a minute)
+      if (level > row + 0.5) this.pour(rate);
+      else if (level < row - 0.5 || (this.flood < 0.02 && this.vol > this.vbase + 0.5)) this.drain(rate * 0.8);
       // a few rounds a tick, so it levels out about as fast as water does
       for (let k = 0; k < 5; k++) this.step();
+      this.level();
       this.vol = this.sum();
       this.top = this.topRow();
     }
@@ -127,13 +168,83 @@
     // at the bottom, it would only squeeze up slowly under pressure).
     pour(v) {
       const m = this.m;
-      const C = this.cols;
-      const list = this.mode === 'pit' ? this.sources.map((i) => {
-        while (i - C >= 0 && !this.block[i - C] && m[i] >= 0.97) i -= C;
-        return i;
-      }) : this.surfaceCells(false);
+      // into the main body's surface (not a separate chamber's: that only
+      // fills when the main body spills over into it); before there's a
+      // body, into where it comes from
+      let list = this.body ? this.surfaceCells(false, this.body) : [];
+      if (!list.length) list = this.seedCells();
       if (!list.length) return;
       for (const i of list) m[i] += v / list.length;
+    }
+    // Where the flood comes from: the pool's surface, the top of what has
+    // welled up in each pit shaft (poured in at the bottom, it would only
+    // squeeze up slowly under pressure), where the open tops' waterfalls
+    // land, or (a room closed to the sky) seeping up through the lowest floor.
+    seedCells() {
+      const m = this.m;
+      const C = this.cols;
+      if (this.mode === 'pool') {
+        const out = [];
+        for (let i = 0; i < m.length; i++) if (this.base[i] > 0.3 && (i < C || this.base[i - C] <= 0.3)) out.push(i);
+        return out;
+      }
+      if (this.mode === 'pit') {
+        return this.sources.map((i) => {
+          while (i - C >= 0 && !this.block[i - C] && m[i] >= 0.97) i -= C;
+          return i;
+        });
+      }
+      const list = [];
+      for (const f of (this.weather && this.weather.fallSpans) || []) {
+        const cy = Math.min(this.rows - 1, Math.floor((f.bot - 1) / this.cell));
+        for (let x = f.x0; x <= f.x1; x += this.cell) {
+          const i = cy * C + U.clamp(Math.floor(x / this.cell), 0, C - 1);
+          if (!this.block[i]) list.push(i);
+        }
+      }
+      if (list.length) return list;
+      if (!this.seeps) {
+        this.seeps = [];
+        let low = -1;
+        for (let i = m.length - 1; i >= 0 && low < 0; i--) if (!this.block[i]) low = (i / C) | 0;
+        for (let x = 0; x < C; x++) {
+          for (let y = low; y >= Math.max(0, low - 2); y--) {
+            if (!this.block[y * C + x]) {
+              this.seeps.push(y * C + x);
+              break;
+            }
+          }
+        }
+      }
+      return this.seeps.slice();
+    }
+    // The main body of water: everything wet connected to where the flood
+    // comes from (a mark per cell, or null when there's none yet).
+    findBody() {
+      const m = this.m;
+      const C = this.cols;
+      const R = this.rows;
+      const mark = this.bodyMark || (this.bodyMark = new Uint8Array(m.length));
+      const q = this.bodyQ || (this.bodyQ = new Int32Array(m.length));
+      mark.fill(0);
+      let n = 0;
+      for (const i of this.seedCells()) {
+        if (m[i] >= WET && !mark[i]) {
+          mark[i] = 1;
+          q[n++] = i;
+        }
+      }
+      if (!n) return null;
+      for (let h = 0; h < n; h++) {
+        const i = q[h];
+        const x = i % C;
+        const y = (i / C) | 0;
+        if (x > 0 && !mark[i - 1] && m[i - 1] >= WET) (mark[i - 1] = 1), (q[n++] = i - 1);
+        if (x < C - 1 && !mark[i + 1] && m[i + 1] >= WET) (mark[i + 1] = 1), (q[n++] = i + 1);
+        if (y > 0 && !mark[i - C] && m[i - C] >= WET) (mark[i - C] = 1), (q[n++] = i - C);
+        if (y < R - 1 && !mark[i + C] && m[i + C] >= WET) (mark[i + C] = 1), (q[n++] = i + C);
+      }
+      return mark;
     }
     // Back down: off the top of anything above where it started (and out
     // the bottom of the pits).
@@ -147,12 +258,12 @@
     }
     // The cells at the top of the water (with nothing wet above them);
     // `above` only those holding more than they did to begin with.
-    surfaceCells(above) {
+    surfaceCells(above, only) {
       const m = this.m;
       const C = this.cols;
       const out = [];
       for (let i = this.top * C; i < m.length; i++) {
-        if (m[i] < WET || this.block[i]) continue;
+        if (m[i] < WET || this.block[i] || (only && !only[i])) continue;
         if (i >= C && !this.block[i - C] && m[i - C] >= WET) continue;
         // (not a stream pouring down through the air)
         if (i + C < m.length && !this.block[i + C] && m[i + C] < 0.9 && m[i] < 0.9) continue;
@@ -218,6 +329,43 @@
       for (let i = 0; i < nm.length; i++) if (nm[i] < MIN_MASS) nm[i] = 0;
       this.next = m;
       this.m = nm;
+    }
+
+    // Water resting on something (rock, or full water below) shares its
+    // level along each row: the automaton alone spreads it sideways too
+    // slowly for a room filling this fast, and the surface slopes. Moves
+    // half the way to the run's mean each tick; nothing is gained or lost.
+    level() {
+      const m = this.m;
+      const B = this.block;
+      const C = this.cols;
+      const R = this.rows;
+      for (let y = this.top; y < R; y++) {
+        let x = 0;
+        while (x < C) {
+          const sup = (q) => !B[y * C + q] && (y + 1 >= R || B[(y + 1) * C + q] || m[(y + 1) * C + q] >= 0.95);
+          if (!sup(x)) {
+            x++;
+            continue;
+          }
+          const x0 = x;
+          let sum = 0;
+          let wet = 0;
+          while (x < C && sup(x)) {
+            const a = m[y * C + x];
+            sum += Math.min(a, 1);
+            if (a >= WET) wet++;
+            x++;
+          }
+          if (wet < 2 || x - x0 < 2) continue;
+          const mean = sum / (x - x0);
+          for (let q = x0; q < x; q++) {
+            const i = y * C + q;
+            if (m[i] > 1) continue; // (under pressure: leave it to the automaton)
+            m[i] += (mean - m[i]) * 0.5;
+          }
+        }
+      }
     }
 
     // ---- asking about it ----
