@@ -10,6 +10,8 @@
   const RW = window.RW;
   const U = RW.U;
   const AIR = { fly: true, key: 'air' };
+  const SLIDE = 0.35; // seconds for a fresh catch to slide onto the needle
+  const FEED = 5; // seconds to drain a catch
 
   // Proportions in world units (a slugcat stands about 30 tall). From the
   // game: the adult's arch is ~2.7 slugcats wide, its tail ~4 slugcats long,
@@ -235,8 +237,47 @@
       this.headAng = Math.atan2(h.y - b.y, h.x - b.x);
       this.needle += (0 - this.needle) * U.approach(10, dt);
     }
+    // The catch hangs off the needle tip; just skewered, the point it's
+    // held by slides there from where it was (no jump).
     holdPoint() {
-      return this.needleTip();
+      const tip = this.needleTip();
+      const f = this.feed;
+      if (!f || f.t >= SLIDE) return tip;
+      const k = 1 - U.smooth(f.t / SLIDE);
+      return { x: tip.x + f.ox * k, y: tip.y + f.oy * k };
+    }
+    // The prey writhing on the needle: a wave running down its body (and
+    // now and then a hard kick), weaker as it's drained.
+    squirm(prey, dt, k) {
+      const pts = (prey.spine && prey.spine.pts) || (prey.chain && prey.chain.pts) || null;
+      const t = this.eco.t;
+      const A = 2.6 * k * (prey.L || 1);
+      if (Math.random() < dt * 2.5 * k) prey.kickT = 0.18; // a sudden thrash
+      prey.kickT = Math.max(0, (prey.kickT || 0) - dt);
+      const kick = prey.kickT > 0 ? 2.4 : 1;
+      if (pts) {
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1];
+          const b = pts[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.hypot(dx, dy) || 1;
+          // (a travelling wave: the rate of change of a sine, so the body
+          // swings about its hang rather than drifting off sideways)
+          const w = Math.cos(t * 13 + (prey.id || 0) - i * 0.85) * A * kick * dt * 13 * Math.min(1, i / 2);
+          b.x += (-dy / d) * w;
+          b.y += (dx / d) * w;
+        }
+      }
+      // a slugcat: kicking its tail and twisting its head about
+      if (prey.tail && prey.tail.pts && !pts) {
+        const tp = prey.tail.pts;
+        for (let i = 1; i < tp.length; i++) tp[i].x += Math.cos(t * 15 - i) * A * kick * dt * 15;
+        if (prey.head) prey.head.x += Math.cos(t * 11) * A * 0.6 * kick * dt * 11;
+      }
+      // the noodlefly feels it: a tug on the needle
+      this.vx += Math.sin(t * 9 + this.id) * 30 * k * kick * dt;
+      this.vy += Math.cos(t * 7) * 24 * k * kick * dt;
     }
     // Rocks and spears can hit the shoulder and the head end.
     hitParts() {
@@ -408,7 +449,9 @@
       // a while (bobbing and dodging used to flick it back and forth);
       // hunting decides its own facing
       const hunting = this.state === 'stalk' || this.state === 'windup' || this.state === 'stab' || this.state === 'recover';
-      if (!hunting && this.curl > 0.5) {
+      // (never with a catch on the needle: the head swings over the top in
+      // a turn, and the catch would be flung round with it)
+      if (!hunting && !this.holding && this.curl > 0.5) {
         const back = Math.abs(this.vx) > 35 && Math.sign(this.vx) !== this.facing;
         this.turnWant = back ? (this.turnWant || 0) + dt : 0;
         if (this.turnWant > 0.4) this.turn();
@@ -489,10 +532,14 @@
       // ease the body between the crook and the straight stabbing pose
       // (slowly enough to read as a wind-up, quickly for a clinging infant)
       const straight = this.state === 'windup' || this.state === 'stab' || this.state === 'stuck' || this.state === 'cling';
-      const rate = this.state === 'cling' ? 14 : this.state === 'windup' ? 6 : this.state === 'recover' ? 4.5 : 4;
-      this.curl += ((straight ? 0 : this.holding ? 0.45 : 1) - this.curl) * U.approach(rate, dt);
+      // (feeding: it reels the catch up off the ground, curling the neck
+      // back over and drawing the needle half in, slowly enough to see)
+      const reel = !!this.holding && this.state === 'eat';
+      const rate = reel ? 1.7 : this.state === 'cling' ? 14 : this.state === 'windup' ? 6 : this.state === 'recover' ? 4.5 : 4;
+      this.curl += ((straight ? 0 : reel ? 0.92 : 1) - this.curl) * U.approach(rate, dt);
       const out = (straight && this.state !== 'cling') || this.state === 'stalk' || this.holding;
-      this.needle += ((out ? 1 : 0) - this.needle) * U.approach(out ? 10 : 3, dt);
+      const nT = reel ? 0.4 : out ? 1 : 0;
+      this.needle += (nT - this.needle) * U.approach(reel ? 2 : out ? 10 : 3, dt);
       // wind-up and recovery: the head stays put and the body moves round it
       if (this.anchor && (this.state === 'windup' || this.state === 'recover')) {
         const h = this.headPt();
@@ -704,16 +751,46 @@
       if (perceive) this.perceiveT = 0.3;
 
       if (this.holding) {
-        // feeding: hover with the kill hanging off the needle
+        // Feeding: the catch, still alive and writhing on the needle, is
+        // hauled up into the open air and drained there as the noodlefly
+        // drifts and sways; it weakens, goes still, and the husk is let go.
+        const prey = this.holding;
         this.setState('eat');
+        const f = this.feed || (this.feed = { t: SLIDE, ox: 0, oy: 0 });
+        f.t += dt;
         this.eatT = (this.eatT || 0) + dt;
-        this.aim = this.facing > 0 ? 1.1 : Math.PI - 1.1;
-        const g = this.keepCatchOnScreen();
-        this.fly(dt, g ? g.x : undefined, g ? g.y : undefined, g ? 60 : 0, g ? 3 : 0);
-        if (this.eatT > 4) {
+        const drained = this.eatT / FEED;
+        // (the needle swings round to hang it below, not snapped there)
+        const want = this.facing > 0 ? 1.15 : Math.PI - 1.15;
+        this.aim = U.lerpAngle(this.aim, want, U.approach(2.2, dt));
+        if (!prey.corpse) {
+          if (drained > 0.75) prey.kill(); // drained to death
+          else this.squirm(prey, dt, Math.pow(1 - drained / 0.75, 0.6));
+        }
+        // Up first: the highest open air it can see within reach (off to
+        // one side if there's a ledge right overhead); then wander a little
+        // about up there, keeping its height.
+        f.goalT = (f.goalT || 0) - dt;
+        if (!f.goal || f.goalT <= 0) {
+          let best = null;
+          for (let k = 0; k < 10; k++) {
+            const g = f.lifted ? this.airGoal(p.x, p.y, 70) : this.airGoal(p.x, p.y - 90 * this.L, 140);
+            if (!g || !this.W.lineClear(p.x, p.y, g.x, g.y)) continue;
+            const score = f.lifted ? -Math.abs(g.y - p.y) : -g.y;
+            if (!best || score > best.score) best = { x: g.x, y: g.y, score };
+          }
+          f.goal = best || { x: p.x, y: p.y - (f.lifted ? 0 : 30) };
+          f.goalT = f.lifted ? U.rand(1.4, 2.6) : 2;
+          f.lifted = true;
+        }
+        const g = this.keepCatchOnScreen() || f.goal;
+        const wp = this.airWaypoint(dt, g.x, g.y);
+        this.fly(dt, wp.x, wp.y, f.goalT > 1.2 && this.eatT < 1.6 ? 75 : 40, 1.6);
+        if (this.eatT > FEED) {
           // it sucks the insides out through the needle: the husk drops and
           // stays, still there for scavengers
-          this.eco.drain(this.holding, this);
+          this.eco.drain(prey, this);
+          this.feed = null;
           this.eatT = 0;
           this.meals++;
           this.huntCd = U.rand(12, 25);
@@ -721,6 +798,7 @@
         }
         return;
       }
+      this.feed = null;
       if (this.state === 'stuck') {
         // a missed stab drove the needle into the wall: wriggle free
         this.vx = this.vy = 0;
@@ -811,7 +889,13 @@
             }
           }
           if (this.eco.cfg.ecosystem.predation && this.grab(c)) {
-            if (!c.corpse) c.kill();
+            // skewered alive: it dies on the needle as it's drained (see
+            // thinkAdult); the point it's held by slides onto the tip
+            c.skewered = this;
+            this.faceAim(); // (while it's straight: no loop curling back up)
+            const m = c.mainPoint();
+            this.feed = { t: 0, ox: m.x - tip.x, oy: m.y - tip.y };
+            this.eatT = 0;
             this.eco.burst(tip.x, tip.y, c.bloodColor || '#2a1418', 6);
             this.vengeance = null;
             this.target = null;

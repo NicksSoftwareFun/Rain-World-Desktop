@@ -86,7 +86,7 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 | `daddy.js` | Daddy Long Legs: tentacles grope for anchors and grab prey; transit (two meat meals). |
 | `dropwig.js` | Ceiling ambushers: crawl to a ceiling, wait, drop on prey. Long-legged grip across corners. |
 | `batfly.js` | Flocking prey; hatch from and roost on the batfly nest. |
-| `noodlefly.js` | Adult and infant noodleflies (one class): a family object ties an adult to its infants; arch + hanging tail chain; stalk / wind-up / stab / feed; infants cling to the tail; cry -> `avenge`; transit like slugcats. |
+| `noodlefly.js` | Adult and infant noodleflies (one class): a family object ties an adult to its infants; arch + hanging tail chain; stalk / wind-up / stab / feed (the stab skewers the prey alive, `skewered`: it slides onto the tip, `holdPoint`, is reeled up off the ground as the neck curls and the needle draws in, squirms, `squirm`, and dies three-quarters of the way through the 5 s drain; no turning round with a catch on); infants cling to the tail; cry -> `avenge`; transit like slugcats. |
 | `squidcada.js` | White/black squidcadas in a flock object: erratic flight, play, rest on ledges, hunt batflies/small centipedes, headbutts, rescue. |
 
 Fliers have `isFlier`; ground predators only target one that `nearGround()`

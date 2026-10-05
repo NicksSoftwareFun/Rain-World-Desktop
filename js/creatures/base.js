@@ -968,6 +968,7 @@
       const prey = this.holding;
       if (prey) {
         prey.grabbedBy = null;
+        prey.skewered = null;
         prey.onReleased(this);
       }
       this.holding = null;
@@ -981,6 +982,7 @@
     // Prey struggles; returns true if it escaped this frame.
     struggle(dt) {
       if (this.corpse || (this.grabbedBy && this.grabbedBy.isHand)) return false; // limp in the hand
+      if (this.skewered) return false; // (on a noodlefly's needle: it writhes, but it's going nowhere)
       const chance = this.p.escapeChance || 0.04;
       if (Math.random() < chance * dt) {
         const holder = this.grabbedBy;
