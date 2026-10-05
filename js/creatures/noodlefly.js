@@ -944,33 +944,45 @@
       const d = Math.hypot(dx, dy) || 1;
       let sx = tp.x + (dx / d) * strike;
       let sy = tp.y + (dy / d) * strike * 0.7 - strike * 0.3;
-      // Level with it, above it, or with rock right over it (on a ceiling,
-      // under a ledge): come at it from below and to the side instead, the
-      // neck half straightened toward it so the body stays below the head.
+      // Where to put the head: the nearest spot round it at striking
+      // distance that's open, in clear sight of it and with room for the
+      // body: above it, the body hangs over the head (room above); level
+      // with it or below (on a ceiling, under a ledge, up a wall), the neck
+      // half straightens toward it and the body trails below (room below).
       const W = this.W;
-      this.upStrike = tp.y < head.y + 12 * L || W.isSolidPt(sx, sy) || W.isSolidPt(tp.x, tp.y - strike * 0.5);
-      if (this.upStrike) {
-        let best = null;
-        for (const deg of [90, 65, 115, 40, 140, 15, 165]) {
-          const a = (deg * Math.PI) / 180;
-          const x = tp.x + Math.cos(a) * strike;
-          const y = tp.y + Math.sin(a) * strike;
-          if (W.isSolidPt(x, y) || W.isSolidPt(x, y + 20 * L) || !W.lineClear(x, y, tp.x, tp.y)) continue;
-          const score = Math.hypot(x - head.x, y - head.y);
-          if (!best || score < best.score) best = { x, y, score };
-        }
-        if (best) {
-          sx = best.x;
-          sy = best.y;
-        }
+      // (a clear line to just off its body: something clinging to the rock
+      // has its middle right against it, which no line reaches)
+      const clearTo = (x, y) => {
+        const q = Math.hypot(x - tp.x, y - tp.y) || 1;
+        return W.lineClear(x, y, tp.x + ((x - tp.x) / q) * 9 * L, tp.y + ((y - tp.y) / q) * 9 * L);
+      };
+      // (the usual spot, a little above it on the near side, if it'll do)
+      const usual = !W.isSolidPt(sx, sy) && !W.isSolidPt(sx, sy - 50 * L) && clearTo(sx, sy);
+      let best = null;
+      for (let deg = -165; deg <= 180 && !usual; deg += 23) {
+        const a = (deg * Math.PI) / 180;
+        const x = tp.x + Math.cos(a) * strike;
+        const y = tp.y + Math.sin(a) * strike * (Math.sin(a) < 0 ? 0.8 : 1);
+        if (x < 10 || x > W.w - 10 || y < 10 || y > W.h - 10 || W.isSolidPt(x, y) || !clearTo(x, y)) continue;
+        const up = y > tp.y - 6 * L;
+        if (up ? W.isSolidPt(x, y + 14 * L) : W.isSolidPt(x, y - 50 * L)) continue;
+        // (the nearest; a little in favour of above, the natural pose)
+        const score = Math.hypot(x - head.x, y - head.y) + (up ? 25 * L : 0);
+        if (!best || score < best.score) best = { x, y, score, up };
       }
+      if (best) {
+        sx = best.x;
+        sy = best.y;
+      }
+      this.upStrike = !!(best && best.up);
+      this.strikeAt = { x: sx, y: sy };
       // steer the shoulder so that the head arrives there
       const wp = this.airWaypoint(dt, p.x + (sx - head.x), p.y + (sy - head.y));
       this.fly(dt, wp.x, wp.y, this.vengeance ? 170 : 130, 3);
       if ((tp.x - head.x) * this.facing < -30 * L) this.turn(); // only turn round if it's well behind
       this.aim = U.lerpAngle(this.aim, toT, U.approach(3, dt));
       const lined = U.dist(head.x, head.y, sx, sy) < 18 * L;
-      if (lined && this.stateT > (this.attempts ? 0.25 : 0.8) && this.W.lineClear(head.x, head.y, tp.x, tp.y)) {
+      if (lined && this.stateT > (this.attempts ? 0.25 : 0.8) && clearTo(head.x, head.y)) {
         this.setState('windup');
         this.faceAim();
         this.anchor = { x: head.x, y: head.y };
