@@ -159,8 +159,12 @@
       const level = this.levelRow();
       this.targetRow = row;
       const rate = (this.open / 40) * dt; // (fast: the room fills in well under a minute)
-      if (level > row + 0.5) this.pour(rate);
-      else if (level < row - 0.5 || (this.flood < 0.02 && this.vol > this.vbase + 0.5)) this.drain(rate * 3);
+      // (pour only while a flood is on: at rest the pool's own top cell can
+      // sit just under "full", which read as a row too low, so it poured
+      // and drained by turns every frame and the surface jittered)
+      const flooding = this.flood > 0.02;
+      if (flooding && level > row + 0.5) this.pour(rate);
+      else if (flooding ? level < row - 0.5 : this.vol > this.vbase + 0.5) this.drain(rate * 3);
       // a few rounds a tick, so it levels out about as fast as water does
       for (let k = 0; k < 5; k++) this.step();
       this.level();
