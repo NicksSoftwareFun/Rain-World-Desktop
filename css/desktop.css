@@ -154,24 +154,43 @@ html, body {
 }
 .rw-panel {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 48px;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
   width: 400px;
-  max-width: 100vw;
+  max-width: calc(100vw - 28px);
   overflow-y: auto;
-  background: rgba(9, 12, 12, 0.93);
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(9, 12, 12, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
   color: #d9d4bd;
   font: 12px/1.4 "Cascadia Mono", Consolas, ui-monospace, monospace;
-  padding: 10px 14px 20px;
+  padding: 0 14px 20px;
   box-sizing: border-box;
-  transform: translateX(105%);
-  transition: transform 0.2s ease;
+  transform: translateX(calc(100% + 28px));
+  transition: transform 0.22s ease;
   z-index: 100002;
 }
 .rw-panel.open { transform: none; }
-.rw-panel .ph { display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.2em; color: #fff; margin-bottom: 6px; }
+.rw-panel .ph {
+  /* (stays put while the panel scrolls, so the close button is always there) */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  letter-spacing: 0.2em;
+  color: #fff;
+  margin: 0 -14px 6px;
+  padding: 10px 10px 8px 14px;
+  background: rgba(9, 12, 12, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px 14px 0 0;
+}
 .rw-panel .stats { white-space: pre-wrap; color: #9fb7a8; margin-bottom: 8px; font-size: 11px; }
 .rw-panel .sec { border-top: 1px solid rgba(255, 255, 255, 0.1); padding: 8px 0 6px; }
 .rw-panel .sec.collapsed { padding-bottom: 2px; }
@@ -233,13 +252,96 @@ html, body {
 .rw-panel button:hover { background: #2a3532; }
 .rw-panel button.add { padding: 0; width: 22px; height: 20px; }
 .rw-panel button.warn { border-color: #6a3a2a; }
-.rw-panel button.x { border: 0; background: none; font-size: 14px; }
+.rw-panel button.x { border: 0; background: rgba(255, 255, 255, 0.06); font-size: 14px; width: 28px; height: 28px; border-radius: 50%; padding: 0; }
+.rw-panel button.x:hover { background: rgba(255, 255, 255, 0.16); }
 .rw-panel .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .rw-panel .msg { color: #ffcf7a; min-height: 1.4em; margin-top: 6px; }
 .rw-panel input[type="range"] { accent-color: #c9b77a; }
 
 @media (max-width: 520px) {
-  .rw-panel { width: 100vw; }
+  .rw-panel { width: calc(100vw - 28px); }
   .rw-panel .sp { grid-template-columns: 18px 1fr 96px 38px 24px 22px; }
   .rw-panel .wcell input { width: 60px; }
 }
+
+/* ---- corner radial menu (js/ui/radial.js) ---- */
+.rw-radial-hub {
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(9, 12, 12, 0.62);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  padding: 0;
+  cursor: pointer;
+  z-index: 100003;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.rw-radial-hub:hover, .rw-radial-hub.open { transform: scale(1.06); border-color: rgba(255, 207, 122, 0.6); }
+.rw-radial-hub:focus-visible { outline: 2px solid #ffcf7a; outline-offset: 3px; }
+.rw-radial-hub canvas { display: block; pointer-events: none; }
+.rw-radial { position: fixed; inset: 0; pointer-events: none; z-index: 100002; }
+.rw-radial-shade {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 8, 8, 0.6) 0%, rgba(6, 8, 8, 0.45) 55%, rgba(6, 8, 8, 0) 72%);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+.rw-radial.open .rw-radial-shade { opacity: 1; transform: none; }
+.rw-radial-item {
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #e8e2c8;
+  font: 11px/1.2 "Cascadia Mono", Consolas, ui-monospace, monospace;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
+  transition-delay: 0s;
+  touch-action: none;
+}
+.rw-radial.open .rw-radial-item { pointer-events: auto; opacity: 1; transform: none; transition-delay: var(--d, 0ms); }
+.rw-radial-item .face {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(14, 18, 17, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.rw-radial-item:hover .face { border-color: rgba(255, 207, 122, 0.7); }
+.rw-radial-item:focus-visible .face { outline: 2px solid #ffcf7a; outline-offset: 2px; }
+.rw-radial-item .icon { font-size: 19px; line-height: 1; }
+.rw-radial-item .lbl {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: #cfc9b0;
+  text-shadow: 0 1px 3px #000;
+  font-size: 10px;
+}
+.rw-radial-toggle.on .face { background: rgba(201, 183, 122, 0.32); border-color: rgba(255, 207, 122, 0.75); }
+.rw-radial-toggle:not(.on) .icon { opacity: 0.45; }
+.rw-radial-item.flash .face { background: rgba(255, 207, 122, 0.45); }
+.rw-radial-dial .gauge { position: absolute; inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); }
+.rw-radial-dial .gauge path { fill: none; stroke-width: 4; stroke-linecap: round; }
+.rw-radial-dial .gauge .track { stroke: rgba(255, 255, 255, 0.12); }
+.rw-radial-dial .gauge .fill { stroke: #c9b77a; }
+.rw-radial-dial .val { position: relative; font-size: 12px; color: #fff; }
+.rw-radial-dial { cursor: ns-resize; }
+.rw-radial-dial.turning .face { border-color: #ffcf7a; background: rgba(30, 36, 34, 0.92); }

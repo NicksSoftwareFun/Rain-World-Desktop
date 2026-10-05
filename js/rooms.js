@@ -740,6 +740,49 @@
     }
   }
 
+  // ---- the flood's way in ------------------------------------------------------
+  // Every room needs somewhere the downpour's flood comes in: an opening to
+  // the sky (the rain pours down through it) or a bottomless pit (it wells
+  // up out of it). A room with neither gets a side entrance: a big inlet
+  // pipe low in its outer wall (a couple of cells above the lowest floor it
+  // can find, so it fills the room from the bottom), gushing while the flood
+  // rises. {cx, cy, side}: the open cell at its mouth, and the wall's
+  // side (-1 left, 1 right).
+  function addInlet(g, R, f) {
+    f.inlets = [];
+    let sky = 0;
+    for (let x = 0; x < g.C; x++) {
+      if (g.solid(x, 0)) sky = 0;
+      else if (++sky >= 3) return;
+    }
+    if (f.pits.length) return;
+    const tun = (x, y) => f.passageCells && f.passageCells.has(y * g.C + x);
+    const sides = R() < 0.5 ? [-1, 1] : [1, -1];
+    for (const side of sides) {
+      for (let y = g.R - 3; y >= Math.floor(g.R * 0.4); y--) {
+        // the outermost open cell on this row, from that side
+        let x = side < 0 ? 0 : g.C - 1;
+        while (x > 0 && x < g.C - 1 && g.solid(x, y)) x -= side;
+        if (g.solid(x, y) || tun(x, y) || (f.waterCells && f.waterCells.has(y * g.C + x))) continue;
+        // rock at its back for the pipe to come out of, a drop of a couple
+        // of cells below its mouth
+        if (!g.solid(x + side, y) || g.solid(x, y + 1) || g.solid(x, y + 2)) continue;
+        f.inlets.push({ cx: x, cy: y, side });
+        return;
+      }
+    }
+    // no side wall to put it in: down out of a ceiling in the upper part
+    // of the room, then (side 0)
+    for (let y = g.R - 4; y >= 1; y--) {
+      for (let k = 0; k < g.C; k++) {
+        const x = Math.floor(g.C / 2 + ((k % 2 ? 1 : -1) * Math.ceil(k / 2)));
+        if (x < 1 || x >= g.C - 1 || g.solid(x, y) || !g.solid(x, y - 1) || tun(x, y) || g.solid(x, y + 1) || g.solid(x, y + 2)) continue;
+        f.inlets.push({ cx: x, cy: y, side: 0 });
+        return;
+      }
+    }
+  }
+
   // ---- passages ------------------------------------------------------------
   // One-cell tunnels through the rock between two doors (open floor cells
   // beside a wall) that are a long way apart through the open, or not
@@ -1053,6 +1096,7 @@
       floor: H,
       pits: f.pits.map((q) => ({ x0: q.cx0 * cell, x1: (q.cx1 + 1) * cell, y: (q.y + 1) * cell })),
       passages: (f.passages || []).map((q) => ({ cells: q.cells, a: q.a, b: q.b })),
+      inlets: (f.inlets || []).map((q) => ({ cx: q.cx, cy: q.cy, side: q.side, x: q.side < 0 ? q.cx * cell : q.side > 0 ? (q.cx + 1) * cell : (q.cx + 0.5) * cell, y: q.side ? (q.cy + 0.5) * cell : q.cy * cell })),
       water: (f.water || []).map((w) => ({
         x: w.x0 * cell,
         y: w.cy * cell + (w.surface ? Math.round(cell * 0.35) : 0),
@@ -1193,6 +1237,7 @@
       furnish(g, R, f, layout.rooms.length);
       closeSlits(g);
       carvePassages(g, R, f);
+      addInlet(g, R, f);
       let decor = buildDecor(g, f, cell, W, H, region, R);
       let res = check(decor, W, H, cell);
       if (!res.ok && f.pits.length) {
@@ -1871,6 +1916,48 @@
     const { C, cell, cells } = room;
     const Rows = room.R;
     const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
+    // the flood's inlet pipes: a big bore out of the wall, a dark mouth
+    for (const q of decor.inlets || []) {
+      if (!q.side) {
+        // down out of the ceiling
+        const d = 30;
+        const out = 12;
+        l.fillStyle = U.rgba(U.mix(pal.mass, pal.light, 0.08));
+        l.fillRect(q.x - d / 2 + 3, q.y - 3 * cell, d - 6, 3 * cell);
+        l.fillStyle = U.rgba(U.mix(pal.mass, pal.light, 0.16));
+        l.fillRect(q.x - d / 2, q.y, d, out);
+        l.fillStyle = U.rgba(U.mix(pal.mass, pal.light, 0.3));
+        l.fillRect(q.x - d / 2 - 3, q.y + out - 3, d + 6, 3);
+        l.fillStyle = U.rgba(U.mix(pal.mass, '#000000', 0.6));
+        l.beginPath();
+        l.ellipse(q.x, q.y + out, d / 2 - 4, 3.5, 0, 0, U.TAU);
+        l.fill();
+        continue;
+      }
+      const face = q.x;
+      const cy = q.y;
+      const d = 30; // the bore
+      const out = 12; // how far it stands out of the wall
+      const body = U.rgba(U.mix(pal.mass, pal.light, 0.16));
+      const rim = U.rgba(U.mix(pal.mass, pal.light, 0.3));
+      const dark = U.rgba(U.mix(pal.mass, '#000000', 0.6));
+      // its run back through the rock
+      l.fillStyle = U.rgba(U.mix(pal.mass, pal.light, 0.08));
+      l.fillRect(q.side < 0 ? face - 3 * cell : face, cy - d / 2 + 3, 3 * cell, d - 6);
+      // the end standing out, a flange, the open mouth
+      const x0 = q.side < 0 ? face : face - out;
+      l.fillStyle = body;
+      l.fillRect(x0, cy - d / 2, out, d);
+      l.fillStyle = rim;
+      l.fillRect(q.side < 0 ? face + out - 3 : face - out, cy - d / 2 - 3, 3, d + 6);
+      l.fillStyle = dark;
+      l.beginPath();
+      l.ellipse(q.side < 0 ? face + out : face - out, cy, 3.5, d / 2 - 4, 0, 0, U.TAU);
+      l.fill();
+      // a streak of rust and weed down the wall below it
+      l.fillStyle = U.rgba(U.mix(U.mix(pal.mass, '#6a4a2a', 0.4), pal.near, 0.2));
+      l.fillRect(q.side < 0 ? face : face - 6, cy + d / 2, 6, 2 * cell);
+    }
     const tun = (x, y) => room.passage.has(y * C + x);
     const metal = U.rgba(U.mix(pal.mass, pal.near, 0.6));
     const metalD = U.rgba(U.mix(pal.mass, pal.near, 0.35));

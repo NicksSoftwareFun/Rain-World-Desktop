@@ -1706,13 +1706,8 @@
       return [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
     }
 
-    drawDebug(ctx) {
-      if (!this.eco.cfg.debug.showLabels) return;
-      const m = this.mainPoint();
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.font = '11px monospace';
-      ctx.fillText(this.species.replace('lizard_', '') + ':' + this.state, m.x + 10, m.y - 14);
-    }
+    // (AI state labels are drawn over everything by Ecosystem.drawLabels)
+    drawDebug(ctx) {}
     drawPath(ctx, pather) {
       if (!this.eco.cfg.debug.showPaths || !pather || !pather.nodes) return;
       ctx.strokeStyle = 'rgba(255,220,80,0.6)';

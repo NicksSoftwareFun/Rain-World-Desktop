@@ -588,6 +588,52 @@
       c.underFallT = 0;
     }
 
+    // A click on a creature: its AI state label for 15s, fading out over the
+    // last second and a half; a click while it shows fades it at once.
+    toggleLabel(c) {
+      if (!c) return;
+      if (c.labelUntil > this.t + 0.4) {
+        c.labelUntil = this.t + 0.35;
+        c.labelFade = 0.35;
+      } else {
+        c.labelUntil = this.t + 15;
+        c.labelFade = 1.5;
+      }
+    }
+    // The labels (every creature's when debug.showLabels is on), over the
+    // creatures and the water: a small dark tag by the body, its name and
+    // what it's doing.
+    drawLabels(ctx) {
+      const all = this.cfg.debug.showLabels;
+      ctx.save();
+      ctx.font = '10px "Cascadia Mono", Consolas, monospace';
+      ctx.textBaseline = 'middle';
+      for (const c of this.creatures) {
+        if (c.dead) continue;
+        let a = all ? 1 : 0;
+        if (c.labelUntil > this.t) a = Math.max(a, Math.min(1, (c.labelUntil - this.t) / (c.labelFade || 1.5)));
+        if (a <= 0.01) continue;
+        const m = c.mainPoint();
+        const sp = this.cfg.species[c.species];
+        const name = ((sp && sp.label) || c.species).toLowerCase();
+        const text = `${name} \u00b7 ${c.corpse ? 'dead' : c.state}${c.swimming ? ' (swimming)' : ''}`;
+        const w = ctx.measureText(text).width + 10;
+        const x = Math.round(m.x + 12);
+        const y = Math.round(m.y - 20);
+        ctx.globalAlpha = a * c.alpha;
+        ctx.fillStyle = 'rgba(8,10,10,0.72)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y - 7, w, 14, 7);
+        else ctx.rect(x, y - 7, w, 14);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(232,226,200,0.95)';
+        ctx.fillText(text, x + 5, y + 0.5);
+        // a tick back to the body
+        ctx.fillRect(x - 1, y + 6, 1, Math.max(0, m.y - y - 10));
+      }
+      ctx.restore();
+    }
+
     // Draw order roughly follows Rain World's layering: big background
     // creatures first, small skittering things on top.
     draw(ctx) {

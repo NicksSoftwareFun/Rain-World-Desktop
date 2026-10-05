@@ -57,6 +57,8 @@
         }
       }
       this.base.set(this.m);
+      // side entrances: the open cell at each inlet pipe's mouth
+      this.inlets = ((decor && decor.inlets) || []).map((q) => q.cy * this.cols + q.cx).filter((i) => i >= 0 && i < n && !this.block[i]);
       // where a flood wells up from: the bottom of each pit shaft
       this.sources = [];
       if (world.pitCols) {
@@ -171,7 +173,8 @@
       // into the main body's surface (not a separate chamber's: that only
       // fills when the main body spills over into it); before there's a
       // body, into where it comes from
-      let list = this.body ? this.surfaceCells(false, this.body) : [];
+      // (a side entrance: it gushes out of the inlet pipe and falls)
+      let list = this.inlets.length ? this.inlets.slice() : this.body ? this.surfaceCells(false, this.body) : [];
       if (!list.length) list = this.seedCells();
       if (!list.length) return;
       for (const i of list) m[i] += v / list.length;
@@ -183,6 +186,7 @@
     seedCells() {
       const m = this.m;
       const C = this.cols;
+      if (this.inlets.length && this.mode !== 'pool') return this.inlets.slice();
       if (this.mode === 'pool') {
         const out = [];
         for (let i = 0; i < m.length; i++) if (this.base[i] > 0.3 && (i < C || this.base[i - C] <= 0.3)) out.push(i);

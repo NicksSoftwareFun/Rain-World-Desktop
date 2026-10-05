@@ -765,6 +765,8 @@ const checks = [
             if (d.water.length) out.water++;
             if (d.dens.some((q) => q.sky)) out.sky++;
             if (d.dens.filter((q) => !q.sky).length < 2) out.fewDens++;
+            // somewhere for the downpour's flood to come in
+            if (!d.dens.some((q) => q.sky) && !d.pits.length && !(d.inlets || []).length) out.noEntry = (out.noEntry || 0) + 1;
           }
         }
         // a Large map: several rooms, joined
@@ -808,6 +810,7 @@ const checks = [
     judge: (m) => [
       m.failed > 0 && `${m.failed} maps never passed the reachability check`,
       m.fewDens > 0 && `${m.fewDens} maps with fewer than two dens`,
+      m.noEntry > 0 && `${m.noEntry} maps with no way in for the flood (no opening to the sky, pit or inlet)`,
       (m.solidMin < 15 || m.solidMax > 70) && `solid share out of range (${m.solidMin}-${m.solidMax}%)`,
       m.slowestMs > 4000 && `a map took ${m.slowestMs} ms to build`,
       m.singleRoomLarge > 0 && 'a Large map came out as one stretched room',

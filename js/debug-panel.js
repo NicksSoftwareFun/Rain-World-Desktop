@@ -160,6 +160,77 @@
         /* storage blocked or corrupt: all sections start closed */
       }
       this.render();
+      if (RW.RadialMenu) this.buildRainMenu();
+    }
+
+    // The rain cycle timer, bottom left: a ring of pips emptying toward the
+    // downpour and the time left in the middle. Clicking it fans the rain
+    // settings out round the corner (a RadialMenu).
+    buildRainMenu() {
+      const eng = this.engine;
+      const R = this.cfg.rain;
+      const hub = h('button', { class: 'rw-cycle', type: 'button', title: 'Rain cycle: click for the rain settings' });
+      const cv = document.createElement('canvas');
+      hub.appendChild(cv);
+      const cycle = () => Math.max(0.5, R.cycleMinutes) * 60;
+      this.rainMenu = new RW.RadialMenu(this.mount, {
+        corner: 'bottom-left',
+        hub,
+        title: 'Rain cycle',
+        onChange: () => this.save(),
+        items: [
+          { type: 'toggle', label: 'rain', icon: '\u2602', title: 'Rain on or off', get: () => R.enabled, set: (v) => (R.enabled = v) },
+          { type: 'toggle', label: 'curtains', icon: '\u224b', title: 'Sheets of rain drifting across', get: () => R.curtains !== false, set: (v) => (R.curtains = v) },
+          { type: 'toggle', label: 'shelter', icon: '\u2302', title: 'Creatures shelter in dens during the downpour', get: () => R.shelterDuringDownpour, set: (v) => (R.shelterDuringDownpour = v) },
+          { type: 'action', label: 'downpour', icon: '\u21ca', title: 'Bring the downpour on now', run: () => {
+            const w = eng.weather;
+            w.t = Math.floor(w.t / cycle()) * cycle() + cycle() * (1 - R.downpourFraction * 0.95);
+          } },
+          { type: 'action', label: 'clear', icon: '\u2600', title: 'Clear skies: start a fresh cycle', run: () => {
+            eng.weather.t = Math.ceil(eng.weather.t / cycle()) * cycle() + 1;
+          } },
+          { type: 'dial', label: 'cycle', title: 'Length of one rain cycle (minutes)', min: 1, max: 30, step: 0.5, get: () => R.cycleMinutes, set: (v) => (R.cycleMinutes = v), format: (v) => v + 'm' },
+          { type: 'dial', label: 'light rain', title: 'Light rain outside the downpour', min: 0, max: 1, step: 0.01, get: () => R.drizzle, set: (v) => (R.drizzle = v), format: (v) => Math.round(v * 100) + '%' },
+          { type: 'dial', label: 'drips', title: 'Drips off the undersides', min: 0, max: 2, step: 0.05, get: () => R.drips, set: (v) => (R.drips = v), format: (v) => v.toFixed(1) },
+          // (while it's being turned, a dotted line marks the height on the map)
+          { type: 'dial', label: 'flood', title: 'How high the water rises in the downpour (experimental maps)', min: 0, max: 0.95, step: 0.05, get: () => R.floodHeight ?? 0.75, set: (v) => (R.floodHeight = v), format: (v) => Math.round(v * 100) + '%', onDrag: () => (eng.floodPreviewUntil = performance.now() + 1500) },
+        ],
+      });
+      eng.domHud = true; // (the engine no longer draws its own on the canvas)
+      const draw = () => {
+        requestAnimationFrame(draw);
+        hub.style.display = R.showCycleHud === false ? 'none' : '';
+        const dpr = window.devicePixelRatio || 1;
+        const s = hub.clientWidth || 72;
+        if (cv.width !== Math.round(s * dpr)) {
+          cv.width = cv.height = Math.round(s * dpr);
+          cv.style.width = cv.style.height = s + 'px';
+        }
+        const w = eng.weather;
+        if (!w) return;
+        const c = cv.getContext('2d');
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        c.clearRect(0, 0, s, s);
+        const pips = 16;
+        const left = R.enabled ? Math.ceil((1 - w.phase) * pips) : pips;
+        const r = s * 0.36;
+        for (let i = 0; i < pips; i++) {
+          const a = -Math.PI / 2 + (i / pips) * Math.PI * 2;
+          c.fillStyle = i < left ? (w.downpour ? '#9fc7e8' : '#e8e2c8') : 'rgba(232,226,200,0.18)';
+          c.fillRect(Math.round(s / 2 + Math.cos(a) * r) - 2.5, Math.round(s / 2 + Math.sin(a) * r) - 2.5, 5, 5);
+        }
+        c.fillStyle = w.downpour ? '#9fc7e8' : '#e8e2c8';
+        c.font = '600 11px "Cascadia Mono", Consolas, monospace';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        let txt = 'off';
+        if (R.enabled) {
+          const secs = w.downpour ? 0 : Math.max(0, w.toDownpour);
+          txt = w.downpour ? 'RAIN' : Math.floor(secs / 60) + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
+        }
+        c.fillText(txt, s / 2, s / 2 + 0.5);
+      };
+      draw();
     }
 
     // (Re)draw the panel's contents from the config, e.g. after a preset.
@@ -270,31 +341,8 @@
         )
       );
 
-      const R = cfg.rain;
-      this.el.appendChild(
-        this.section('Rain cycle',
-          this.toggleCtl('rain', R, 'enabled'),
-          this.slider('cycle (min)', R, 'cycleMinutes', 1, 30, 0.5),
-          this.slider('light rain', R, 'drizzle', 0, 1, 0.01),
-          this.slider('drips', R, 'drips', 0, 2, 0.05),
-          // (while it's being dragged, a dotted line marks the height on the map)
-          this.slider('water max height', R, 'floodHeight', 0, 0.95, 0.05, () => (eng.floodPreviewUntil = performance.now() + 1500)),
-          this.toggleCtl('rain curtains', R, 'curtains'),
-          this.toggleCtl('shelter in dens during downpour', R, 'shelterDuringDownpour'),
-          this.toggleCtl('cycle timer', R, 'showCycleHud'),
-          h('div', { class: 'btns' },
-            this.button('Downpour now', () => {
-              const cyc = Math.max(0.5, R.cycleMinutes) * 60;
-              const w = eng.weather;
-              w.t = Math.floor(w.t / cyc) * cyc + cyc * (1 - R.downpourFraction * 0.95);
-            }),
-            this.button('Clear skies', () => {
-              const cyc = Math.max(0.5, R.cycleMinutes) * 60;
-              eng.weather.t = Math.ceil(eng.weather.t / cyc) * cyc + 1;
-            })
-          )
-        )
-      );
+      // (the rain cycle's settings live in the radial menu off the cycle
+      // timer, bottom left: see buildRainMenu)
 
       const Wc = cfg.world;
       this.el.appendChild(

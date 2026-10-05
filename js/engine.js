@@ -71,7 +71,8 @@
       return this._hand;
     }
     // The creature (living or dead) whose body is nearest the press, if any.
-    tryGrab(x, y) {
+    // The creature under (x, y), if any.
+    creatureAt(x, y) {
       const hand = this.hand;
       let best = null;
       let bd = Infinity;
@@ -85,6 +86,11 @@
           }
         }
       }
+      return best;
+    }
+    tryGrab(x, y) {
+      const hand = this.hand;
+      const best = this.creatureAt(x, y);
       if (!best) return false;
       this.dropHand();
       if (best.grabbedBy) best.grabbedBy.release(); // snatched from a predator's jaws
@@ -354,10 +360,22 @@
       if (moves.length) this.eco.carry(moves);
       const c = g.cursor || { x: -9999, y: -9999, inside: false };
       this.eco.setCursor(c.x, c.y, !!c.inside, dt);
-      // Press on a creature to pick it up (it hangs limp from the cursor);
-      // let go to drop it. A press on empty wallpaper drops food if enabled.
+      // Press on a creature and hold or drag to pick it up (it hangs limp
+      // from the cursor); let go to drop it. A quick click instead shows its
+      // AI state for 15s (another click hides it). A press on empty wallpaper
+      // drops food if enabled.
       for (const k of g.clicks || []) {
-        if (!this.tryGrab(k.x, k.y) && this.cfg.ecosystem.clickDropsFood) this.eco.dropFood(k.x, k.y);
+        const c = this.creatureAt(k.x, k.y);
+        if (c) this.press = { x: k.x, y: k.y, t: performance.now(), c };
+        else if (this.cfg.ecosystem.clickDropsFood) this.eco.dropFood(k.x, k.y);
+      }
+      const pr = this.press;
+      if (pr) {
+        const pt = g.pointer || c;
+        if (performance.now() - pr.t > 160 || Math.hypot(pt.x - pr.x, pt.y - pr.y) > 6) {
+          this.press = null;
+          this.tryGrab(pr.x, pr.y);
+        }
       }
       const hand = this.hand;
       if (hand.holding) {
@@ -369,7 +387,13 @@
         const h = hand.holding;
         if (h.dead || h.leaving || h.grabbedBy !== hand) hand.holding = null;
       }
-      if ((g.releases || []).length) this.dropHand();
+      if ((g.releases || []).length) {
+        if (this.press) {
+          this.eco.toggleLabel(this.press.c);
+          this.press = null;
+        }
+        this.dropHand();
+      }
       this.weather.update(dt, this.cfg, this.W, this.H, this.world);
       if (this.world.waterSim) this.world.waterSim.update(dt, this.weather, this.cfg.rain);
       this.eco.update(dt);
@@ -398,6 +422,7 @@
       ctx.drawImage(this.spriteCanvas, 0, 0);
       ctx.setTransform(k, 0, 0, k, 0, 0);
       this.drawWater(ctx);
+      this.eco.drawLabels(ctx);
       this.weather.drawRain(ctx, this.pal);
       // the time of day over everything: warm at dawn and dusk, dim at night
       const L = this.light;
@@ -409,7 +434,7 @@
         ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         ctx.restore();
       }
-      if (cfg.rain.enabled && cfg.rain.showCycleHud) this.weather.drawHud(ctx, this.W, this.H, this.pal);
+      if (cfg.rain.enabled && cfg.rain.showCycleHud && !this.domHud) this.weather.drawHud(ctx, this.W, this.H, this.pal);
       if (cfg.debug.showGrid) this.drawGrid(ctx);
       // the water max height slider being dragged: a dotted line at the
       // height the flood will reach
@@ -417,9 +442,10 @@
         const y = Math.round(this.H * (1 - (+cfg.rain.floodHeight || 0)));
         const a = Math.min(1, (this.floodPreviewUntil - performance.now()) / 500);
         ctx.fillStyle = U.rgba(U.mix((this.pal && this.pal.water) || '#6a8aa0', '#ffffff', 0.7), 0.9 * a);
-        const dash = 8 / (this.zoom / this.ps);
-        for (let x = 0; x < this.W; x += dash * 2) ctx.fillRect(x, y - 1, dash, 2);
-        ctx.font = `${Math.round(12 / (this.zoom / this.ps))}px monospace`;
+        // (sizes in screen pixels: the world is drawn at zoom)
+        const dash = 8 / this.zoom;
+        for (let x = 0; x < this.W; x += dash * 2) ctx.fillRect(x, y - 1 / this.zoom, dash, 2 / this.zoom);
+        ctx.font = `${12 / this.zoom}px "Cascadia Mono", Consolas, monospace`;
         ctx.fillText(`water max ${Math.round((+cfg.rain.floodHeight || 0) * 100)}%`, 12, y - 6);
       }
       if (cfg.debug.showFps) {

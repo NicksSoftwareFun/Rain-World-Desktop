@@ -258,6 +258,10 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
 - **Sea fruit** (`items.js`, `SeaFruitPlant`): on most pool maps 1-2 fruit
   stalks stand up off the pool's bottom. Thrown things can't reach them;
   a hungry slugcat swims down and plucks one (state `dive`).
+- **The flood's way in** (`addInlet`): a room with no opening to the sky
+  and no pit gets an inlet pipe low in an outer wall (or, failing that,
+  down out of a ceiling), a couple of cells above the lowest floor; the
+  water sim pours the flood out of it (`decor.inlets`).
 - **Passages** (`carvePassages`): 1-2 one-cell tunnels through the rock
   between side doors (open floor cells beside a wall) that are a long way
   apart through the open or on different floors; routed through solid only
@@ -306,6 +310,23 @@ wildlife presets set spawn weights (and cap boosts). Picking a different
 size from the panel or Lively also resets `world` and `rain` to defaults
 (`RW.resetWorldAndRain`). The panel (backtick or
 the ≡ button) saves to `localStorage` under `STORAGE_KEY`; sections collapse.
+It floats off the screen's edge (translucent, rounded) with its header and
+close button pinned while it scrolls.
+
+The rain cycle's settings aren't in the panel: the cycle timer sits in the
+bottom-left corner (`Panel.buildRainMenu`: a canvas ring of pips and the
+time to the downpour) and clicking it opens a **corner radial menu**
+(`js/ui/radial.js`, `RW.RadialMenu`, reusable): items fan out round the
+corner, toggles and actions on the inner ring, dials (drag up/right, the
+wheel, or arrow keys; a gauge arc and the value) further out, more rings
+as needed; Escape, the hub or a click outside closes it. Rain, curtains,
+shelter, downpour now, clear skies; cycle length, light rain, drips and
+flood height (turning it shows the dotted line).
+
+A quick click on a creature (released within 160ms, without dragging)
+shows its AI state label for 15 s (`Ecosystem.toggleLabel`/`drawLabels`,
+drawn over everything so it can fade); another click fades it at once.
+Holding or dragging picks it up as before (`Engine.press`).
 
 ## Windows side (`windows/`, `js/geometry/`)
 
