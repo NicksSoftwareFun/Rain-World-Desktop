@@ -160,7 +160,69 @@
         /* storage blocked or corrupt: all sections start closed */
       }
       this.render();
-      if (RW.RadialMenu) this.buildRainMenu();
+      if (RW.RadialMenu) {
+        this.buildRainMenu();
+        this.buildWorldMenu();
+      }
+    }
+
+    // The world menu, top left: a globe that fans out the world type, the
+    // size and a new background (a RadialMenu, like the rain one).
+    buildWorldMenu() {
+      const eng = this.engine;
+      const cfg = this.cfg;
+      const Wc = cfg.world;
+      const hub = h('button', { class: 'rw-world', type: 'button', title: 'World: type, size and a new background' });
+      hub.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7.5h14M5 16.5h14"/></svg>';
+      // (every change goes through here: saved, and the side panel redrawn
+      // to match)
+      const done = () => {
+        this.save();
+        this.render();
+      };
+      const type = (value, label, icon, title) => ({
+        type: 'toggle', ring: 1, label, icon, title,
+        get: () => Wc.layout === value,
+        set: () => {
+          if (Wc.layout === value) return;
+          Wc.layout = value;
+          eng.regenerate(false);
+          eng.restartWildlife();
+          done();
+        },
+      });
+      const size = (name, icon, ring) => ({
+        type: 'toggle', ring, label: RW.SIZE_PRESETS[name].label.toLowerCase(), icon, title: RW.SIZE_PRESETS[name].label + ' size',
+        get: () => (cfg.presets || {}).size === name,
+        set: () => {
+          if ((cfg.presets || {}).size === name) return;
+          // (as the panel's size picker, but keeping the world type)
+          const keep = { layout: Wc.layout, region: Wc.region };
+          RW.resetWorldAndRain(cfg);
+          Object.assign(Wc, keep);
+          RW.applySizePreset(cfg, name);
+          eng.regenerate(false);
+          done();
+        },
+      });
+      this.worldMenu = new RW.RadialMenu(this.mount, {
+        corner: 'top-left',
+        hub,
+        hubSize: 52,
+        margin: 16,
+        title: 'World',
+        items: [
+          { type: 'action', ring: 0, label: 'new map', icon: '\u21bb', title: 'A new background: a fresh map of this type', run: () => eng.regenerate(true) },
+          type('tiers', 'tiers', '\u2630', 'Rows of ledges bridged by poles'),
+          type('scatter', 'scatter', '\u2058', 'Ledges anywhere'),
+          type('experimental', 'rooms', '\u25a6', 'Carved like real Rain World rooms'),
+          size('compact', 'S', 2),
+          size('normal', 'M', 2),
+          size('large', 'L', 2),
+          size('xl', 'XL', 2),
+        ],
+      });
     }
 
     // The rain cycle timer, bottom left: a ring of pips emptying toward the

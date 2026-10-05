@@ -16,6 +16,9 @@
 //     onChange: () => {},           // after any change (save the config, say)
 //   });
 //
+// Items go on rings by kind (buttons and toggles in, dials out); give one
+// `ring: n` to group it yourself (ring 0 innermost).
+//
 // A dial turns by dragging (up or right to raise it), the mouse wheel, or
 // the arrow keys when focused. Escape, a click on the hub or anywhere
 // outside closes the menu.
@@ -168,12 +171,15 @@
     }
 
     // Spread the items round the corner: buttons and toggles on the inner
-    // ring, dials outside them, a ring adding itself whenever one fills up.
+    // ring, dials outside them (or by each item's `ring`), a ring adding
+    // itself whenever one fills up.
     layout() {
       const a0 = (8 * Math.PI) / 180;
       const a1 = (82 * Math.PI) / 180;
       const rings = [];
-      const groups = [this.items.filter((i) => i.type !== 'dial'), this.items.filter((i) => i.type === 'dial')];
+      const ringOf = (i) => i.ring ?? (i.type === 'dial' ? 1 : 0);
+      const keys = [...new Set(this.items.map(ringOf))].sort((a, b) => a - b);
+      const groups = keys.map((k) => this.items.filter((i) => ringOf(i) === k));
       let r = this.hubSize / 2 + 72;
       for (const g of groups) {
         let rest = g.slice();

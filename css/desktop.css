@@ -280,6 +280,8 @@ html, body {
 .rw-radial-hub:hover, .rw-radial-hub.open { transform: scale(1.06); border-color: rgba(255, 207, 122, 0.6); }
 .rw-radial-hub:focus-visible { outline: 2px solid #ffcf7a; outline-offset: 3px; }
 .rw-radial-hub canvas { display: block; pointer-events: none; }
+.rw-world { color: #e8e2c8; }
+.rw-world svg { display: block; width: 60%; height: 60%; margin: auto; fill: none; stroke: currentColor; stroke-width: 1.4; pointer-events: none; }
 .rw-radial { position: fixed; inset: 0; pointer-events: none; z-index: 100002; }
 .rw-radial-shade {
   border-radius: 50%;
