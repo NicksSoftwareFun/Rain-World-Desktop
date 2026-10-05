@@ -65,7 +65,10 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
   den in reach it fades out). Sheltering: from `rain.shelterWarnSeconds`
   before the downpour each creature heads in at its own moment
   (`shelterTime()`); those that go in for the rain (`sheltered`) wait in
-  `Ecosystem.shelterStash` and come back out after it (`startUnpiping`,
+  `Ecosystem.shelterStash` and come back out after it, spread evenly over
+every den on the map (each given the least-used one, `releaseLoad`, and
+waiting till the water is below its mouth; one that stays under gives way
+to an open den after 60 s) (`startUnpiping`,
   `layInPipe`, `unpipeStep`: head first, along the ledge top from a ledge
   pipe). Before that, once the rain is past `rain.avoidFrom`
   (`Ecosystem.heavyRain()`), creatures keep out of it: `wanderGoal` looks

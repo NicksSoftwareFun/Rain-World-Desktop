@@ -126,17 +126,46 @@
       return !!(w && w.shelter && w.shelterAt(x, y) > y);
     }
     // After the rain, the sheltered come back out of the pipes one by one.
+    // They come back out spread evenly over every den on the map (not the
+    // upper ones they crowded into to get out of the flood): each is given
+    // the least-used den and waits until the water there has gone down
+    // below its mouth. (A den that stays under, a pool's, gives way after a
+    // while to whichever open one is least used.)
     releaseSheltered(dt) {
       const stash = this.shelterStash;
+      if (this.shouldShelter()) this.releaseLoad = null; // (a fresh share-out next time)
       if (!stash.length || this.shouldShelter()) return;
-      for (const s of stash) if (s.backAt === undefined) s.backAt = this.t + U.rand(1.5, 25);
-      if (!this.openDens().length) return;
+      const load = (this.releaseLoad = this.releaseLoad || new Map());
+      const leastUsed = (dens) => {
+        let best = [];
+        let bn = Infinity;
+        for (const d of dens) {
+          const n = load.get(d) || 0;
+          if (n < bn) {
+            bn = n;
+            best = [d];
+          } else if (n === bn) best.push(d);
+        }
+        const d = best.length ? U.pick(best) : null;
+        if (d) load.set(d, bn + 1);
+        return d;
+      };
+      for (const s of stash) {
+        if (s.backAt === undefined) s.backAt = this.t + U.rand(1.5, 25);
+        if (!s.releaseDen || !this.dens.includes(s.releaseDen)) s.releaseDen = leastUsed(this.usableDens(s.isFlier));
+      }
       for (let i = stash.length - 1; i >= 0; i--) {
         const c = stash[i];
         if (this.t < c.backAt) continue;
         const open = this.openDens(c.isFlier);
+        let d = c.releaseDen;
+        if (!d || !open.includes(d)) {
+          // still under water (or blocked): wait, unless it's been a while
+          if (this.t < c.backAt + 60 || !open.length) continue;
+          d = c.releaseDen = leastUsed(open);
+        }
         stash.splice(i, 1);
-        const d = c.shelterDen && open.includes(c.shelterDen) ? c.shelterDen : U.pick(open);
+        delete c.releaseDen;
         c.dead = c.leaving = c.sheltered = c.migrating = false;
         c.piping = c.burrow = c.nudge = c.unburrow = null;
         c.holding = c.grabbedBy = null;
@@ -157,6 +186,16 @@
       return { x: d.x, y: d.y - 10 };
     }
 
+    // Every den a creature could come out of, flooded or not (sky openings
+    // for fliers only; not one walled over).
+    usableDens(flier) {
+      const W = this.world;
+      return this.dens.filter((d) => {
+        if (d.sky) return !!flier;
+        const p = this.denSpawnPoint(d);
+        return !W.solid(W.cellX(p.x), W.cellY(p.y)) && !W.isSolidPt(p.x, p.y) && !W.isSolidPt(p.x, p.y - 14);
+      });
+    }
     // Open dens; `flier` includes the openings to the sky at the top of an
     // experimental room, which only fliers use to come and go.
     openDens(flier) {
