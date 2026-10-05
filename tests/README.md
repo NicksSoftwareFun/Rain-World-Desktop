@@ -12,6 +12,29 @@ node behaviour.mjs               # all behaviour checks (~2-3 min)
 node behaviour.mjs bodies rain   # just some
 ```
 
+## When to run what
+
+The suite exists to catch regressions before a release, not to confirm
+every edit. Each step up costs more, so stop at the first that fits:
+
+1. **While working**: `node --check` on the files touched, plus one small
+   throwaway script that reproduces the thing being changed (a trace or a
+   single screenshot; a GIF only for a finished feature the owner should
+   see). Seconds.
+2. **Before a commit**: `node behaviour.mjs --changed` runs only the checks
+   covering the files changed since the last commit (see `COVERS` in
+   behaviour.mjs); a UI/CSS-only change needs `smoke.mjs` instead. Usually
+   under a minute.
+3. **Before publishing the artifact, or after a change to shared code**
+   (world, nav, base creature, ecosystem, engine): the full suite,
+   `node behaviour.mjs` (about 2 minutes, three checks side by side) and
+   `smoke.mjs`.
+
+A failing check is rerun once automatically; one that passes the second
+time is reported as `FLAKY` (worth a note, not a dig). A `FAIL` survived the
+rerun and is real. Passing checks print one line; `--verbose` adds their
+measurements.
+
 ## What's covered
 
 `smoke.mjs`: the prototype and the wallpaper build (served by

@@ -6,6 +6,8 @@
 //   node behaviour.mjs                 all checks (~10-15 min)
 //   node behaviour.mjs --quick         shorter runs (~5 min), looser numbers
 //   node behaviour.mjs bodies fruit    just the named checks
+//   node behaviour.mjs --changed       just the checks covering files changed since HEAD
+//   options: --jobs=N (side by side, default 3), --no-retry, --verbose (metrics for passes too)
 //   (CHROMIUM_PATH=/path/to/chrome to use a preinstalled browser)
 //
 // The simulation isn't seeded (only the map is, via ?seed=), so the numbers
@@ -17,7 +19,10 @@ import { launch, openPrototype } from './lib.mjs';
 
 const args = process.argv.slice(2);
 const quick = args.includes('--quick');
-const only = args.filter((a) => !a.startsWith('--'));
+const verbose = args.includes('--verbose');
+const noRetry = args.includes('--no-retry');
+const jobsArg = args.find((a) => a.startsWith('--jobs='));
+let only = args.filter((a) => !a.startsWith('--'));
 const T = (min) => (quick ? min / 2 : min); // simulated minutes per check
 
 // Every check: run(page) -> metrics (computed in the page), then
@@ -1159,33 +1164,84 @@ const checks = [
   },
 ];
 
+// --changed: only the checks that cover the files changed since the last
+// commit (the working tree against HEAD). Anything shared by every creature
+// (world, nav, base, ecosystem, engine) brings in the core set.
+const COVERS = [
+  [/js\/water\.js/, ['water']],
+  [/js\/rooms\.js/, ['experimental', 'water']],
+  [/js\/creatures\/lizard\.js/, ['bodies', 'scramble', 'jumps', 'reds', 'corpses', 'packs']],
+  [/js\/creatures\/centipede\.js/, ['bodies', 'centipedes', 'reds']],
+  [/js\/creatures\/slugcat\.js/, ['scramble', 'jumps', 'throws', 'fruit', 'transients']],
+  [/js\/creatures\/dropwig\.js/, ['dropwigs']],
+  [/js\/creatures\/(noodlefly|squidcada|batfly)\.js/, ['fliers']],
+  [/js\/creatures\/daddy\.js/, ['transients']],
+  [/js\/(weapons|items)\.js/, ['throws', 'fruit']],
+  [/js\/(background|drips)\.js/, ['rain']],
+  [/js\/config\.js/, ['presets']],
+  [/js\/(world|nav|engine|ecosystem)\.js|js\/creatures\/base\.js/, ['soak', 'bodies', 'centipedes', 'scramble', 'shelter']],
+];
+if (args.includes('--changed')) {
+  const { execSync } = await import('node:child_process');
+  const files = execSync('git diff --name-only HEAD', { cwd: new URL('..', import.meta.url) }).toString().split('\n').filter(Boolean);
+  const want = new Set(only);
+  for (const f of files) for (const [re, names] of COVERS) if (re.test(f)) names.forEach((n) => want.add(n));
+  only = [...want];
+  console.log(only.length ? `changed: ${files.join(' ')}\nrunning: ${only.join(' ')}` : 'no checks cover the changed files (UI/docs only: run smoke.mjs)');
+  if (!only.length) process.exit(0);
+}
+
+// One check on its own page: {name, line, problems, warning, metrics}.
+async function runCheck(browser, c) {
+  const started = Date.now();
+  const { page, errors } = await openPrototype(browser, { seed: c.seed });
+  let metrics;
+  let problems;
+  try {
+    metrics = await c.run(page);
+    problems = c.judge(metrics).filter(Boolean);
+  } catch (err) {
+    metrics = {};
+    problems = ['crashed: ' + err.message.split('\n')[0]];
+  }
+  if (errors.length) problems.push('page errors: ' + errors.slice(0, 3).join(' | '));
+  const warning = !problems.length && c.warn && c.warn(metrics);
+  await page.close();
+  return { c, problems, warning, metrics, secs: ((Date.now() - started) / 1000).toFixed(0) };
+}
+
 const browser = await launch();
 let failures = 0;
 const t0 = Date.now();
+const todo = checks.filter((c) => !only.length || only.includes(c.name));
+// (checks run side by side, a few at a time: each is a separate page)
+const jobs = Math.max(1, jobsArg ? +jobsArg.split('=')[1] : Math.min(3, todo.length));
 try {
-  for (const c of checks) {
-    if (only.length && !only.includes(c.name)) continue;
-    const started = Date.now();
-    const { page, errors } = await openPrototype(browser, { seed: c.seed });
-    let metrics;
-    let problems;
-    try {
-      metrics = await c.run(page);
-      problems = c.judge(metrics).filter(Boolean);
-    } catch (err) {
-      metrics = {};
-      problems = ['crashed: ' + err.message.split('\n')[0]];
+  const queue = todo.slice();
+  const worker = async () => {
+    while (queue.length) {
+      const c = queue.shift();
+      let r = await runCheck(browser, c);
+      // a failure gets one rerun: the simulation isn't seeded, and a check
+      // that passes the second time is reported as flaky, not failed
+      let flaky = false;
+      if (r.problems.length && !noRetry) {
+        const again = await runCheck(browser, c);
+        if (!again.problems.length) flaky = r.problems;
+        r = again;
+      }
+      const tag = r.problems.length ? 'FAIL' : flaky ? 'FLAKY' : r.warning ? 'WARN' : 'ok  ';
+      const lines = [`${tag.padEnd(5)} ${c.name.padEnd(12)} ${r.secs.padStart(4)}s`];
+      if (verbose || r.problems.length || flaky) lines[0] += `  ${c.about}`;
+      if (verbose || r.problems.length) lines.push(`      ${JSON.stringify(r.metrics)}`);
+      for (const p of r.problems) lines.push(`      -> ${p}`);
+      if (flaky) lines.push(`      (failed once, passed on the rerun: ${flaky.join('; ')})`);
+      if (r.warning) lines.push(`      -> ${r.warning} (nothing to measure; rerun if it matters)`);
+      console.log(lines.join('\n'));
+      if (r.problems.length) failures++;
     }
-    if (errors.length) problems.push('page errors: ' + errors.slice(0, 3).join(' | '));
-    const warning = !problems.length && c.warn && c.warn(metrics);
-    const secs = ((Date.now() - started) / 1000).toFixed(0);
-    console.log(`${problems.length ? 'FAIL' : warning ? 'WARN' : 'ok  '}  ${c.name.padEnd(10)} ${secs.padStart(4)}s  ${c.about}`);
-    console.log(`      ${JSON.stringify(metrics)}`);
-    for (const p of problems) console.log(`      -> ${p}`);
-    if (warning) console.log(`      -> ${warning} (nothing to measure; rerun if it matters)`);
-    if (problems.length) failures++;
-    await page.close();
-  }
+  };
+  await Promise.all(Array.from({ length: jobs }, worker));
 } finally {
   await browser.close();
 }
