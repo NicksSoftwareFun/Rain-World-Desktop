@@ -11,8 +11,11 @@ html, body {
 #wallpaper {
   position: fixed;
   inset: 0;
+  /* (the engine sets the exact size in px; dvh is the visible height on
+     iPad/iPhone Safari, where 100vh runs on under the toolbars) */
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   image-rendering: pixelated;
   z-index: 0;
 }

@@ -136,6 +136,12 @@
       this.zoom = U.clamp(2 / map, 0.5, 3);
       this.W = Math.max(320, window.innerWidth) / this.zoom;
       this.H = Math.max(240, window.innerHeight) / this.zoom;
+      // The canvas covers exactly the area the map was made for: on a
+      // tablet, CSS's 100vh is taller than the visible page (it counts the
+      // space under the browser's toolbars), which stretched the picture
+      // and hid the map's bottom edge.
+      this.canvas.style.width = Math.round(this.W * this.zoom) + 'px';
+      this.canvas.style.height = Math.round(this.H * this.zoom) + 'px';
       this.world = new RW.World(cfg.world.cellSize || 20);
       this.world.resize(this.W, this.H);
       if (!keepSeed || !this.seed) this.seed = cfg.world.seed || Math.floor(Math.random() * 1e9);
