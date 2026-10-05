@@ -772,9 +772,12 @@
     // creatures first, small skittering things on top.
     draw(ctx) {
       const dirty = (this.dirty = []);
-      for (const g of this.grass) {
-        this.drawGrass(ctx, g);
-        dirty.push([g.x - 20, g.y - g.h - 8, g.x + 20, g.y + 2]);
+      // (in a room the grass is a foreground plant: see RW.Foliage)
+      if (!this.grassInFoliage) {
+        for (const g of this.grass) {
+          this.drawGrass(ctx, g);
+          dirty.push([g.x - 20, g.y - g.h - 8, g.x + 20, g.y + 2]);
+        }
       }
       for (const p of this.plants) {
         p.draw(ctx);

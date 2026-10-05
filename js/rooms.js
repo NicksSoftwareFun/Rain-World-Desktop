@@ -1744,7 +1744,8 @@
   // Region accents and hanging detail, over the mass: Outskirts' acid-green
   // vines on the blocks and floor tufts, Industrial's pink coral, Shoreline's
   // long yellow-green strands; sagging cables slung between walls and blocks.
-  function paintAccents(l, decor, pal, R0) {
+  function paintAccents(l, decor, pal, R0, fg) {
+    const F = fg || l;
     const R = either(R0);
     const room = decor.room;
     const { C, cell, cells } = room;
@@ -1753,17 +1754,18 @@
     const acc = pal.accent;
     const region = decor.region;
     const vine = (x, y, len, col, w) => {
-      l.strokeStyle = col;
-      l.lineWidth = w;
-      l.beginPath();
-      l.moveTo(x, y);
+      if (fg) fg.plant(x, y, true);
+      F.strokeStyle = col;
+      F.lineWidth = w;
+      F.beginPath();
+      F.moveTo(x, y);
       let vx = x;
       for (let k = 0; k < len; k += 3) {
         vx += Math.sin(k * 0.3 + x) * 0.8;
         if (solid(Math.floor(vx / cell), Math.floor((y + k) / cell))) break;
-        l.lineTo(vx, y + k);
+        F.lineTo(vx, y + k);
       }
-      l.stroke();
+      F.stroke();
     };
     const accCol = U.rgba(U.mix(acc, pal.mass, 0.25));
     if (region === 'outskirts' || region === 'shoreline') {
@@ -1788,26 +1790,27 @@
         if (region === 'industrial' ? R() > 0.05 : region === 'shaded' ? true : R() > 0.07) continue;
         const bx = (x + R()) * cell;
         const by = y * cell;
-        l.strokeStyle = accCol;
-        l.lineWidth = region === 'industrial' ? 3 : 1.4;
+        if (fg) fg.plant(bx, by);
+        F.strokeStyle = accCol;
+        F.lineWidth = region === 'industrial' ? 3 : 1.4;
         if (region === 'industrial') {
           // coral: a branching fan, 3-5 cells tall
           const nb = 5 + Math.floor(R() * 5);
           for (let k = 0; k < nb; k++) {
             const a = -Math.PI / 2 + (k - (nb - 1) / 2) * 0.24;
             const len = R(1.5, 2.5) * cell;
-            l.beginPath();
-            l.moveTo(bx, by);
-            l.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
-            l.lineTo(bx + Math.cos(a + 0.4) * len * 1.4, by + Math.sin(a + 0.4) * len * 1.4);
-            l.stroke();
+            F.beginPath();
+            F.moveTo(bx, by);
+            F.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
+            F.lineTo(bx + Math.cos(a + 0.4) * len * 1.4, by + Math.sin(a + 0.4) * len * 1.4);
+            F.stroke();
           }
         } else {
           for (let k = 0; k < 9; k++) {
-            l.beginPath();
-            l.moveTo(bx + k * 2 - 8, by);
-            l.lineTo(bx + k * 2 - 8 + R(-4, 4), by - R(6, 22));
-            l.stroke();
+            F.beginPath();
+            F.moveTo(bx + k * 2 - 8, by);
+            F.lineTo(bx + k * 2 - 8 + R(-4, 4), by - R(6, 22));
+            F.stroke();
           }
         }
       }
@@ -1847,11 +1850,291 @@
   // Plant life round the water: reeds and cattails crowding the banks,
   // kelp ribbons swaying up from the bottom, moss on the wet rock. (On a
   // pit map, round the pits' rims: that's where the flood wells up.)
+  // Background props: purely decorative machinery on the back wall, behind
+  // everything that moves: wall-mounted cogs (now and then a meshing pair),
+  // machine housings with panels, rivets, vents and a gauge, pipe runs with
+  // flanges and a valve wheel, and junk piles heaped on the floors (crates,
+  // a barrel, a tyre, scrap plates and rods). Each casts a soft shadow down
+  // the wall and catches a rim of light on its upper edges, brighter the
+  // nearer the room's openings it is.
+  //   ctx: the backdrop (the shadows go straight onto it, soft); layer: draws
+  //   crisp shapes onto it (see Background.paint).
+  function paintProps(ctx, layer, decor, pal, R0) {
+    const R = either(R0);
+    const room = decor.room;
+    const { C, cell, cells } = room;
+    const Rows = room.R;
+    const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
+    const dist = room.lightDist;
+    const lightAt = (x, y) => {
+      const d = dist ? dist[U.clamp(Math.floor(y / cell), 0, Rows - 1) * C + U.clamp(Math.floor(x / cell), 0, C - 1)] : -1;
+      return d < 0 ? 0 : Math.pow(U.clamp(1 - d / 14, 0, 1), 1.3);
+    };
+    // open space round a cell (how big a prop can sit there)
+    const room4 = (cx, cy, rw, rh) => {
+      for (let y = cy - rh; y <= cy + rh; y++) for (let x = cx - rw; x <= cx + rw; x++) if (solid(x, y)) return false;
+      return true;
+    };
+    const props = [];
+    const taken = (x, y, r) => props.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + r + cell);
+    const open = C * Rows;
+    const want = U.clamp(Math.round(open / 140), 4, 22);
+    for (let tries = 0; tries < want * 30 && props.length < want; tries++) {
+      const cx = 2 + Math.floor(R() * (C - 4));
+      const cy = 2 + Math.floor(R() * (Rows - 4));
+      if (solid(cx, cy)) continue;
+      const roll = R();
+      if (roll < 0.35 && solid(cx, cy + 1)) {
+        // a junk pile on the floor
+        const w = R(2.5, 5) * cell;
+        if (taken(cx * cell, (cy + 1) * cell, w / 2)) continue;
+        props.push({ kind: 'junk', x: (cx + 0.5) * cell, y: (cy + 1) * cell, w, r: w / 2, seed: R(0, 1000) });
+      } else if (roll < 0.6 && room4(cx, cy, 2, 2)) {
+        const r = R(0.9, 2) * cell;
+        if (taken(cx * cell, cy * cell, r)) continue;
+        props.push({ kind: 'cog', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, pair: R() < 0.35, seed: R(0, 1000) });
+      } else if (roll < 0.82 && room4(cx, cy, 3, 2)) {
+        const w = R(2.5, 4.5) * cell;
+        const h = R(1.8, 3.2) * cell;
+        if (taken(cx * cell, cy * cell, Math.max(w, h) / 2)) continue;
+        props.push({ kind: 'machine', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, w, h, r: Math.max(w, h) / 2, seed: R(0, 1000) });
+      } else {
+        // a pipe run: along the wall from rock to rock (horizontal or up)
+        const vert = R() < 0.4;
+        let a = vert ? cy : cx;
+        let b = a;
+        if (vert) {
+          while (a > 0 && !solid(cx, a - 1)) a--;
+          while (b < Rows - 1 && !solid(cx, b + 1)) b++;
+        } else {
+          while (a > 0 && !solid(a - 1, cy)) a--;
+          while (b < C - 1 && !solid(b + 1, cy)) b++;
+        }
+        if (b - a < 4 || b - a > 40) continue;
+        const pr = { kind: 'pipe', vert, x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, a: a * cell, b: (b + 1) * cell, t: R(4, 8), r: 6, seed: R(0, 1000) };
+        if (props.some((q) => q.kind === 'pipe' && q.vert === vert && Math.abs(vert ? q.x - pr.x : q.y - pr.y) < 3 * cell)) continue;
+        props.push(pr);
+      }
+    }
+    // colours: darker than the wall, a rusty accent, the lit rim
+    const base = U.mix(pal.interior, pal.mass, 0.55);
+    const deep = U.mix(pal.interior, pal.mass, 0.82);
+    const mid = U.mix(pal.interior, pal.mass, 0.35);
+    const rust = U.mix(pal.rust, pal.mass, 0.45);
+    const draw = (l, q, shadow) => {
+      const RR = U.mulberry32((q.seed * 997) >>> 0);
+      const r = (a, b) => a + RR() * (b - a);
+      const lit = U.rgba(U.mix(base, pal.light, 0.18 + 0.5 * lightAt(q.x, q.y)));
+      const C_ = (c) => (shadow ? shadow : U.rgba(c));
+      const rim = shadow || lit;
+      if (q.kind === 'cog') {
+        const cogs = [[q.x, q.y, q.r]];
+        if (q.pair) cogs.push([q.x + q.r * 1.7, q.y + q.r * 0.6, q.r * 0.62]);
+        for (const [x, y, R_] of cogs) {
+          const teeth = Math.max(8, Math.round(R_ / 2.6));
+          l.fillStyle = C_(base);
+          l.beginPath();
+          for (let i = 0; i < teeth * 2; i++) {
+            const a = (i / (teeth * 2)) * U.TAU;
+            const rr = i % 2 ? R_ : R_ * 0.84;
+            const a2 = ((i + 1) / (teeth * 2)) * U.TAU;
+            l.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+            l.lineTo(x + Math.cos(a2) * rr, y + Math.sin(a2) * rr);
+          }
+          l.closePath();
+          l.fill();
+          if (shadow) continue;
+          // rim light along the top teeth
+          l.strokeStyle = rim;
+          l.lineWidth = 1.2;
+          l.beginPath();
+          l.arc(x, y, R_ * 0.9, Math.PI * 1.1, Math.PI * 1.9);
+          l.stroke();
+          // spokes and holes, the hub
+          l.fillStyle = C_(deep);
+          const holes = 4 + Math.floor(r(0, 3));
+          for (let i = 0; i < holes; i++) {
+            const a = (i / holes) * U.TAU + q.seed;
+            l.beginPath();
+            l.arc(x + Math.cos(a) * R_ * 0.5, y + Math.sin(a) * R_ * 0.5, R_ * 0.17, 0, U.TAU);
+            l.fill();
+          }
+          l.fillStyle = C_(mid);
+          l.beginPath();
+          l.arc(x, y, R_ * 0.2, 0, U.TAU);
+          l.fill();
+          l.fillStyle = C_(deep);
+          l.fillRect(x - 1.5, y - 1.5, 3, 3);
+        }
+      } else if (q.kind === 'machine') {
+        const x0 = q.x - q.w / 2;
+        const y0 = q.y - q.h / 2;
+        l.fillStyle = C_(base);
+        l.fillRect(x0, y0, q.w, q.h);
+        // pipe stubs off the sides
+        l.fillRect(x0 - 6, q.y + r(-q.h * 0.3, q.h * 0.2), 6, 5);
+        l.fillRect(x0 + q.w, q.y + r(-q.h * 0.3, q.h * 0.2), 6, 5);
+        if (shadow) return;
+        l.fillStyle = rim;
+        l.fillRect(x0, y0, q.w, 1.5);
+        l.fillRect(x0, y0, 1.5, q.h * 0.6);
+        // panel seams
+        l.fillStyle = C_(deep);
+        const nPanels = 2 + Math.floor(r(0, 2));
+        for (let i = 1; i < nPanels; i++) l.fillRect(x0 + (q.w * i) / nPanels, y0 + 2, 1, q.h - 4);
+        // rivets along the top and bottom
+        l.fillStyle = C_(mid);
+        for (let x = x0 + 4; x < x0 + q.w - 3; x += 7) {
+          l.fillRect(x, y0 + 3, 1.5, 1.5);
+          l.fillRect(x, y0 + q.h - 4, 1.5, 1.5);
+        }
+        // vent slats in one panel
+        l.fillStyle = C_(deep);
+        const vx = x0 + q.w * r(0.08, 0.4);
+        for (let y = y0 + q.h * 0.3; y < y0 + q.h * 0.8; y += 3.5) l.fillRect(vx, y, q.w * 0.22, 1.8);
+        // a gauge with its needle, rusted at the rim
+        const gx = x0 + q.w * r(0.62, 0.82);
+        const gy = y0 + q.h * r(0.3, 0.5);
+        const gr = Math.min(q.w, q.h) * 0.15;
+        l.fillStyle = C_(rust);
+        l.beginPath();
+        l.arc(gx, gy, gr + 1.5, 0, U.TAU);
+        l.fill();
+        l.fillStyle = C_(deep);
+        l.beginPath();
+        l.arc(gx, gy, gr, 0, U.TAU);
+        l.fill();
+        l.strokeStyle = rim;
+        l.lineWidth = 1;
+        const na = r(-2.4, -0.7);
+        l.beginPath();
+        l.moveTo(gx, gy);
+        l.lineTo(gx + Math.cos(na) * gr * 0.9, gy + Math.sin(na) * gr * 0.9);
+        l.stroke();
+      } else if (q.kind === 'pipe') {
+        const t = q.t;
+        l.fillStyle = C_(base);
+        if (q.vert) l.fillRect(q.x - t / 2, q.a, t, q.b - q.a);
+        else l.fillRect(q.a, q.y - t / 2, q.b - q.a, t);
+        if (shadow) return;
+        l.fillStyle = rim;
+        if (q.vert) l.fillRect(q.x - t / 2, q.a, 1.2, q.b - q.a);
+        else l.fillRect(q.a, q.y - t / 2, q.b - q.a, 1.2);
+        // flanges every few cells, a valve wheel on one
+        l.fillStyle = C_(deep);
+        const len = q.b - q.a;
+        const step = r(2.5, 4.5) * cell;
+        for (let d = step * 0.5; d < len; d += step) {
+          if (q.vert) l.fillRect(q.x - t / 2 - 2, q.a + d, t + 4, 3);
+          else l.fillRect(q.a + d, q.y - t / 2 - 2, 3, t + 4);
+        }
+        const vd = q.a + len * r(0.25, 0.75);
+        const vx = q.vert ? q.x + t / 2 + 5 : vd;
+        const vy = q.vert ? vd : q.y - t / 2 - 6;
+        l.strokeStyle = C_(rust);
+        l.lineWidth = 1.6;
+        l.beginPath();
+        l.arc(vx, vy, 4.5, 0, U.TAU);
+        l.moveTo(vx - 4.5, vy);
+        l.lineTo(vx + 4.5, vy);
+        l.moveTo(vx, vy - 4.5);
+        l.lineTo(vx, vy + 4.5);
+        l.stroke();
+      } else {
+        // a junk pile: the heap's silhouette, then the things in it
+        const w = q.w;
+        const x0 = q.x - w / 2;
+        const hh = w * r(0.35, 0.55);
+        l.fillStyle = C_(base);
+        l.beginPath();
+        l.moveTo(x0, q.y);
+        for (let i = 0; i <= 8; i++) {
+          const u = i / 8;
+          l.lineTo(x0 + u * w, q.y - Math.sin(u * Math.PI) * hh * r(0.7, 1.15));
+        }
+        l.lineTo(x0 + w, q.y);
+        l.closePath();
+        l.fill();
+        // a crate or two, tilted
+        const nc = 1 + Math.floor(r(0, 2.4));
+        for (let i = 0; i < nc; i++) {
+          const s = r(7, 13);
+          const cx = x0 + w * r(0.2, 0.8);
+          const cy = q.y - hh * r(0.3, 0.75);
+          l.save();
+          l.translate(cx, cy);
+          l.rotate(r(-0.4, 0.4));
+          l.fillStyle = C_(mid);
+          l.fillRect(-s / 2, -s / 2, s, s);
+          if (!shadow) {
+            l.fillStyle = C_(deep);
+            l.fillRect(-s / 2, -0.5, s, 1);
+            l.fillStyle = rim;
+            l.fillRect(-s / 2, -s / 2, s, 1);
+          }
+          l.restore();
+        }
+        if (r(0, 1) < 0.6) {
+          // a barrel on its end, banded
+          const bw = r(7, 10);
+          const bh = r(10, 15);
+          const bx = x0 + w * (r(0, 1) < 0.5 ? r(0.05, 0.2) : r(0.75, 0.9));
+          l.fillStyle = C_(rust);
+          l.fillRect(bx - bw / 2, q.y - bh, bw, bh);
+          if (!shadow) {
+            l.fillStyle = C_(deep);
+            l.fillRect(bx - bw / 2, q.y - bh * 0.7, bw, 1.2);
+            l.fillRect(bx - bw / 2, q.y - bh * 0.3, bw, 1.2);
+            l.fillStyle = rim;
+            l.fillRect(bx - bw / 2, q.y - bh, bw, 1);
+          }
+        }
+        if (r(0, 1) < 0.45) {
+          // a tyre leaning in the heap
+          const tx = x0 + w * r(0.3, 0.7);
+          const tr = r(5, 8);
+          l.strokeStyle = C_(deep);
+          l.lineWidth = 3;
+          l.beginPath();
+          l.ellipse(tx, q.y - tr, tr, tr * 0.9, r(-0.3, 0.3), 0, U.TAU);
+          l.stroke();
+        }
+        if (!shadow) {
+          // rods and plates sticking out
+          l.strokeStyle = C_(mid);
+          l.lineWidth = 1.4;
+          for (let i = 0; i < 3; i++) {
+            const sx = x0 + w * r(0.15, 0.85);
+            const sy = q.y - hh * r(0.2, 0.6);
+            const a = r(-2.6, -0.5);
+            const len = r(6, 16);
+            l.beginPath();
+            l.moveTo(sx, sy);
+            l.lineTo(sx + Math.cos(a) * len, sy + Math.sin(a) * len);
+            l.stroke();
+          }
+          l.fillStyle = rim;
+          l.fillRect(x0 + w * 0.3, q.y - hh * 0.95, w * 0.3, 1);
+        }
+      }
+    };
+    // soft shadows straight onto the wall, a little down and away from the light
+    ctx.save();
+    ctx.translate(2.5, 4);
+    for (const q of props) draw(ctx, q, U.rgba(pal.mass, 0.38));
+    ctx.restore();
+    layer((l) => {
+      for (const q of props) draw(l, q, null);
+    });
+    decor.props = props;
+  }
+
   // The Shaded Citadel's bioluminescence (placed by paintBackdrop, with its
   // haloes): pale blue fungus bracketing the ceilings with glowing threads
   // hanging off them, speckled patches on the walls, and glowing plants on
   // the floors: curved stalks with bulbs.
-  function paintBiolum(l, decor) {
+  function paintBiolum(l, decor, fg) {
+    const F = fg || l;
     const core = '#e2f8ff';
     const glowC = 'rgba(159, 220, 240, 0.75)';
     const stem = 'rgba(70, 130, 160, 0.85)';
@@ -1902,32 +2185,36 @@
       } else {
         // a plant: a few curved stalks with glowing bulbs at the tips
         const n = 1 + Math.floor(R() * 3);
+        if (fg) fg.plant(b.x, b.y);
         for (let i = 0; i < n; i++) {
           const h = r(10, 26);
           const lean = r(-6, 6);
           const x0 = b.x + r(-4, 4);
-          l.strokeStyle = stem;
-          l.lineWidth = 1.2;
-          l.beginPath();
-          l.moveTo(x0, b.y);
-          l.quadraticCurveTo(x0 + lean * 0.2, b.y - h * 0.6, x0 + lean, b.y - h);
-          l.stroke();
-          l.fillStyle = glowC;
-          l.beginPath();
-          l.arc(x0 + lean, b.y - h, r(1.6, 2.6), 0, U.TAU);
-          l.fill();
-          l.fillStyle = core;
-          l.fillRect(x0 + lean - 0.5, b.y - h - 0.5, 1.5, 1.5);
+          F.strokeStyle = stem;
+          F.lineWidth = 1.2;
+          F.beginPath();
+          F.moveTo(x0, b.y);
+          F.quadraticCurveTo(x0 + lean * 0.2, b.y - h * 0.6, x0 + lean, b.y - h);
+          F.stroke();
+          F.fillStyle = glowC;
+          F.beginPath();
+          F.arc(x0 + lean, b.y - h, r(1.6, 2.6), 0, U.TAU);
+          F.fill();
+          F.fillStyle = core;
+          F.fillRect(x0 + lean - 0.5, b.y - h - 0.5, 1.5, 1.5);
           if (R() < 0.6) {
-            l.fillStyle = glowC;
-            l.fillRect(x0 + lean * 0.45 + 1, b.y - h * 0.5, 2, 2);
+            F.fillStyle = glowC;
+            F.fillRect(x0 + lean * 0.45 + 1, b.y - h * 0.5, 2, 2);
           }
         }
       }
     }
   }
 
-  function paintWaterPlants(l, decor, pal, R0) {
+  // (fg: the foreground plants' recorder, RW.Foliage; without one they're
+  // painted straight onto the layer as before)
+  function paintWaterPlants(l, decor, pal, R0, fg) {
+    const F = fg || l;
     const R = either(R0);
     const room = decor.room;
     const { C, cell, cells } = room;
@@ -1984,34 +2271,36 @@
           let top = y;
           while (top > 0 && wet[(top - 1) * C + x]) top--;
           const n = R() < 0.85 ? 2 + Math.floor(R() * 3) : 0;
+          if (fg && n) fg.plant(bx + cell / 2, by, false, { wet: true });
           for (let k = 0; k < n; k++) {
             const h = (by - top * cell) * R(0.45, 0.95);
             let px = bx + R(2, cell - 2);
-            l.strokeStyle = k % 2 ? dark : stalk;
-            l.lineWidth = R(1.5, 3);
-            l.beginPath();
-            l.moveTo(px, by);
+            F.strokeStyle = k % 2 ? dark : stalk;
+            F.lineWidth = R(1.5, 3);
+            F.beginPath();
+            F.moveTo(px, by);
             for (let t = 4; t < h; t += 4) {
               px += Math.sin(t * 0.18 + x) * 1.4;
-              l.lineTo(px, by - t);
+              F.lineTo(px, by - t);
             }
-            l.stroke();
+            F.stroke();
           }
           // shallows: reeds standing up out of the water
           if (by - top * cell <= 3 * cell && clump[x]) {
+            if (fg) fg.plant(bx + cell / 2, by);
             for (let k = 0; k < 6 + Math.floor(R() * 7); k++) {
               const sx = bx + R(0, cell);
               const h = by - top * cell + R(0.4, 1.6) * cell;
               const lean = R(-5, 5);
-              l.strokeStyle = R() < 0.5 ? leaf : stalk;
-              l.lineWidth = R(1, 2);
-              l.beginPath();
-              l.moveTo(sx, by);
-              l.quadraticCurveTo(sx + lean * 0.2, by - h * 0.6, sx + lean, by - h);
-              l.stroke();
+              F.strokeStyle = R() < 0.5 ? leaf : stalk;
+              F.lineWidth = R(1, 2);
+              F.beginPath();
+              F.moveTo(sx, by);
+              F.quadraticCurveTo(sx + lean * 0.2, by - h * 0.6, sx + lean, by - h);
+              F.stroke();
               if (R() < 0.3) {
-                l.fillStyle = head;
-                l.fillRect(sx + lean - 1.5, by - h - 1, 3, 7);
+                F.fillStyle = head;
+                F.fillRect(sx + lean - 1.5, by - h - 1, 3, 7);
               }
             }
           }
@@ -2021,32 +2310,33 @@
         const near = 1 - dist[i] / 7;
         if (!clump[x] || R() > 0.4 + near * 0.6) continue;
         const n = 4 + Math.floor(R() * 7 * near + R() * 3);
+        if (fg) fg.plant(bx + cell / 2, by);
         for (let k = 0; k < n; k++) {
           const sx = bx + R(0, cell);
           const h = R(0.8, 1.8 + near * 1.8) * cell;
           const lean = R() < 0.2 ? R(-14, 14) : R(-6, 6); // (some bent over)
-          l.strokeStyle = R() < 0.4 ? leaf : stalk;
-          l.lineWidth = R(1, 2);
-          l.beginPath();
-          l.moveTo(sx, by);
-          l.quadraticCurveTo(sx + lean * 0.3, by - h * 0.6, sx + lean, by - h);
-          l.stroke();
+          F.strokeStyle = R() < 0.4 ? leaf : stalk;
+          F.lineWidth = R(1, 2);
+          F.beginPath();
+          F.moveTo(sx, by);
+          F.quadraticCurveTo(sx + lean * 0.3, by - h * 0.6, sx + lean, by - h);
+          F.stroke();
           // a cattail head on some
           if (R() < 0.25 * near) {
-            l.fillStyle = head;
-            l.fillRect(sx + lean - 1.5, by - h - 1, 3, 7);
+            F.fillStyle = head;
+            F.fillRect(sx + lean - 1.5, by - h - 1, 3, 7);
           }
         }
         // broad leaves arching over
         if (R() < near * 0.6) {
-          l.fillStyle = leaf;
+          F.fillStyle = leaf;
           const lx = bx + R(0, cell);
           const s = R() < 0.5 ? 1 : -1;
-          l.beginPath();
-          l.moveTo(lx, by);
-          l.quadraticCurveTo(lx + s * 8, by - 16, lx + s * 16, by - 6);
-          l.quadraticCurveTo(lx + s * 8, by - 10, lx, by);
-          l.fill();
+          F.beginPath();
+          F.moveTo(lx, by);
+          F.quadraticCurveTo(lx + s * 8, by - 16, lx + s * 16, by - 6);
+          F.quadraticCurveTo(lx + s * 8, by - 10, lx, by);
+          F.fill();
         }
       }
     }
@@ -2059,18 +2349,19 @@
         if (yy >= Rows || !wet[yy * C + x]) continue;
         const len = (yy - y) * cell * R(0.3, 0.9);
         let px = x * cell + R(2, cell - 2);
-        l.strokeStyle = R() < 0.5 ? leaf : stalk;
-        l.lineWidth = R(1, 1.8);
-        l.beginPath();
-        l.moveTo(px, y * cell);
+        if (fg) fg.plant(px, y * cell, true);
+        F.strokeStyle = R() < 0.5 ? leaf : stalk;
+        F.lineWidth = R(1, 1.8);
+        F.beginPath();
+        F.moveTo(px, y * cell);
         for (let t = 4; t < len; t += 4) {
           px += Math.sin(t * 0.25 + x * 3) * 0.9;
-          l.lineTo(px, y * cell + t);
+          F.lineTo(px, y * cell + t);
         }
-        l.stroke();
+        F.stroke();
         if (R() < 0.5) {
-          l.fillStyle = leaf;
-          l.fillRect(px - 2, y * cell + len - 2, 4, 3);
+          F.fillStyle = leaf;
+          F.fillRect(px - 2, y * cell + len - 2, 4, 3);
         }
       }
     }
@@ -2466,5 +2757,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();

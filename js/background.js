@@ -570,6 +570,7 @@
 
     function paintRoom() {
       RW.Rooms.paintBackdrop(ctx, W, H, pal, decor, R, layer);
+      RW.Rooms.paintProps(ctx, layer, decor, pal, R);
       RW.Rooms.paintShade(ctx, decor, pal);
       RW.Rooms.paintPits(ctx, decor, pal, H);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -584,13 +585,17 @@
       back2.getContext('2d').drawImage(canvas, 0, 0);
       const play2 = mkc();
       const p2 = play2.getContext('2d', { willReadFrequently: true });
+      // (the plants go to the foreground, RW.Foliage: drawn over the
+      // creatures, swaying and bumped, not baked in here)
+      const fol = (decor.foliage = RW.Foliage ? new RW.Foliage() : null);
+      const fg = fol && fol.rec;
       layer((l) => {
         RW.Rooms.paintMass(l, decor, pal, R);
         RW.Rooms.paintPassages(l, decor, pal);
         RW.Rooms.paintJunk(l, decor, pal, R);
-        RW.Rooms.paintAccents(l, decor, pal, R);
-        RW.Rooms.paintWaterPlants(l, decor, pal, R);
-        RW.Rooms.paintBiolum(l, decor);
+        RW.Rooms.paintAccents(l, decor, pal, R, fg);
+        RW.Rooms.paintWaterPlants(l, decor, pal, R, fg);
+        RW.Rooms.paintBiolum(l, decor, fg);
         for (const p of decor.poles) drawPole(l, p, pal);
         for (const b of decor.beams || []) drawBeam(l, b, pal);
         for (const d of decor.dens) if (!d.sky) drawDenStatic(l, d, pal);

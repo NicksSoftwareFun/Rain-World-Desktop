@@ -206,6 +206,17 @@
     }
     paintBackground() {
       RW.Background.paint(this.bgCanvas, this.W, this.H, this.ps / this.zoom, this.pal, this.decor, this.seed % 100000, this.light);
+      // the foreground plants (a room's): the batfly grass joins them, and
+      // each is drawn onto its sprite at this scale
+      this.foliage = this.decor.foliage || null;
+      if (this.foliage) {
+        for (const g of this.eco.grass) {
+          this.foliage.rec.plant(g.x, g.y);
+          this.eco.drawGrass(this.foliage.rec, g);
+        }
+        this.eco.grassInFoliage = true;
+        this.foliage.build(this.zoom / this.ps);
+      } else this.eco.grassInFoliage = false;
     }
     // The light for now: the rain cycle's clock (or the preview hour); null
     // when the day-night light is off.
@@ -424,6 +435,7 @@
         this.dropHand();
       }
       this.weather.update(dt, this.cfg, this.W, this.H, this.world);
+      if (this.foliage) this.foliage.update(dt, this.eco.creatures, this.cfg.rain.enabled ? this.weather.intensity : 0, this.eco.t);
       if (this.world.waterSim) this.world.waterSim.update(dt, this.weather, this.cfg.rain);
       this.eco.update(dt);
     }
@@ -449,6 +461,9 @@
       this.eco.drawLate(this.spriteCanvas, k);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(this.spriteCanvas, 0, 0);
+      // plants in front of the creatures (before the water, which tints
+      // whatever's in it)
+      if (this.foliage) this.foliage.draw(ctx, k);
       ctx.setTransform(k, 0, 0, k, 0, 0);
       this.drawWater(ctx);
       this.eco.drawLabels(ctx);
