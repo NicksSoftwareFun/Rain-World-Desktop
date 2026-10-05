@@ -190,8 +190,22 @@
             eng.weather.t = Math.ceil(eng.weather.t / cycle()) * cycle() + 1;
           } },
           { type: 'dial', label: 'cycle', title: 'Length of one rain cycle (minutes)', min: 1, max: 30, step: 0.5, get: () => R.cycleMinutes, set: (v) => (R.cycleMinutes = v), format: (v) => v + 'm' },
-          { type: 'dial', label: 'light rain', title: 'Light rain outside the downpour', min: 0, max: 1, step: 0.01, get: () => R.drizzle, set: (v) => (R.drizzle = v), format: (v) => Math.round(v * 100) + '%' },
-          { type: 'dial', label: 'drips', title: 'Drips off the undersides', min: 0, max: 2, step: 0.05, get: () => R.drips, set: (v) => (R.drips = v), format: (v) => v.toFixed(1) },
+          // where the cycle is now, out of its full length: click to step on
+          // to the next stage (calm, light rain, build-up, downpour)
+          { type: 'action', label: 'now', title: 'Where the rain cycle is, out of its full length (click: on to the next stage)', icon: () => {
+            const w = eng.weather;
+            const total = cycle();
+            const now = w ? (w.t % total) : 0;
+            const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+            return mmss(now) + '/' + mmss(total);
+          }, run: () => {
+            const w = eng.weather;
+            const total = cycle();
+            const ph = (w.t % total) / total;
+            const stops = [0.25, 0.42, 1 - R.downpourFraction - 0.3, 1 - R.downpourFraction * 0.95, 1.001];
+            const next = stops.find((q) => q > ph + 0.01);
+            w.t = Math.floor(w.t / total) * total + next * total;
+          } },
           // (while it's being turned, a dotted line marks the height on the map)
           { type: 'dial', label: 'flood', title: 'How high the water rises in the downpour (experimental maps)', min: 0, max: 0.95, step: 0.05, get: () => R.floodHeight ?? 0.75, set: (v) => (R.floodHeight = v), format: (v) => Math.round(v * 100) + '%', onDrag: () => (eng.floodPreviewUntil = performance.now() + 1500) },
         ],

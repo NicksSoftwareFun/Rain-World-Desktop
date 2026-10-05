@@ -100,7 +100,10 @@
         face.appendChild(it._val);
         this.bindDial(b, it);
       } else {
-        face.appendChild(el('span', 'icon', it.icon || '•'));
+        // (an icon can be live text: a function, kept up to date while open)
+        const live = typeof it.icon === 'function';
+        it._icon = el('span', live ? 'icon text' : 'icon', live ? it.icon() : it.icon || '•');
+        face.appendChild(it._icon);
         b.addEventListener('click', () => {
           if (it.type === 'toggle') it.set(!it.get());
           else it.run();
@@ -196,6 +199,7 @@
     }
 
     refresh(it) {
+      if (typeof it.icon === 'function' && it._icon) it._icon.textContent = it.icon();
       if (it.type === 'toggle') {
         const on = !!it.get();
         it._el.classList.toggle('on', on);
@@ -216,12 +220,17 @@
     open() {
       for (const it of this.items) this.refresh(it);
       this.isOpen = true;
+      clearInterval(this.liveT);
+      this.liveT = setInterval(() => {
+        for (const it of this.items) if (typeof it.icon === 'function') this.refresh(it);
+      }, 250);
       this.root.classList.add('open');
       this.hub.classList.add('open');
       this.hub.setAttribute('aria-expanded', 'true');
     }
     close() {
       this.isOpen = false;
+      clearInterval(this.liveT);
       this.root.classList.remove('open');
       this.hub.classList.remove('open');
       this.hub.setAttribute('aria-expanded', 'false');

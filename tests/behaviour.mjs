@@ -461,7 +461,7 @@ const checks = [
   },
   {
     name: 'rain',
-    about: 'rain eases into and out of the downpour exponentially; waterfalls only in real rain; rain falls past horizontal poles',
+    about: 'the cycle: drips dying away after the storm, a calm, light rain starting and building exponentially into the downpour, an abrupt stop; waterfalls only in real rain; rain falls past horizontal poles',
     run: (page) =>
       page.evaluate(() => {
         const e = RW_APP.engine;
@@ -469,17 +469,20 @@ const checks = [
         R.cycleMinutes = 1;
         const w = e.weather;
         const cyc = 60;
-        const out = { flatEarly: true, rampMonotonic: true, peak: 0, decaysBack: false, waterfallsInDrizzle: 0, beamBlocked: 0, beamExposed: 0 };
+        const out = { calm: true, lightStarts: false, rampMonotonic: true, peak: 0, stops: true, dripsAfter: 0, dripsCalm: 9, waterfallsInDrizzle: 0, beamBlocked: 0, beamExposed: 0 };
         let last = 0;
         e.tick(1 / 60);
         while (w.t < cyc * 2.3) {
           e.tick(1 / 60);
           const ph = w.phase;
           const second = w.t >= cyc;
-          if (!second && ph < 0.5 && Math.abs(w.intensity - R.drizzle) > 1e-6) out.flatEarly = false;
-          if (!second && ph > 0.5 && !w.downpour && w.intensity < last - 1e-6) out.rampMonotonic = false;
+          if (ph < 0.38 && (second ? ph > 0.06 : true) && w.intensity > 1e-6) out.calm = second ? out.calm : false;
+          if (second && ph > 0.06 && ph < 0.38 && w.intensity > 1e-6) out.stops = false;
+          if (!second && ph > 0.45 && ph < 0.6 && w.intensity > 0.02 && w.intensity < 0.9) out.lightStarts = true;
+          if (!second && ph > 0.4 && !w.downpour && w.intensity < last - 1e-6) out.rampMonotonic = false;
           if (w.downpour) out.peak = Math.max(out.peak, w.intensity);
-          if (second && ph > 0.25 && ph < 0.5 && Math.abs(w.intensity - R.drizzle) < 0.01) out.decaysBack = true;
+          if (second && ph < 0.02) out.dripsAfter = Math.max(out.dripsAfter, w.dripLevel);
+          if (second && ph > 0.33 && ph < 0.38) out.dripsCalm = Math.min(out.dripsCalm, w.dripLevel);
           if (w.intensity < (R.waterfallsFrom ?? 0.35) && w.waterfalls > 0) out.waterfallsInDrizzle++;
           last = w.intensity;
         }
@@ -497,10 +500,13 @@ const checks = [
         return out;
       }),
     judge: (m) => [
-      !m.flatEarly && 'light rain not steady early in the cycle',
+      !m.calm && 'rain early in the cycle (should be calm)',
+      !m.lightStarts && 'light rain never started after the calm',
       !m.rampMonotonic && 'build-up to the downpour not smooth',
       m.peak < 0.99 && 'downpour never reached full strength',
-      !m.decaysBack && 'rain never eased back to light rain after the downpour',
+      !m.stops && 'rain didn\'t stop after the downpour',
+      !(m.dripsAfter > 1) && 'little dripping right after the storm',
+      !(m.dripsCalm < 0.3) && 'still dripping hard in the calm',
       m.waterfallsInDrizzle && 'ledge waterfalls running in light rain',
       m.beamBlocked && `horizontal poles block the rain (${m.beamBlocked} points)`,
     ],

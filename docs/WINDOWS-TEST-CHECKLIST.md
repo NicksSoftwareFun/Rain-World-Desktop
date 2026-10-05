@@ -40,7 +40,7 @@ The real wallpaper is **`wallpaper.html`, served by the helper**:
 - [ ] Leave it on **Normal** for 10 minutes: does it stay smooth? Then **XL**:
       any stutter? (If so: Settings panel → World → max fps 30.)
 - [ ] Display scaling (125%/150%): creatures line up with window edges.
-- [ ] Watch one rain cycle (about 4 minutes): light rain, a build-up, the
-      downpour (everyone shelters), then easing off.
+- [ ] Watch one rain cycle (about 4 minutes): drips dying away, a calm,
+      light rain, a build-up, the downpour (everyone shelters), then a stop.
 
 Note anything odd with a screenshot and roughly where on screen it happened.

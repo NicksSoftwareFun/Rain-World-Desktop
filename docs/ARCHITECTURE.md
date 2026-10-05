@@ -155,8 +155,11 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   holds it. It gives the sun's side and height (the shadow offset `dx, dy`,
   thrown by ledges, poles and beams only, never creatures) and a colour
   wash the engine multiplies over the whole frame.
-- `Weather`: the rain cycle (light rain, an exponential build-up, the
-  downpour, an exponential ease-off), rain drops with a slanted rain shadow
+- `Weather`: the rain cycle, automated: heavy drips left over from the
+  last storm that die away, a calm, light rain from 40% of the way through
+  (`rain.drizzle` sets how strong it gets), an exponential build-up, the
+  downpour, an abrupt stop. `dripLevel` follows the same curve (`rain.drips`
+  scales it). Rain drops with a slanted rain shadow
   under ledges/windows (not beams), curtains, fog, the cycle HUD.
   `drips.js`: drips from undersides and ledge-end waterfalls (only in real
   rain). In a room the rain shadow comes from the rock grid itself (each
@@ -330,7 +333,8 @@ time to the downpour) and clicking it opens a **corner radial menu**
 corner, toggles and actions on the inner ring, dials (drag up/right, the
 wheel, or arrow keys; a gauge arc and the value) further out, more rings
 as needed; Escape, the hub or a click outside closes it. Rain, curtains,
-shelter, downpour now, clear skies; cycle length, light rain, drips and
+shelter, downpour now, clear skies, a live "now" button (time into the
+cycle out of its length; a click skips to the next stage); cycle length and
 flood height (turning it shows the dotted line).
 
 A quick click on a creature (released within 160ms, without dragging)

@@ -1097,10 +1097,12 @@
       this.drips = RW.Drips ? new RW.Drips() : null;
     }
 
-    // Rain cycle: light rain for most of it. Approaching the downpour the
-    // rain builds on an exponential curve (barely at first, then fast), and
-    // once it ends it eases back off the same way: a sharp drop, then a long
-    // tail down to the light rain.
+    // Rain cycle, start to finish: the storm stops at once, leaving
+    // everything dripping; the drips slowly die away into a calm with no rain
+    // at all; then (40% of the way in) light rain starts and picks up, and
+    // approaching the downpour it builds on an exponential curve (barely at
+    // first, then fast). rain.drizzle sets how heavy the light rain gets
+    // before the build-up, rain.drips how much everything drips.
     update(dt, cfg, W, H, world) {
       this.t += dt;
       const rc = cfg.rain;
@@ -1110,14 +1112,22 @@
       const K = 4;
       const ex = (u) => (Math.exp(K * U.clamp(u, 0, 1)) - 1) / (Math.exp(K) - 1);
       const up = 0.3; // share of the cycle the build-up takes
-      const down = 0.18; // ...and the easing off afterwards
-      const base = U.clamp(+rc.drizzle || 0, 0, 1);
-      let target = base;
-      if (this.phase >= 1 - dp) target = 1;
-      else if (this.phase > 1 - dp - up) target = base + (1 - base) * ex((this.phase - (1 - dp - up)) / up);
-      else if (this.t >= cycle && this.phase < down) target = base + (1 - base) * ex(1 - this.phase / down);
+      const down = 0.04; // ...and the storm's quick stop afterwards
+      const rainFrom = 0.4; // light rain starts this far in (after the calm)
+      const rampAt = 1 - dp - up;
+      const ph = this.phase;
+      // the light rain: none, then starting and picking up toward the build-up
+      const lightMax = U.clamp((+rc.drizzle || 0) * 1.6, 0, 0.9);
+      const light = ph > rainFrom ? lightMax * U.smooth(U.clamp((ph - rainFrom) / Math.max(0.01, rampAt - rainFrom), 0, 1)) : 0;
+      let target = light;
+      if (ph >= 1 - dp) target = 1;
+      else if (ph > rampAt) target = lightMax + (1 - lightMax) * ex((ph - rampAt) / up);
+      else if (this.t >= cycle && ph < down) target = Math.max(light, ex(1 - ph / down));
       if (!rc.enabled) target = 0;
       this.intensity = target;
+      // the drips: the storm's leftovers dying away early on, then more as
+      // the rain comes on again
+      this.dripLevel = rc.enabled ? 1.8 * Math.exp(-ph / 0.08) + this.intensity * 1.6 : 0;
       // Water only pours off the ledge ends in proper rain; light rain just drips.
       const wf = rc.waterfallsFrom ?? 0.35;
       this.waterfalls = rc.enabled ? U.smooth(U.clamp((this.intensity - wf) / 0.2, 0, 1)) : 0;
@@ -1127,7 +1137,7 @@
 
       // Drips: light in light rain, more as it comes down harder.
       if (this.drips && world) {
-        const amount = rc.enabled ? (rc.drips ?? 0.7) * (0.5 + this.intensity * 1.6) : 0;
+        const amount = (rc.drips ?? 0.7) * this.dripLevel;
         this.drips.update(dt, world, this.decor, amount, 60 + this.intensity * 220, this.t, this.waterfalls);
         this.world = world;
       }

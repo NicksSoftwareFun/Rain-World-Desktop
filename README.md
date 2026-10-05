@@ -74,9 +74,11 @@ titles.
   poles) smaller; smaller zooms in so everything is bigger. The ledge, pole
   and fruit plant counts are densities: they scale with the map's area, and
   the tiered layout adds a row of ledges for about every 140 px of height.
-- **Rain**: cycle length, light rain level, and whether creatures take shelter
-  in dens during the downpour. The rain builds from the light rain into the
-  downpour on an exponential curve and eases back off the same way. Water
+- **Rain**: cycle length and whether creatures take shelter in dens during
+  the downpour. The cycle runs itself: it opens dripping from the last storm,
+  the drips die away into a calm, then light rain starts, builds on an
+  exponential curve into the downpour and stops. The cycle menu's "now"
+  button shows the time into the cycle and skips to the next stage. Water
   only pours off ledge ends once the rain is heavier than
   `rain.waterfallsFrom` (0.35); in light rain there are just drips.
 - **Experimental layout** (World layout: experimental): maps built like real

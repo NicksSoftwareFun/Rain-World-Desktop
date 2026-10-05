@@ -54,7 +54,7 @@ without page errors, populate, and react to geometry changes.
 | `fruit` | fruit dropping by itself or piling up |
 | `transients` | slugcats / Daddy Long Legs leaving before two meals; batflies running out |
 | `fliers` | noodlefly families hunting, feeding and leaving together, revenge for a grabbed infant, squidcadas feeding and resting, fliers leaving the screen |
-| `rain` | the rain curve, waterfalls in light rain, rain blocked by horizontal poles |
+| `rain` | the rain cycle (drips, calm, light rain, build-up, downpour, stop), waterfalls in light rain, rain blocked by horizontal poles |
 | `shelter` | creatures caught out in the downpour, fading instead of using pipes, or not coming back out after the rain |
 | `reds` | red lizards and large centipedes not fighting on sight, armoured reds grabbed alive, red lizards not spitting spines |
 | `corpses` | lizards never contesting a scavenged corpse, corpses left untaken |

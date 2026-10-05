@@ -325,6 +325,7 @@ html, body {
 .rw-radial-item:hover .face { border-color: rgba(255, 207, 122, 0.7); }
 .rw-radial-item:focus-visible .face { outline: 2px solid #ffcf7a; outline-offset: 2px; }
 .rw-radial-item .icon { font-size: 19px; line-height: 1; }
+.rw-radial-item .icon.text { font-size: 9px; letter-spacing: -0.02em; white-space: nowrap; }
 .rw-radial-item .lbl {
   position: absolute;
   top: calc(100% + 3px);
