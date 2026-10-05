@@ -474,6 +474,49 @@
       }
     }
 
+    // Lizards can tangle and ball up in a fight, but never sink right into
+    // one another: their bodies (head and torso; tails may cross) keep about
+    // a body's width apart, the lighter one giving more, softly (a couple of
+    // px a frame at most). The head's allowance is small, so bites land.
+    separateLizards() {
+      const lz = [];
+      for (const c of this.creatures) {
+        if (c.spine && c.bodyN && c.species.startsWith('lizard_') && !c.dead && !c.corpse && !c.grabbedBy && !c.piping && !c.unpiping && !c.burrow) lz.push(c);
+      }
+      for (let i = 0; i < lz.length; i++) {
+        for (let j = i + 1; j < lz.length; j++) {
+          const a = lz[i];
+          const b = lz[j];
+          const A = a.spine.pts;
+          const B = b.spine.pts;
+          const ca = A[3];
+          const cb = B[3];
+          if (Math.abs(ca.x - cb.x) > 90 * (a.L + b.L) || Math.abs(ca.y - cb.y) > 90 * (a.L + b.L)) continue;
+          const wa = (b.mass || 1) / ((a.mass || 1) + (b.mass || 1));
+          for (let ia = 0; ia < a.bodyN; ia++) {
+            const p = A[ia];
+            const ra = (ia === 0 ? 2.5 : 5) * a.L;
+            for (let ib = 0; ib < b.bodyN; ib++) {
+              const q = B[ib];
+              const r = ra + (ib === 0 ? 2.5 : 5) * b.L;
+              const dx = q.x - p.x;
+              const dy = q.y - p.y;
+              const d2 = dx * dx + dy * dy;
+              if (d2 >= r * r) continue;
+              const d = Math.sqrt(d2) || 0.01;
+              const push = Math.min(2, r - d);
+              const nx = d > 0.01 ? dx / d : 1;
+              const ny = d > 0.01 ? dy / d : 0;
+              p.x -= nx * push * wa;
+              p.y -= ny * push * wa;
+              q.x += nx * push * (1 - wa);
+              q.y += ny * push * (1 - wa);
+            }
+          }
+        }
+      }
+    }
+
     // A corpse's colour drains away as it lies there: down to about a
     // quarter of its saturation over 40 s, and a little darker.
     drawFaded(ctx, c) {
@@ -619,6 +662,7 @@
         // anything that has fallen or been flung far out of the world is gone
         if (c.y > Wd.h + 500 || c.y < -500 || c.x < -500 || c.x > Wd.w + 500 || !isFinite(c.x) || !isFinite(c.y)) c.remove();
       }
+      this.separateLizards();
       for (const it of this.items) it.update(dt);
       // The flood at its height carries off the dead under it: a passive
       // clean-up of the map, once a downpour.
