@@ -822,6 +822,11 @@
     }
     unpipeStep(dt) {
       const up = this.unpiping;
+      // (waiting its turn inside, behind one coming out ahead of it)
+      if (up.wait > 0) {
+        up.wait -= dt;
+        return false;
+      }
       up.t += dt;
       const lead = this.pipeLead();
       const depth = (lead.x - up.sx) * up.ax + (lead.y - up.sy) * up.ay; // > 0: still inside

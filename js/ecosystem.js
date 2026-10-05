@@ -233,12 +233,21 @@
         y = ex.y;
         n.pulse = 0.6;
       }
+      // (from a pipe: the creature crawls out of it, as it goes in when it
+      // leaves; see Creature.startUnpiping)
+      let den = null;
       if (x === undefined) {
         const pos = this.pickSpawnPoint(species, false);
         if (!pos) return null;
         x = pos.x;
         y = pos.y;
+        den = pos.den && !pos.den.sky ? pos.den : null;
       }
+      const emerge = (c, wait) => {
+        if (!den || c.isFlier || !c.startUnpiping) return;
+        c.startUnpiping(den);
+        c.unpiping.wait = wait || 0;
+      };
       if (species === 'batfly') {
         const sz = this.cfg.species.batfly.params.flockSize || [3, 6];
         const room = Math.max(1, (this.cfg.species.batfly.max || 10) - this.count('batfly'));
@@ -278,6 +287,7 @@
       c.homeState = c.state; // what it settles back into after sheltering
       this.creatures.push(c);
       this.stats.born++;
+      emerge(c);
       // Yellow lizards hunt in packs: they come out in pairs, sharing a
       // territory (see Lizard.mate).
       if (species === 'lizard_yellow' && this.count(species) < (this.cfg.species[species].max || 0)) {
@@ -287,6 +297,7 @@
         m.packMate = c;
         this.creatures.push(m);
         this.stats.born++;
+        emerge(m, 1.5); // (the mate following it out)
       }
       return c;
     }
@@ -302,7 +313,7 @@
           // come in from the sky where a room is open to it.
           const sky = dens.filter((d) => d.sky);
           const d = sky.length && Math.random() < 0.7 ? U.pick(sky) : U.pick(dens);
-          return this.denSpawnPoint(d);
+          return Object.assign(this.denSpawnPoint(d), { den: d });
         }
       }
       let caps = FLOOR_CAPS;
