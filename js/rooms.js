@@ -1350,7 +1350,7 @@
     // insides darker than the room's own colour)
     room.lightDist = dist;
     const lit = U.mix(pal.sky, pal.light, 0.4);
-    const deep = U.mix(pal.interior, pal.mass, 0.3);
+    const deep = U.mix(pal.interior, pal.mass, 0.18);
     for (let y = 0; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         const d = dist[y * C + x];
@@ -1475,8 +1475,9 @@
       if (len < cell * 2) continue;
       const str = 0.12 + 0.88 * Math.pow(0.5 + 0.5 * Math.sin(x * 0.5 + ph) * Math.sin(x * 0.17 + ph * 2), 3);
       const gr = ctx.createLinearGradient(0, 0, 0, len);
-      gr.addColorStop(0, U.rgba(beam, 0.42 * str));
-      gr.addColorStop(0.55, U.rgba(beam, 0.17 * str));
+      const dark = region === 'shaded' ? 1.35 : 1;
+      gr.addColorStop(0, U.rgba(beam, Math.min(0.6, 0.42 * str * dark)));
+      gr.addColorStop(0.45, U.rgba(beam, 0.2 * str * dark));
       gr.addColorStop(1, U.rgba(beam, 0));
       ctx.fillStyle = gr;
       ctx.beginPath();
@@ -1501,15 +1502,17 @@
           const d = dist[y * C + x];
           const dim = d < 0 ? 1 : U.clamp((d - 4) / 10, 0, 1); // (it grows in the dark)
           if (dim <= 0) continue;
+          // (in colonies: much likelier next to one already started)
+          const near = decor.biolum.some((q) => Math.abs(q.x - (x + 0.5) * cell) < cell * 2.5 && Math.abs(q.y - (y + 0.5) * cell) < cell * 2.5);
+          const k = dim * (near ? 1.6 : 0.25);
           let kind = null;
-          if (solid(x, y - 1) && R() < 0.22 * dim) kind = 'ceiling';
-          else if (solid(x, y + 1) && R() < 0.1 * dim) kind = 'plant';
-          else if ((solid(x - 1, y) || solid(x + 1, y)) && R() < 0.07 * dim) kind = 'wall';
-          else if (R() < 0.006 * dim) kind = 'wall';
+          if (solid(x, y - 1) && R() < 0.22 * k) kind = 'ceiling';
+          else if (solid(x, y + 1) && R() < 0.1 * k) kind = 'plant';
+          else if ((solid(x - 1, y) || solid(x + 1, y)) && R() < 0.08 * k) kind = 'wall';
           if (!kind) continue;
           const b = { kind, x: (x + R(0.15, 0.85)) * cell, y: kind === 'ceiling' ? y * cell : kind === 'plant' ? (y + 1) * cell : (y + R(0.2, 0.8)) * cell, seed: R(0, 1000), side: solid(x - 1, y) ? -1 : 1 };
           decor.biolum.push(b);
-          glow(b.x, kind === 'ceiling' ? b.y + 5 : kind === 'plant' ? b.y - 12 : b.y, R(14, 24), '#7fd4ff', 0.3);
+          glow(b.x, kind === 'ceiling' ? b.y + 5 : kind === 'plant' ? b.y - 12 : b.y, R(14, 24), '#8fc6e0', 0.2);
         }
       }
     }
@@ -1850,7 +1853,7 @@
   // the floors: curved stalks with bulbs.
   function paintBiolum(l, decor) {
     const core = '#e2f8ff';
-    const glowC = '#8fdcff';
+    const glowC = 'rgba(159, 220, 240, 0.75)';
     const stem = 'rgba(70, 130, 160, 0.85)';
     for (const b of decor.biolum || []) {
       const R = U.mulberry32((b.seed * 1000) >>> 0);
@@ -1865,8 +1868,10 @@
           l.beginPath();
           l.ellipse(x, b.y, w, r(1.6, 2.8), 0, 0, Math.PI);
           l.fill();
-          l.fillStyle = core;
-          l.fillRect(x - w * 0.5, b.y, w, 1);
+          if (R() < 0.4) {
+            l.fillStyle = core;
+            l.fillRect(x - w * 0.3, b.y, w * 0.6, 1);
+          }
           if (R() < 0.7) {
             const len = r(3, 13);
             l.fillStyle = stem;
