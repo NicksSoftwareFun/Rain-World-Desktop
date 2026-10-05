@@ -305,6 +305,13 @@
       return g ? { x: g.x, y: g.y } : { x: W.w / 2, y: W.h / 2 };
     }
 
+    // The population cap: 30% lower on an experimental (Rain World room)
+    // map, which has much less open space than the ledge layouts.
+    maxPopulation() {
+      const m = +this.cfg.ecosystem.maxPopulation || 0;
+      return this.cfg.world.layout === 'experimental' ? m * 0.7 : m;
+    }
+
     chooseSpecies() {
       const cfg = this.cfg;
       const pop = this.population();
@@ -315,7 +322,7 @@
         if (!s.enabled || !(s.weight > 0)) continue;
         if (this.count(k) >= (s.max || 0)) continue;
         waiting.push(k);
-        if (pop + (s.popCost !== undefined ? +s.popCost : 1) > cfg.ecosystem.maxPopulation + 0.01) continue;
+        if (pop + (s.popCost !== undefined ? +s.popCost : 1) > this.maxPopulation() + 0.01) continue;
         entries.push([k, s.weight * this.varietyBoost(k)]);
       }
       const pick = U.weighted(entries);

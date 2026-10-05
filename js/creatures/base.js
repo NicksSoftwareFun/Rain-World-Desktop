@@ -1236,7 +1236,12 @@
         if (T.i >= T.route.length) return this.endTunnel();
         return false;
       }
-      const speed = U.clamp((this.p.speed || 60) * 0.8, 42, 90);
+      // in pushes, not a glide: surge, gather, surge
+      T.phase = (T.phase || 0) + dt * 8;
+      const surge = 0.35 + 1.25 * Math.max(0, Math.sin(T.phase));
+      const speed = U.clamp((this.p.speed || 60) * 0.8, 42, 90) * surge;
+      if (this.phase !== undefined) this.phase += dt * 12 * surge; // (a centipede's legs ripple)
+      this.crawlPhase = T.phase;
       const st = Math.min(d, speed * dt);
       const mx = (dx / d) * st;
       const my = (dy / d) * st;
@@ -1246,6 +1251,7 @@
         P[0].y += my;
         T.trail.push({ x: P[0].x, y: P[0].y });
         this.layOnTrail(sp, T.trail);
+        this.tunnelWiggle(sp, T.phase);
       } else {
         this.pipeMove(mx, my, dt);
       }
@@ -1283,14 +1289,47 @@
       P[0].py = P[0].y;
       // (only as much trail as the body needs)
       if (trail.length > 400) trail.splice(0, trail.length - 300);
+    }
+    // Squeezing along: a wave runs down the body side to side (the head
+    // stays on the line), and the legs paw at the tunnel walls in turn,
+    // reaching forward and shoving back.
+    tunnelWiggle(sp, phase) {
+      const P = sp.pts;
+      const n = P.length;
+      const amp = Math.min(3, this.W.cell * 0.14);
+      const off = [];
+      for (let i = 0; i < n; i++) {
+        const a = P[Math.max(0, i - 1)];
+        const b = P[Math.min(n - 1, i + 1)];
+        let dx = a.x - b.x;
+        let dy = a.y - b.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        dx /= dl;
+        dy /= dl;
+        off.push({ dx, dy, nx: -dy, ny: dx });
+        if (i === 0) continue;
+        const k = Math.sin(phase * 1.3 - i * 0.9) * amp * Math.min(1, i / 2);
+        P[i].x += -dy * k;
+        P[i].y += dx * k;
+        P[i].px = P[i].x;
+        P[i].py = P[i].y;
+      }
       if (this.legs) {
-        for (const l of this.legs) {
-          const a = P[Math.min(l.at || 0, P.length - 1)];
+        this.legs.forEach((l, j) => {
+          const at = Math.min(l.at || 0, n - 1);
+          const a = P[at];
+          const o = off[at];
           const f = l.leg.foot;
-          if (!f) continue;
-          f.x += (a.x - f.x) * 0.3;
-          f.y += (a.y - f.y) * 0.3;
-        }
+          if (!f) return;
+          const side = l.near ? 1 : -1;
+          const reach = (l.leg.l1 + l.leg.l2) * 0.55;
+          const swing = Math.sin(phase + (l.leg.group || 0) * Math.PI + j * 0.4);
+          const tx = a.x + o.dx * swing * reach + o.nx * side * this.W.cell * 0.4;
+          const ty = a.y + o.dy * swing * reach + o.ny * side * this.W.cell * 0.4;
+          f.x += (tx - f.x) * 0.5;
+          f.y += (ty - f.y) * 0.5;
+          l.leg.planted = false;
+        });
       }
     }
     // Squeezed round: the other end leads now, back the way it came.
@@ -1331,6 +1370,7 @@
     }
     endTunnel() {
       this.tunnel = null;
+      this.crawlPhase = undefined;
       this.tunnelCd = 1.2;
       if ('vx' in this) this.vx = this.vy = 0;
       if (this.pather) {

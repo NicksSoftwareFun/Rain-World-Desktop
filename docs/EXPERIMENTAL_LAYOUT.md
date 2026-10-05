@@ -108,3 +108,13 @@ compare renders against the dataset (scores 4 → 6.5 → round 3 pending),
 and the `experimental` behaviour check covers generation and living in
 the maps. Next, once the owner has seen the placeholder: water physics
 and swimming.
+
+## Update (2026-10-05)
+
+The owner found Large and XL maps the dullest (one screen-sized room
+stretched out) and asked for a jungle gym. Big maps are now built from
+2-6 rooms side by side and stacked, joined by doorways and laddered
+shafts, with free-standing ledges (now and then on screen-sized maps, more
+on big ones). Experimental maps hold 30% fewer creatures, and creatures
+crawling a passage now squirm: surges, a wave down the body, legs pawing
+at the walls, a slugcat clawing hand over hand.

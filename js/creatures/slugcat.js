@@ -256,6 +256,12 @@
       const hip = this.hip;
       h.x += dx;
       h.y += dy;
+      if (this.tunnel) {
+        // a shimmy side to side as it squeezes along
+        const w = Math.sin((this.crawlPhase || 0) * 1.3) * 0.6;
+        h.x += -dy * w * 0.2;
+        h.y += dx * w * 0.2;
+      }
       const d = Math.hypot(hip.x - h.x, hip.y - h.y) || 1;
       hip.x = h.x + ((hip.x - h.x) / d) * 11;
       hip.y = h.y + ((hip.y - h.y) / d) * 11;
@@ -1440,6 +1446,22 @@
         const w = Math.sin(this.age * 12) * 4;
         feet.push({ x: hip.x + 3 + w, y: hip.y + 10 }, { x: hip.x - 3 - w, y: hip.y + 10 });
         hands.push({ x: shoulder.x + 7, y: shoulder.y - 4 - w }, { x: shoulder.x - 7, y: shoulder.y - 4 + w });
+      } else if (this.tunnel) {
+        // squeezing through a passage: clawing forward hand over hand, the
+        // feet shoving behind
+        const hd = this.head;
+        let dx = hd.x - hip.x;
+        let dy = hd.y - hip.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        dx /= dl;
+        dy /= dl;
+        const c = this.crawlPhase || 0;
+        for (const k of [0, Math.PI]) {
+          const s = Math.sin(c + k);
+          const side = k ? -1 : 1;
+          hands.push({ x: hd.x + dx * (3 + s * 4) - dy * side * 4, y: hd.y + dy * (3 + s * 4) + dx * side * 4 });
+          feet.push({ x: hip.x - dx * (5 - s * 3) - dy * side * 3, y: hip.y - dy * (5 - s * 3) + dx * side * 3 });
+        }
       } else if (this.pole) {
         // hugging the pole, hand over hand
         const px = this.pole.x;

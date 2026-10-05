@@ -767,6 +767,19 @@ const checks = [
             if (d.dens.filter((q) => !q.sky).length < 2) out.fewDens++;
           }
         }
+        // a Large map: several rooms, joined
+        RW.applySizePreset(e.cfg, 'large');
+        e.cfg.world.region = 'auto';
+        for (let k = 0; k < 3; k++) {
+          e.seed = 500 + k;
+          const t0 = performance.now();
+          e.regenerate(false);
+          out.slowestMs = Math.max(out.slowestMs, Math.round(performance.now() - t0));
+          out.maps++;
+          if (!e.decor.ok) out.failed++;
+          if ((e.decor.room.arch || '').indexOf('+') < 0) out.singleRoomLarge = (out.singleRoomLarge || 0) + 1;
+        }
+        RW.applySizePreset(e.cfg, 'normal');
         // live in one of each region for a while
         let stuck = 0;
         const B = RW.Creature.prototype;
@@ -796,7 +809,8 @@ const checks = [
       m.failed > 0 && `${m.failed} maps never passed the reachability check`,
       m.fewDens > 0 && `${m.fewDens} maps with fewer than two dens`,
       (m.solidMin < 15 || m.solidMax > 70) && `solid share out of range (${m.solidMin}-${m.solidMax}%)`,
-      m.slowestMs > 3000 && `a map took ${m.slowestMs} ms to build`,
+      m.slowestMs > 4000 && `a map took ${m.slowestMs} ms to build`,
+      m.singleRoomLarge > 0 && 'a Large map came out as one stretched room',
       m.pits < 2 && 'pits (almost) never generated',
       m.water < 2 && 'water (almost) never generated',
       m.stuckBurrows > 8 && `${m.stuckBurrows} creatures stuck long enough to burrow away`,

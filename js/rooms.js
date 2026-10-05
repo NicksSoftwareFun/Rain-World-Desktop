@@ -94,6 +94,37 @@
     }
   }
 
+  // One room's rectangle of a bigger map's grid: the archetypes carve in it
+  // as if it were the whole screen (outside it counts as rock).
+  class SubGrid {
+    constructor(g, ox, oy, C, R) {
+      this.g = g;
+      this.ox = ox;
+      this.oy = oy;
+      this.C = C;
+      this.R = R;
+    }
+    in(x, y) {
+      return x >= 0 && y >= 0 && x < this.C && y < this.R;
+    }
+    solid(x, y) {
+      return !this.in(x, y) || this.g.solid(x + this.ox, y + this.oy);
+    }
+    set(x, y, v) {
+      if (this.in(x, y)) this.g.set(x + this.ox, y + this.oy, v);
+    }
+    carve(x0, y0, x1, y1) {
+      this.g.carve(Math.max(0, x0) + this.ox, Math.max(0, y0) + this.oy, Math.min(this.C - 1, x1) + this.ox, Math.min(this.R - 1, y1) + this.oy);
+    }
+    fill(x0, y0, x1, y1) {
+      this.g.fill(Math.max(0, x0) + this.ox, Math.max(0, y0) + this.oy, Math.min(this.C - 1, x1) + this.ox, Math.min(this.R - 1, y1) + this.oy);
+    }
+    air(x0, y0, x1, y1) {
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (this.solid(x, y)) return false;
+      return true;
+    }
+  }
+
   // A 45-degree chamfer as a 1-cell stair-step, filling the corner of an
   // open area at (x, y) (the corner cell itself), k cells along each side;
   // sx/sy point from the corner into the open area.
@@ -424,14 +455,15 @@
 
   // Every room: at least 8 vertical poles (hanging from ceilings, some down
   // to the floor) and 2 horizontal bars across open spans, clear of ladders.
-  function furnish(g, R, f) {
+  function furnish(g, R, f, k) {
+    k = k || 1;
     const usedCols = new Set(f.poles.map((p) => p.cx));
     const vertical = () => f.poles.filter((p) => !p.stub).length;
-    const want = 8 + Math.floor(R() * 5);
+    const want = Math.round((8 + Math.floor(R() * 5)) * k);
     // in bundles of 2-4, 1-2 cells apart, with 6-10 open cells between bundles
     const centres = [];
     for (let x = 3 + Math.floor(R() * 6); x < g.C - 3; x += 8 + Math.floor(R() * 8)) centres.push(x);
-    for (let tries = 0; tries < 400 && vertical() < want; tries++) {
+    for (let tries = 0; tries < 400 * k && vertical() < want; tries++) {
       const c0 = centres[Math.floor(R() * centres.length)];
       const x = c0 + Math.floor(R() * 5) - 2;
       if (x < 2 || x > g.C - 3) continue;
@@ -453,8 +485,8 @@
       usedCols.add(x);
     }
     // horizontal bars: spans of 6-20 cells between solids, with headroom
-    const bars = 2 + Math.floor(R() * 2);
-    for (let tries = 0; tries < 200 && f.beams.length < bars; tries++) {
+    const bars = Math.round((2 + Math.floor(R() * 2)) * k);
+    for (let tries = 0; tries < 200 * k && f.beams.length < bars; tries++) {
       const y = 3 + Math.floor(R() * (g.R - 8));
       const x = 2 + Math.floor(R() * (g.C - 4));
       if (g.solid(x, y)) continue;
@@ -507,6 +539,105 @@
         if (R() < 0.4) f.poles.push({ cx: px, y0: y + h, y1: y + h + 1 + Math.floor(R() * 3), stub: true });
         placed++;
       }
+    }
+  }
+
+  // ---- big maps: several rooms -------------------------------------------------------
+  // A Large or XL map is a few Rain World rooms side by side and stacked
+  // (each about a screen of the dataset's), joined by doorways and shafts,
+  // rather than one archetype stretched over a hall it was never meant for.
+  function roomGrid(C, Rows, R) {
+    let nx = C >= 100 ? (R() < 0.5 ? 3 : 2) : C >= 80 ? 2 : 1;
+    let ny = Rows >= 44 ? 2 : 1;
+    if (nx === 2 && ny === 2 && C < 100 && R() < 0.4) ny = 1; // (two tall rooms)
+    const cut = (n, len) => {
+      const out = [0];
+      for (let i = 1; i < n; i++) out.push(Math.round((len * i) / n + (R() - 0.5) * 6));
+      out.push(len);
+      return out;
+    };
+    const xs = cut(nx, C);
+    const ys = cut(ny, Rows);
+    const rooms = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) rooms.push({ i, j, x0: xs[i], x1: xs[i + 1] - 1, y0: ys[j], y1: ys[j + 1] - 1 });
+    return { nx, ny, rooms };
+  }
+  // A doorway between side-by-side rooms: a 3-tall corridor along a floor
+  // through the wall between them (the shortest found), floored under.
+  function connectH(g, R, bx, y0, y1) {
+    let best = null;
+    for (let y = y0 + 3; y <= y1 - 2; y++) {
+      let xl = -1;
+      for (let x = bx - 1; x >= bx - 16 && x > 0; x--) {
+        if (!g.solid(x, y)) {
+          if (g.solid(x, y + 1)) xl = x;
+          break;
+        }
+      }
+      let xr = -1;
+      for (let x = bx; x <= bx + 16 && x < g.C - 1; x++) {
+        if (!g.solid(x, y)) {
+          if (g.solid(x, y + 1)) xr = x;
+          break;
+        }
+      }
+      if (xl < 0 || xr < 0) continue;
+      if (!best || xr - xl < best.xr - best.xl) best = { y, xl, xr };
+    }
+    if (!best) return false;
+    g.carve(best.xl, best.y - 2, best.xr, best.y);
+    g.fill(best.xl, best.y + 1, best.xr, best.y + 1);
+    return true;
+  }
+  // A shaft between stacked rooms: 3 wide, from a floor in the upper room
+  // down into the lower one, with a ladder.
+  function connectV(g, R, f, by, x0, x1) {
+    let best = null;
+    for (let x = x0 + 3; x <= x1 - 3; x++) {
+      let yt = -1;
+      for (let y = by - 1; y >= by - 16 && y > 0; y--) {
+        if (!g.solid(x, y)) {
+          if (g.solid(x, y + 1)) yt = y;
+          break;
+        }
+      }
+      let yb = -1;
+      for (let y = by; y <= by + 16 && y < g.R - 1; y++) {
+        if (!g.solid(x, y)) {
+          yb = y;
+          break;
+        }
+      }
+      if (yt < 0 || yb < 0) continue;
+      if (!best || yb - yt < best.yb - best.yt) best = { x, yt, yb };
+    }
+    if (!best) return false;
+    g.carve(best.x - 1, best.yt + 1, best.x + 1, best.yb);
+    let floorY = best.yb;
+    while (floorY < g.R - 1 && !g.solid(best.x, floorY + 1)) floorY++;
+    f.poles.push({ cx: best.x, y0: best.yt - 3, y1: floorY, ladder: true });
+    return true;
+  }
+  // Free-standing ledges (a jungle gym on the bigger maps): 5-14 cells long,
+  // 1-2 thick, clear all round, each with a ladder down to a floor.
+  function addLedges(g, R, f, n) {
+    let placed = 0;
+    for (let tries = 0; tries < n * 40 && placed < n; tries++) {
+      const w = 5 + Math.floor(R() * 10);
+      const t = f.style.block === 'octagon' ? 1 : 1 + Math.floor(R() * 2);
+      const x = 2 + Math.floor(R() * (g.C - w - 4));
+      const y = 4 + Math.floor(R() * (g.R - 10));
+      if (!g.air(x - 2, y - 3, x + w + 1, y + t + 2)) continue;
+      // not level with another ledge close by
+      if (f.ledges && f.ledges.some((q) => Math.abs(q.y - y) < 2 && Math.abs(q.x - x) < w + 8)) continue;
+      g.fill(x, y, x + w - 1, y + t - 1);
+      (f.ledges = f.ledges || []).push({ x, y, w });
+      // a ladder off one end, down to whatever's below
+      const cx = R() < 0.5 ? x - 1 : x + w;
+      let yy = y - 1;
+      while (yy < g.R - 1 && !g.solid(cx, yy + 1)) yy++;
+      if (yy - y < 16 && yy < g.R - 1) f.poles.push({ cx, y0: y - 1, y1: yy, ladder: true });
+      placed++;
     }
   }
 
@@ -837,7 +968,7 @@
         cand.push({ x: (x + 1) * cell, y: (p.y + 1) * cell, cy: p.y, cx: x, w: nearWall ? 3 : 1 });
       }
     }
-    const nDen = 3 + Math.floor(R() * 4);
+    const nDen = Math.round((3 + Math.floor(R() * 4)) * Math.pow(f.rooms || 1, 0.7));
     for (let k = 0; k < nDen * 6 && dens.length < nDen && cand.length; k++) {
       // weighted toward the walls, kept apart from each other
       let pick = cand[Math.floor(R() * cand.length)];
@@ -865,7 +996,7 @@
     const tun = (x, y) => f.passageCells && f.passageCells.has(y * g.C + x);
     for (let y = 1; y < g.R - 4; y++) for (let x = 1; x < g.C - 1; x++) if (g.solid(x, y - 1) && !g.solid(x, y) && !g.solid(x, y + 1) && !g.solid(x, y + 2) && !tun(x, y)) ceilings.push({ x, y });
     const fruitPlants = [];
-    const nF = Math.round(3 + R() * 3);
+    const nF = Math.round((3 + R() * 3) * Math.pow(f.rooms || 1, 0.7));
     for (let i = 0; i < nF && ceilings.length; i++) {
       const c = ceilings[Math.floor(R() * ceilings.length)];
       fruitPlants.push({ x: Math.round((c.x + 0.5) * cell), y: c.y * cell, len: U.lerp(26, 50, R()) });
@@ -874,10 +1005,11 @@
     for (const p of plats) if (p.x1 - p.x0 >= 2 && R() < 0.5 && !(f.waterCells && f.waterCells.has(p.y * g.C + p.x0)) && !tun(p.x0, p.y)) grass.push({ x: Math.round((U.lerp(p.x0, p.x1, R()) + 0.5) * cell), y: (p.y + 1) * cell, h: U.lerp(20, 34, R()), phase: R() * 10 });
     const roomy = ceilings.filter((c) => !g.solid(c.x, c.y + 3) && !g.solid(c.x - 1, c.y) && !g.solid(c.x + 1, c.y) && !(f.waterCells && f.waterCells.has((c.y + 3) * g.C + c.x)));
     const nests = [];
-    if (roomy.length) {
-      const c = roomy[Math.floor(R() * roomy.length)];
+    for (let k = 0; k < Math.max(1, Math.round((f.rooms || 1) / 2)) && roomy.length; k++) {
+      const c = roomy.splice(Math.floor(R() * roomy.length), 1)[0];
       nests.push({ x: Math.round((c.x + 0.5) * cell), y: c.y * cell });
-    } else nests.push({ x: Math.round(W / 2), y: 0 });
+    }
+    if (!nests.length) nests.push({ x: Math.round(W / 2), y: 0 });
     // chains hang from ceilings (over open air, never across solid)
     const chains = [];
     for (let i = 0, tries = 0; i < 2 + Math.floor(R() * 3) && tries < 60 && ceilings.length; tries++) {
@@ -931,7 +1063,7 @@
     return w;
   }
   function reach(w, from, to) {
-    const p = RW.Nav.findPath(w, from.x, from.y - 4, to.x, to.y - 4, CHECK_CAPS, 8000);
+    const p = RW.Nav.findPath(w, from.x, from.y - 4, to.x, to.y - 4, CHECK_CAPS, 30000);
     return !!(p && p.complete);
   }
   function check(decor, W, H, cell) {
@@ -986,9 +1118,42 @@
     for (let tries = 0; tries < 12; tries++) {
       const R = U.mulberry32((rnd() * 4294967296) >>> 0);
       const g = new Grid(C, Rows);
-      const arch = REGIONS[region].archetypes[Math.floor(R() * REGIONS[region].archetypes.length)];
-      const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region] };
-      const info = ARCHETYPES[arch](g, R, f);
+      const pickArch = () => REGIONS[region].archetypes[Math.floor(R() * REGIONS[region].archetypes.length)];
+      const layout = roomGrid(C, Rows, R);
+      const arch = pickArch();
+      const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region], rooms: layout.rooms.length };
+      let info = null;
+      if (layout.rooms.length === 1) {
+        info = ARCHETYPES[arch](g, R, f);
+      } else {
+        // each room carved by its own archetype in its own rectangle
+        for (const rm of layout.rooms) {
+          const sub = new SubGrid(g, rm.x0, rm.y0, rm.x1 - rm.x0 + 1, rm.y1 - rm.y0 + 1);
+          const lf = { poles: [], beams: [], blocks: [], pits: [], region, style: STYLE[region] };
+          const a = pickArch();
+          rm.arch = a;
+          const ri = ARCHETYPES[a](sub, R, lf);
+          if (!info || rm.j === layout.ny - 1) info = ri;
+          for (const q of lf.poles) f.poles.push(Object.assign({}, q, { cx: q.cx + rm.x0, y0: q.y0 + rm.y0, y1: q.y1 + rm.y0 }));
+          for (const q of lf.blocks) f.blocks.push(Object.assign({}, q, { x0: q.x0 + rm.x0, x1: q.x1 + rm.x0, y0: q.y0 + rm.y0, y1: q.y1 + rm.y0 }));
+          for (const q of lf.beams) f.beams.push(Object.assign({}, q, { cy: q.cy + rm.y0, x0: q.x0 + rm.x0, x1: q.x1 + rm.x0 }));
+          if (lf.open && rm.j === 0 && ((lf.open === 'left' && rm.i === 0) || (lf.open === 'right' && rm.i === layout.nx - 1))) f.open = lf.open;
+          if (lf.widePits && rm.j === layout.ny - 1) f.widePits = true;
+          if (lf.wantPit && rm.j === layout.ny - 1) f.wantPit = true;
+        }
+        f.arch = layout.rooms.map((rm) => rm.arch).join('+');
+        // join neighbours: doorways side by side, shafts top to bottom
+        for (const a of layout.rooms) {
+          for (const b of layout.rooms) {
+            if (b.i === a.i + 1 && b.j === a.j) connectH(g, R, b.x0, Math.max(a.y0, b.y0), Math.min(a.y1, b.y1)) || connectH(g, R, b.x0, Math.max(a.y0, b.y0), Math.min(a.y1, b.y1));
+            if (b.j === a.j + 1 && b.i === a.i) connectV(g, R, f, b.y0, Math.max(a.x0, b.x0), Math.min(a.x1, b.x1));
+          }
+        }
+      }
+      // free-standing ledges: now and then on a screen-sized map, more (a
+      // jungle gym) on the big ones
+      const nLedge = layout.rooms.length > 1 ? Math.round(layout.rooms.length * (1 + R() * 1.5)) : C * Rows > 2000 ? (R() < 0.6 ? 1 + Math.floor(R() * 3) : 0) : R() < 0.35 ? 1 + Math.floor(R() * 2) : 0;
+      addLedges(g, R, f, nLedge);
       // no flat floor longer than ~12 cells anywhere
       for (const p of platforms(g)) if (p.x1 - p.x0 + 1 > 12 && p.y > 3 && !f.blocks.some((b) => p.y + 1 >= b.y0 && p.y + 1 <= b.y1 && p.x1 >= b.x0 && p.x0 <= b.x1)) roughFloor(g, p.x0 + 2, p.x1 - 2, p.y + 1, R, 2, f);
       // water on about a third of maps (more in Shoreline), a pit on about a
@@ -1007,7 +1172,7 @@
         const side = R() < 0.5 ? q.cx0 - 2 : q.cx1 + 2;
         if (!g.solid(side, q.y) && g.solid(side, q.y + 1)) f.poles.push({ cx: side, y0: q.y - 6 - Math.floor(R() * 4), y1: q.y, ladder: true });
       }
-      furnish(g, R, f);
+      furnish(g, R, f, layout.rooms.length);
       closeSlits(g);
       carvePassages(g, R, f);
       let decor = buildDecor(g, f, cell, W, H, region, R);

@@ -95,71 +95,18 @@ within 30 degrees of level; slugcats backflip to throw spears straight down, to
 double back at a run and to dodge a lunge.
 Details in docs/ARCHITECTURE.md.
 
-## Resumed 2026-10-04: done since the notes below
+## Status 2026-10-05
 
-Passages carve and are crawled (head-to-head squeeze-round works); slits
-closed; held creatures never enter passage mode; long leaps only when the
-flat arc is clear; art-review-2 fixes (stepped floors everywhere, offset
-slabs, thicker Shaded walls, 4-cell octagons with no grass/dens on top,
-mass mottling, red-orange Shoreline glow, deeper darker water, pit depth
-gradient, fewer poles off the top edge, accent clumps).
-
-## Notes saved at low usage (2026-10-04), now mostly done
-
-- **Not yet done since the last full suite:** run the full suite, then
-  republish the artifact. The artifact needs `artifact.html` copied to its
-  page and `js/rooms.js` added to its files.
-- **Passages (owner's request, WIP):** these are one-cell tunnels through the
-  rock in experimental maps that creatures squeeze through like pipes. They
-  go vertically too, and turning back inside costs squeeze time.
-  - Done: `World.setPassages`/`passage()`, nav `TUNNEL` edges (passage
-    cells are never start or goal cells), and creature crawling in
-    `base.js` (`tryTunnel`, `startTunnel`, `tunnelStep`, `layOnTrail`,
-    `tunnelReverse`, `endTunnel`).
-  - The generator `carvePassages` (rooms.js) currently carves **none**.
-    There are too few doors, and the shortcut test is too strict
-    (`room.debug` shows the counts). The fix was to allow side doors without
-    the above/below rule, add floor doors going straight down, and use the
-    shortcut rule `ad < md * 1.3 + 8`. It wasn't applied: the patch script
-    had a stray `])`.
-  - Then test with scratchpad-style checks: creatures enter, finish and
-    reverse, and none get stuck. Then film one.
-- **Art review 2** (6.5/10, up from 4). Its fixes, in order:
-  1. Step every flat floor span.
-  2. Offset slab rows so they never share a y.
-  3. Make Shaded rooms thicker and less box-like.
-  4. Shaded octagons: no grass or dens on top, 4 cells, add bell capitals.
-  5. Rock texture: std dev about 3.
-  6. Shoreline glow: true red-orange, smooth falloff.
-  7. Water 3-5 cells deep, darker, with a climb-out ledge.
-  8. Pit: a lip, an edge pole and a dark gradient.
-  9. Pole rhythm.
-  10. Accent clumps.
-  11. Maybe a 1 px rim on creatures for readability.
-- **Owner's bug reports after the WIP save** (with screenshots):
-  1. **Narrow shafts jam creatures.** Lizards pile up in one-cell-wide
-     vertical shafts and get stuck there, a whole stack of them in one shaft.
-     These are probably narrow gaps left by the generator (wall notches,
-     pillars beside walls), not real passages, which carve none yet. Two
-     fixes:
-     - The generator never leaves an accidental one-cell vertical gap: fill
-       it, or widen it to three or more cells.
-     - Real passages need a crawl that never jams: one creature at a time,
-       the rest wait at the door, or nav treats an occupied passage as
-       blocked.
-  2. **Dragging is one-way.** The owner can drag a creature into a passage
-     but can't drag it back out. Probably `tryTunnel` grabs anything whose
-     lead is in a passage cell, and the hand's hold is then fighting
-     `tunnelStep`. A hand hold (`grabbedBy.isHand`) should always win:
-     clear `tunnel`, and don't re-enter while held or for a moment after
-     release.
-  3. **Long leaps pass through terrain.** Slugcat long leaps go straight
-     through rock, likely on the new experimental maps: the jump arc check
-     (`arcClear`) or the leap physics don't collide during `longLeap`.
-     Reproduce it on an experimental seed and check the collision during
-     the flight.
-- `bodies` check is noisy, sometimes failing lizard hairpins, and it was
-  already like that before this work.
+Done and pushed: passages (crawled in surges with a squirming body and
+pawing legs), slits closed, held creatures never enter passages, long
+leaps only along a clear arc, three art-review rounds, and multi-room
+Large/XL experimental maps with ledges (`roomGrid`, `connectH`/`connectV`,
+`addLedges` in rooms.js). Experimental maps carry 30% fewer creatures
+(`Ecosystem.maxPopulation`). Next, once the owner approves the water
+placeholder: water physics and swimming. The `bodies` check is
+occasionally noisy (lizard hairpins), and so is `fruit` (a burst of
+knocks can leave 7 loose fruit against a limit of 6; it fails without
+these changes too).
 
 ## Experimental layout (in progress)
 

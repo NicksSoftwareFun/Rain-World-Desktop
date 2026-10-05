@@ -164,6 +164,15 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   (`hangBlocks`), then `furnish` (8-12 vertical poles in bundles, 2-3
   horizontal bars). Solid cells are merged into rectangles (`kind: 'rock'`)
   so the world, physics and nav are unchanged.
+- **Big maps** (Large, XL): `roomGrid` splits the grid into 2-6 rooms
+  (each about a dataset screen), each carved by its own archetype through a
+  `SubGrid` view, then joined: `connectH` (a 3-tall doorway along a floor
+  through the wall between) and `connectV` (a laddered 3-wide shaft from a
+  floor down into the room below). `addLedges` adds free-standing ledges
+  with a ladder each: now and then on a screen-sized map, more on big ones.
+  Poles, bars, dens, fruit and nests scale with the number of rooms.
+- **Population**: `Ecosystem.maxPopulation()` is 30% lower on an
+  experimental map (less open space).
 - **Pits or water, never both.** `addPit`: 3-5 cells cut down through the
   floor to the bottom edge, a pole beside it. `World.setPits` splits the
   bottom border, `solid()` is open below a pit column and `inPit()` marks
@@ -182,7 +191,9 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   passage cells are never a start or goal). A creature whose path runs into
   one (or that's in one, not held) crawls it end to end like a pipe
   (`Creature.tryTunnel`/`tunnelStep`): head first, the body laid along the
-  head's own trail (`layOnTrail`), up and down alike. Meeting a bigger or
+  head's own trail (`layOnTrail`), up and down alike, in surges with a wave
+  down the body and the legs pawing at the walls (`tunnelWiggle`; a
+  slugcat claws hand over hand, `limbTargets`). Meeting a bigger or
   hungrier creature head on, it wriggles, squeezes round (`tunnelReverse`:
   ends swapped, back out from the new lead) and backs out; one going the
   same way just follows.
