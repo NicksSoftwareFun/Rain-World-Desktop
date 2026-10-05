@@ -393,3 +393,14 @@ and no long-press callout; the buttons have `touch-action: manipulation`
 - `js/geometry/remote.js`: `RemoteGeometry` polls the helper; `ConfigSync`
   shares settings. `mock-desktop.js` is the prototype's stand-in.
 - `tests/fake-helper.mjs` imitates the helper anywhere Node runs.
+
+Fights and fear: lizard fights go in rounds (`Lizard.rivalry`: after each
+lunge `backPending` -> `backT`, a slow back-step along the body's line,
+facing the rival and gaping; squared up again one may submit); red lizards
+barely give ground. Red lizards hunt the lesser lizards and every other
+lizard flees one it sees (greens only up close), so a red one often uses
+its spines on fleeing prey. A red centipede shocking something armoured
+runs off round the far side after each shock (`Centipede.startRun`) and
+comes in again from there. Corpses fade toward grey as they lie
+(`Ecosystem.drawFaded`, a canvas filter on `corpseT`).
+
