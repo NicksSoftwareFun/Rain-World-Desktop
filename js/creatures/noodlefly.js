@@ -536,7 +536,8 @@
       // back over and drawing the needle half in, slowly enough to see)
       const reel = !!this.holding && this.state === 'eat';
       const rate = reel ? 1.7 : this.state === 'cling' ? 14 : this.state === 'windup' ? 6 : this.state === 'recover' ? 4.5 : 4;
-      this.curl += ((straight ? 0 : reel ? 0.92 : 1) - this.curl) * U.approach(rate, dt);
+      const up = this.state === 'stalk' && this.upStrike;
+      this.curl += ((straight ? 0 : reel ? 0.92 : up ? 0.3 : 1) - this.curl) * U.approach(rate, dt);
       const out = (straight && this.state !== 'cling') || this.state === 'stalk' || this.holding;
       const nT = reel ? 0.4 : out ? 1 : 0;
       this.needle += (nT - this.needle) * U.approach(reel ? 2 : out ? 10 : 3, dt);
@@ -941,8 +942,28 @@
       const dx = head.x - tp.x;
       const dy = head.y - tp.y;
       const d = Math.hypot(dx, dy) || 1;
-      const sx = tp.x + (dx / d) * strike;
-      const sy = tp.y + (dy / d) * strike * 0.7 - strike * 0.3;
+      let sx = tp.x + (dx / d) * strike;
+      let sy = tp.y + (dy / d) * strike * 0.7 - strike * 0.3;
+      // Level with it, above it, or with rock right over it (on a ceiling,
+      // under a ledge): come at it from below and to the side instead, the
+      // neck half straightened toward it so the body stays below the head.
+      const W = this.W;
+      this.upStrike = tp.y < head.y + 12 * L || W.isSolidPt(sx, sy) || W.isSolidPt(tp.x, tp.y - strike * 0.5);
+      if (this.upStrike) {
+        let best = null;
+        for (const deg of [90, 65, 115, 40, 140, 15, 165]) {
+          const a = (deg * Math.PI) / 180;
+          const x = tp.x + Math.cos(a) * strike;
+          const y = tp.y + Math.sin(a) * strike;
+          if (W.isSolidPt(x, y) || W.isSolidPt(x, y + 20 * L) || !W.lineClear(x, y, tp.x, tp.y)) continue;
+          const score = Math.hypot(x - head.x, y - head.y);
+          if (!best || score < best.score) best = { x, y, score };
+        }
+        if (best) {
+          sx = best.x;
+          sy = best.y;
+        }
+      }
       // steer the shoulder so that the head arrives there
       const wp = this.airWaypoint(dt, p.x + (sx - head.x), p.y + (sy - head.y));
       this.fly(dt, wp.x, wp.y, this.vengeance ? 170 : 130, 3);
