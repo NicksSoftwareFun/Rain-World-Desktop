@@ -2579,6 +2579,7 @@
       // the head's colour. On the hunt they lift and hook over further.
       const base = this.headColor;
       const col = U.rgba(far ? U.scale(base, 0.55) : base);
+      const stripe = U.rgba(U.scale(base, far ? 0.15 : 0.2)); // (banded, like the body)
       let x = far ? 0.6 : -1.2;
       let y = far ? -5.4 : -5.8;
       let a = U.lerp(-3.0, -2.4, F) + (far ? 0.16 : 0); // (back, lifting when flared)
@@ -2592,11 +2593,28 @@
         const len = 4.8 - k * 0.45;
         const nx = x + Math.cos(a) * len;
         const ny = y + Math.sin(a) * len;
-        ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * (2.6 - k * 0.55);
+        const w = Math.max(u * 1.3, 0.85) + u * (2.6 - k * 0.55);
+        ctx.lineWidth = w;
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(nx, ny);
         ctx.stroke();
+        // dark stripes across it, two a segment (none on the tip)
+        if (k < segs - 1) {
+          const px = -Math.sin(a) * w * 0.62;
+          const py = Math.cos(a) * w * 0.62;
+          ctx.strokeStyle = stripe;
+          ctx.lineWidth = Math.max(u * 1.7, 1);
+          ctx.beginPath();
+          for (const f of [0.45, 0.95]) {
+            const cx = x + (nx - x) * f;
+            const cy = y + (ny - y) * f;
+            ctx.moveTo(cx - px, cy - py);
+            ctx.lineTo(cx + px, cy + py);
+          }
+          ctx.stroke();
+          ctx.strokeStyle = col;
+        }
         x = nx;
         y = ny;
       }
