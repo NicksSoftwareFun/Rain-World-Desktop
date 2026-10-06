@@ -406,6 +406,12 @@ comes in again from there. Corpses fade toward grey as they lie
 canvas and greyed pixel by pixel; a canvas filter cost a whole-screen
 pass per corpse per frame).
 
+Surface maps (`Rooms.surface`, `world.surface`): open ground across
+the top over a complex of rooms in another region's style; the map's
+palette is `decor.pal` (`makePalette`: a region variant from `VARIANTS`,
+the complex's back walls, a `crust` colour for rock open to the sky,
+`room.skyOpen`). See docs/EXPERIMENTAL_LAYOUT.md.
+
 Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
 behind everything that moves): wall cogs, machine housings, wall fans,
 pipe runs (rock to rock, a third of the props at most, thicker and lighter

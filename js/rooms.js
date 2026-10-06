@@ -66,6 +66,50 @@
     shaded: { block: 'octagon', comb: 0.8, wall: [1, 2], floorRise: 2 },
   };
 
+  // Rock colour variants per region, one picked per map (the first: the
+  // region's own palette as it stands). `crust` is the weathered rock where
+  // it meets the sky (the surface, the ruins standing on it); a variant can
+  // also change the sky and the back walls (Shoreline's pale fog days, as in
+  // SL_A02 and SL_B01).
+  const VARIANTS = {
+    outskirts: [
+      {},
+      { mass: '#1a130e', crust: '#3b2c22', interior: '#544c46', skyTop: '#c9c1ac', skyBot: '#a39a86', fog: '#b6ad98', sky: '#c4bba5' }, // sepia (CC_B04)
+      { mass: '#131619', crust: '#2c3338', interior: '#47505a' }, // slate
+    ],
+    shoreline: [
+      {},
+      { mass: '#1d1118', crust: '#3c2531', interior: '#465450', sky: '#c3c8c9', skyTop: '#cbd0d1', skyBot: '#a8afb0', fog: '#b7bdbe', far: '#8b9394', mid: '#5c6566', light: '#f4f6f4', rain: '#e1e6e6' }, // pale fog, mauve rock
+      { mass: '#1a1013', crust: '#432a2b', interior: '#3a443c' }, // rust-brown rock
+      { mass: '#0f1416', crust: '#253438', sky: '#9fb0ae', interior: '#3a4a48' }, // blue-grey
+    ],
+    industrial: [
+      {},
+      { mass: '#1a1311', crust: '#3c2b24', interior: '#56504a' }, // brown rust
+      { mass: '#0f1419', crust: '#26323d', interior: '#3f4b58' }, // steel blue
+    ],
+    shaded: [{}],
+  };
+  // The complex under a surface map: whose style its rooms are carved in.
+  const UNDER = { shoreline: ['industrial'], outskirts: ['industrial', 'outskirts'], industrial: ['industrial'] };
+  const UNDER_ARCH = { industrial: ['stacked', 'stacked', 'cruciform'], outskirts: ['cruciform', 'stacked'], shoreline: ['cruciform', 'cruciform', 'stacked'] };
+  // A map's palette: its region's, in one of its variants; a surface map's
+  // back walls underground are the complex's region's.
+  function makePalette(region, under, R) {
+    const vs = VARIANTS[region] || [{}];
+    const v = R() < 0.35 ? vs[0] : vs[Math.floor(R() * vs.length)];
+    const P = Object.assign({}, REGIONS[region].pal, v);
+    if (!P.crust) P.crust = U.rgba(U.mix(P.mass, P.rust, 0.28));
+    if (under) {
+      const uv = (VARIANTS[under] || [{}])[Math.floor(R() * (VARIANTS[under] || [{}]).length)];
+      const up = Object.assign({}, REGIONS[under].pal, uv);
+      P.interior = up.interior;
+      P.underAccent = up.accent;
+    }
+    P.variant = (VARIANTS[region] || [{}]).indexOf(v);
+    return P;
+  }
+
   // ---- the tile grid -------------------------------------------------------
   class Grid {
     constructor(C, R) {
@@ -350,8 +394,9 @@
         else if (lift < 0) g.carve(s0, a.y1 + 1, x - 1, a.y1 - lift);
       }
     }
-    // one side open to the sky (stair-cliff edge)
-    if (R() < 0.4) {
+    // one side open to the sky (stair-cliff edge; not under a surface map's
+    // ground, where it would only cut a room open to the map's edge)
+    if (!f.buried && R() < 0.4) {
       const left = R() < 0.5;
       let w = Math.round(C * U.lerp(0.12, 0.2, R()));
       for (let yy = 0; yy < bands[n - 1].y0; yy++) {
@@ -453,6 +498,178 @@
 
   const ARCHETYPES = { skyShaft, cruciform, stacked, citadel, ruins };
 
+  // ---- surface maps -----------------------------------------------------------
+  // Ground open to the sky across the whole top: rain and daylight on all of
+  // it, rolling and stepped, a cliff here and there, ruins standing on it
+  // (stilted platforms, broken towers); under a crust of rock, a complex of
+  // rooms in another region's style (Shoreline over Industrial: SL_A02,
+  // SL_B01, SU_A13, CC_B04), reached down shafts with ladders.
+  function surface(g, R, f, under) {
+    const { C, R: Rows } = g;
+    // the lie of the land: broad hills and hollows (two slow waves), stepped
+    // into terraces 3-9 cells wide, a cliff now and then; leaving room for
+    // the sky above and the complex below
+    const A = U.clamp(Math.round(Rows * 0.11), 2, 7);
+    const base = U.clamp(Math.round(Rows * U.lerp(0.4, 0.5, R())), 5 + A, Rows - 16 - A);
+    const surf = new Int16Array(C);
+    const f1 = U.TAU / U.lerp(C * 0.6, C * 1.4, R());
+    const f2 = U.TAU / U.lerp(10, 22, R());
+    const p1 = R() * U.TAU;
+    const p2 = R() * U.TAU;
+    let h = base;
+    for (let x = 0; x < C; ) {
+      const want = base + A * (0.75 * Math.sin(x * f1 + p1) + 0.35 * Math.sin(x * f2 + p2));
+      // a terrace, its height stepping toward the wave (a cliff: a big step)
+      const step = Math.round(want - h);
+      h += Math.abs(step) > 2 && R() < 0.6 ? step : Math.sign(step) * Math.min(Math.abs(step), 1 + Math.floor(R() * 2));
+      if (R() < 0.08) h += (R() < 0.5 ? -1 : 1) * (2 + Math.floor(R() * 2));
+      h = U.clamp(h, base - A - 1, base + A);
+      const w = 3 + Math.floor(R() * 7);
+      for (let k = 0; k < w && x < C; k++, x++) surf[x] = h;
+    }
+    // (no narrow deep notches: a terrace under 6 cells wide sunk more than
+    // 2 below both its neighbours is raised to the lower of them)
+    for (let pass = 0; pass < 2; pass++) {
+      for (let x = 0; x < C; ) {
+        let e = x;
+        while (e + 1 < C && surf[e + 1] === surf[x]) e++;
+        const l = x > 0 ? surf[x - 1] : -1;
+        const r = e + 1 < C ? surf[e + 1] : -1;
+        if (l >= 0 && r >= 0 && e - x + 1 < 6 && surf[x] - l > 2 && surf[x] - r > 2) for (let k = x; k <= e; k++) surf[k] = Math.max(l, r);
+        x = e + 1;
+      }
+    }
+    for (let x = 0; x < C; x++) g.carve(x, 0, x, surf[x] - 1);
+    // a ladder up every step too high to jump
+    for (let x = 0; x + 1 < C; x++) {
+      const d = surf[x + 1] - surf[x];
+      if (Math.abs(d) <= 2) continue;
+      const lx = d > 0 ? x + 1 : x; // (on the low side, against the cliff)
+      f.poles.push({ cx: lx, y0: Math.min(surf[x], surf[x + 1]) - 2, y1: Math.max(surf[x], surf[x + 1]) - 1, ladder: true });
+    }
+    // ruins on the surface
+    const built = [];
+    const nS = 1 + Math.floor(R() * (C >= 80 ? 4 : 2));
+    for (let i = 0, tries = 0; i < nS && tries < 40; tries++) {
+      const roll = R();
+      const stilts = roll < 0.45;
+      const mound = !stilts && roll < 0.65;
+      const w = stilts ? 9 + Math.floor(R() * 9) : mound ? 7 + Math.floor(R() * 8) : 3 + Math.floor(R() * 4);
+      const x = 2 + Math.floor(R() * (C - w - 4));
+      if (built.some((b) => x < b.x1 + 5 && x + w > b.x0 - 5)) continue;
+      let ground = Rows;
+      for (let k = x; k < x + w; k++) ground = Math.min(ground, surf[k]);
+      if (mound) {
+        // a heap of rubble: stepped up to a ragged crest
+        // (never up to the top of the screen: it would wall the surface off)
+        const peak = Math.min(2 + Math.floor(R() * 4), ground - 6);
+        if (peak < 2) continue;
+        for (let k = 0; k < w; k++) {
+          const u = 1 - Math.abs((k + 0.5) / w - 0.5) * 2;
+          const hh = Math.max(0, Math.round(peak * u + (R() - 0.5)));
+          if (hh) g.fill(x + k, surf[x + k] - hh, x + k, surf[x + k] - 1);
+        }
+      } else if (stilts) {
+        // a deck on two or three pillars, its underside's corners cut
+        const t = 2 + Math.floor(R() * 2);
+        const deckY = ground - (7 + Math.floor(R() * 9)) - t;
+        if (deckY < 4) continue;
+        g.fill(x, deckY, x + w - 1, deckY + t - 1);
+        g.set(x, deckY + t - 1, 0);
+        g.set(x + w - 1, deckY + t - 1, 0);
+        const np = w >= 14 ? 3 : 2;
+        for (let k = 0; k < np; k++) {
+          const px = Math.round(U.lerp(x + 2, x + w - 4, k / (np - 1)));
+          for (let c = px; c < px + 2; c++) g.fill(c, deckY + t, c, surf[c] - 1);
+        }
+        // a ladder up to it
+        const lx = R() < 0.5 ? x - 1 : x + w;
+        f.poles.push({ cx: lx, y0: deckY - 1, y1: surf[U.clamp(lx, 0, C - 1)] - 1, ladder: true });
+      } else {
+        // a broken tower: crenellated, a window through it
+        const top = ground - (6 + Math.floor(R() * 9));
+        if (top < 5) continue;
+        for (let c = x; c < x + w; c++) g.fill(c, top, c, surf[c] - 1);
+        for (let k = x; k < x + w; k += 2) g.carve(k, top, k, top);
+        if (w >= 4 && R() < 0.7) g.carve(x + 1, top + 3, x + w - 2, top + 4);
+        // a ladder up its side
+        const lx = R() < 0.5 ? x - 1 : x + w;
+        f.poles.push({ cx: lx, y0: top - 1, y1: surf[U.clamp(lx, 0, C - 1)] - 1, ladder: true });
+      }
+      built.push({ x0: x, x1: x + w - 1 });
+      i++;
+    }
+    // the complex: rooms side by side (two rows when it's deep enough)
+    let low = 0;
+    for (let x = 0; x < C; x++) low = Math.max(low, surf[x]);
+    const top = low + 3 + Math.floor(R() * 2);
+    const bh = Rows - top;
+    const nx = C >= 100 ? 3 : C >= 56 ? 2 : 1;
+    const ny = bh >= 36 ? 2 : 1;
+    const cut = (n, len, o) => {
+      const out = [o];
+      for (let i = 1; i < n; i++) out.push(o + Math.round((len * i) / n + (R() - 0.5) * 4));
+      out.push(o + len);
+      return out;
+    };
+    const xs = cut(nx, C, 0);
+    const ys = cut(ny, bh, top);
+    const rooms = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) rooms.push({ i, j, x0: xs[i], x1: xs[i + 1] - 1, y0: ys[j], y1: ys[j + 1] - 1 });
+    const archs = UNDER_ARCH[under] || ['stacked'];
+    let info = null;
+    for (const rm of rooms) {
+      const sub = new SubGrid(g, rm.x0, rm.y0, rm.x1 - rm.x0 + 1, rm.y1 - rm.y0 + 1);
+      const lf = { poles: [], beams: [], blocks: [], pits: [], region: under, style: STYLE[under], buried: true };
+      const a = archs[Math.floor(R() * archs.length)];
+      rm.arch = a;
+      const ri = ARCHETYPES[a](sub, R, lf);
+      if (!info || rm.j === ny - 1) info = ri;
+      for (const q of lf.poles) f.poles.push(Object.assign({}, q, { cx: q.cx + rm.x0, y0: q.y0 + rm.y0, y1: q.y1 + rm.y0 }));
+      for (const q of lf.blocks) f.blocks.push(Object.assign({}, q, { x0: q.x0 + rm.x0, x1: q.x1 + rm.x0, y0: q.y0 + rm.y0, y1: q.y1 + rm.y0 }));
+      for (const q of lf.beams) f.beams.push(Object.assign({}, q, { cy: q.cy + rm.y0, x0: q.x0 + rm.x0, x1: q.x1 + rm.x0 }));
+    }
+    for (const a of rooms) {
+      for (const b of rooms) {
+        if (b.i === a.i + 1 && b.j === a.j) connectH(g, R, b.x0, Math.max(a.y0, b.y0), Math.min(a.y1, b.y1)) || connectH(g, R, b.x0, Math.max(a.y0, b.y0), Math.min(a.y1, b.y1));
+        if (b.j === a.j + 1 && b.i === a.i) connectV(g, R, f, b.y0, Math.max(a.x0, b.x0), Math.min(a.x1, b.x1));
+      }
+    }
+    // shafts down from the surface into the rooms (one over each, now and
+    // then a wider one, a skylight): the shortest drop through the crust
+    for (const rm of rooms) {
+      if (rm.j !== 0) continue;
+      let best = null;
+      for (let x = rm.x0 + 3; x <= rm.x1 - 3; x++) {
+        if (built.some((b) => x >= b.x0 - 2 && x <= b.x1 + 2)) continue;
+        let y = surf[x];
+        while (y < Rows - 1 && g.solid(x, y)) y++;
+        const d = y - surf[x];
+        if (y >= Rows - 1 || d > 24 || (!g.solid(x, y + 1) && d < 2)) continue;
+        if (!best || d + R() * 2 < best.d) best = { x, y, d };
+      }
+      if (!best) {
+        // (none found: straight down the middle to the first air)
+        const x = Math.round((rm.x0 + rm.x1) / 2);
+        let y = surf[x];
+        while (y < Rows - 1 && g.solid(x, y)) y++;
+        if (y >= Rows - 1) continue;
+        best = { x, y, d: y - surf[x] };
+      }
+      const wide = R() < 0.35 ? 2 : 1;
+      g.carve(best.x - wide, surf[best.x], best.x + wide, best.y);
+      let fl = best.y;
+      while (fl < Rows - 1 && !g.solid(best.x, fl + 1)) fl++;
+      f.poles.push({ cx: best.x, y0: surf[best.x] - 3, y1: fl, ladder: true });
+    }
+    f.surf = surf;
+    f.underTop = top;
+    f.under = under;
+    f.rooms = rooms.length;
+    f.arch = 'surface/' + rooms.map((rm) => rm.arch).join('+');
+    return info || { floorY: Rows - 3, hallTop: base, wall: 1 };
+  }
+
   // Every room: at least 8 vertical poles (hanging from ceilings, some down
   // to the floor) and 2 horizontal bars across open spans, clear of ladders.
   function furnish(g, R, f, k) {
@@ -473,7 +690,7 @@
       if (g.solid(x, y)) continue;
       let top = y;
       while (top > 0 && !g.solid(x, top - 1)) top--;
-      if (top === 0 && R() < 0.9) continue; // (rarely from off the top of the screen)
+      if (top === 0 && (f.surf || R() < 0.9)) continue; // (rarely from off the top of the screen; never over a surface map's open ground)
       let bot = top;
       while (bot < g.R - 1 && !g.solid(x, bot + 1)) bot++;
       const span = bot - top;
@@ -632,6 +849,14 @@
       if (f.ledges && f.ledges.some((q) => Math.abs(q.y - y) < 2 && Math.abs(q.x - x) < w + 8)) continue;
       g.fill(x, y, x + w - 1, y + t - 1);
       (f.ledges = f.ledges || []).push({ x, y, w });
+      // held up from the floor below by a girder or two (background props:
+      // see paintProps), so it never just floats
+      f.supports = f.supports || [];
+      for (const sx of w >= 9 ? [x + 1, x + w - 2] : [x + Math.floor(w / 2)]) {
+        let yy = y + t;
+        while (yy < g.R - 1 && !g.solid(sx, yy)) yy++;
+        if (yy < g.R - 1 && yy > y + t) f.supports.push({ cx: sx, y0: y + t, y1: yy });
+      }
       // a ladder off one end, down to whatever's below
       const cx = R() < 0.5 ? x - 1 : x + w;
       let yy = y - 1;
@@ -1031,7 +1256,9 @@
       }
       const s0 = x;
       while (x < g.C && !g.solid(x, 0)) x++;
-      if (x - s0 >= 3) dens.push({ x: ((s0 + x) / 2) * cell, y: 0, sky: true, dir: 0, wall: false });
+      // (a wide-open top, a surface map's: one every 24 cells or so)
+      const n = Math.max(1, Math.round((x - s0) / 24));
+      if (x - s0 >= 3) for (let k = 0; k < n; k++) dens.push({ x: (s0 + ((k + 0.5) * (x - s0)) / n) * cell, y: 0, sky: true, dir: 0, wall: false });
     }
 
     // Fruit vines under ceilings, grass on floors, a nest under an overhang.
@@ -1105,7 +1332,9 @@
         surface: w.surface,
       })),
       region,
-      room: { debug: f.passageDebug, C: g.C, R: g.R, cell, cells: g.a, blocks: f.blocks, open: f.open || null, arch: f.arch, passage: f.passageCells || new Set() },
+      under: f.under || null,
+      pal: f.pal || null,
+      room: { debug: f.passageDebug, C: g.C, R: g.R, cell, cells: g.a, blocks: f.blocks, open: f.open || null, arch: f.arch, passage: f.passageCells || new Set(), surf: f.surf || null, underTop: f.underTop || 0, supports: f.supports || [] },
     };
   }
 
@@ -1193,10 +1422,18 @@
     const C = Math.ceil(W / cell);
     const Rows = Math.floor(floor / cell);
     const region = pickRegion(cfg, rnd);
+    // a surface map (open ground on top, a complex below): about two maps in
+    // five where the region has one, or always/never by the setting
+    const sw = cfg.world.surface || 'auto';
+    const surfRoll = rnd();
+    const surfaceOn = !!UNDER[region] && Rows >= 22 && (sw === 'always' || (sw === 'auto' && surfRoll < 0.4));
+    const under = surfaceOn ? (UNDER[region].includes(cfg.world.under) ? cfg.world.under : UNDER[region][Math.floor(rnd() * UNDER[region].length)]) : null;
+    const pal = makePalette(region, under, U.mulberry32((rnd() * 4294967296) >>> 0));
     let best = null;
     // (a big map takes a while to check: fewer re-rolls, then the nearest miss)
     const maxTries = W * H > 2.5e6 ? 5 : 12;
-    for (let tries = 0; tries < maxTries; tries++) {
+    const tryCap = surfaceOn ? Math.max(maxTries, 9) : maxTries; // (a surface map passes a little less often)
+    for (let tries = 0; tries < tryCap; tries++) {
       const R = U.mulberry32((rnd() * 4294967296) >>> 0);
       const g = new Grid(C, Rows);
       const pickArch = () => REGIONS[region].archetypes[Math.floor(R() * REGIONS[region].archetypes.length)];
@@ -1216,9 +1453,11 @@
       };
       const layout = roomGrid(C, Rows, R);
       const arch = pickArch();
-      const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region], rooms: layout.rooms.length };
+      const f = { poles: [], beams: [], blocks: [], pits: [], arch, region, style: STYLE[region], rooms: layout.rooms.length, pal };
       let info = null;
-      if (layout.rooms.length === 1) {
+      if (surfaceOn) {
+        info = surface(g, R, f, under);
+      } else if (layout.rooms.length === 1) {
         info = ARCHETYPES[arch](g, R, f);
       } else {
         // each room carved by its own archetype in its own rectangle
@@ -1247,7 +1486,8 @@
       }
       // free-standing ledges: now and then on a screen-sized map, more (a
       // jungle gym) on the big ones
-      const nLedge = layout.rooms.length > 1 ? Math.round(layout.rooms.length * (1 + R() * 1.5)) : C * Rows > 2000 ? (R() < 0.6 ? 1 + Math.floor(R() * 3) : 0) : R() < 0.35 ? 1 + Math.floor(R() * 2) : 0;
+      const nRooms = f.rooms || 1;
+      const nLedge = surfaceOn ? 0 : layout.rooms.length > 1 ? Math.round(layout.rooms.length * (1 + R() * 1.5)) : C * Rows > 2000 ? (R() < 0.6 ? 1 + Math.floor(R() * 3) : 0) : R() < 0.35 ? 1 + Math.floor(R() * 2) : 0;
       addLedges(g, R, f, nLedge);
       // no flat floor longer than ~12 cells anywhere
       for (const p of platforms(g)) if (p.x1 - p.x0 + 1 > 12 && p.y > 3 && !f.blocks.some((b) => p.y + 1 >= b.y0 && p.y + 1 <= b.y1 && p.x1 >= b.x0 && p.x0 <= b.x1)) roughFloor(g, p.x0 + 2, p.x1 - 2, p.y + 1, R, 2, f);
@@ -1267,7 +1507,7 @@
         const side = R() < 0.5 ? q.cx0 - 2 : q.cx1 + 2;
         if (!g.solid(side, q.y) && g.solid(side, q.y + 1)) f.poles.push({ cx: side, y0: q.y - 6 - Math.floor(R() * 4), y1: q.y, ladder: true });
       }
-      furnish(g, R, f, layout.rooms.length);
+      furnish(g, R, f, surfaceOn ? nRooms : layout.rooms.length);
       closeSlits(g);
       carvePassages(g, R, f);
       addInlet(g, R, f);
@@ -1311,6 +1551,7 @@
   // (R is Background.paint's R(a, b); called bare it gives 0..1 here)
   const either = (R) => (a, b) => (a === undefined ? R(0, 1) : R(a, b));
   function paintBackdrop(ctx, W, H, pal, decor, R0, layer) {
+    const layer0 = layer;
     const R = either(R0);
     const region = decor.region;
     const room = decor.room;
@@ -1349,6 +1590,9 @@
     // (harsh: bright right by the openings, falling off fast, and the deep
     // insides darker than the room's own colour)
     room.lightDist = dist;
+    // open to the sky: air with nothing above it to the top of the screen
+    const skyOpen = (room.skyOpen = new Uint8Array(C * Rows));
+    for (let x = 0; x < C; x++) for (let y = 0; y < Rows && cells[y * C + x] !== 1; y++) skyOpen[y * C + x] = 1;
     const lit = U.mix(pal.sky, pal.light, 0.4);
     const deep = U.mix(pal.interior, pal.mass, 0.18);
     for (let y = 0; y < Rows; y++) {
@@ -1370,63 +1614,215 @@
     // Silhouettes darken whatever light is behind them (so they read as
     // shapes in the haze whether the room is lit or dim).
     const dark = U.rgba(pal.mass);
-    if (region === 'outskirts') {
-      // pump towers and tanks far off, a couple of huge fans nearer
-      layer((l) => {
-        l.fillStyle = dark;
-        for (let x = R(-40, 40); x < W; x += R(70, 160)) {
-          const w = R(16, 46);
-          const h = R(H * 0.25, H * 0.7);
-          l.fillRect(x, H - h, w, h);
-          if (R() < 0.6) l.fillRect(x - w * 0.4, H - h - R(10, 30), w * 1.8, R(8, 16)); // a tank on top
-          if (R() < 0.5) l.fillRect(x + w * 0.4, H - h - R(30, 70), 3, R(30, 70)); // a mast
-        }
-      }, 0.16);
-      layer((l) => {
-        l.fillStyle = dark;
-        for (let i = 0; i < 2; i++) fan(l, R(W * 0.1, W * 0.9), R(H * 0.3, H * 0.75), R(40, 75), R);
-      }, 0.26);
-    } else if (region === 'industrial') {
-      // huge gears at the open side (or an edge), pipe conduits crossing
-      layer((l) => {
-        l.fillStyle = dark;
-        const side = room.open === 'right' ? 1 : room.open === 'left' ? 0 : R() < 0.5 ? 1 : 0;
-        for (let i = 0; i < 3; i++) gear(l, side ? R(W * 0.78, W * 1.05) : R(-W * 0.05, W * 0.22), R(H * 0.15, H * 0.9), R(70, 130), R);
-      }, 0.22);
-      layer((l) => {
-        l.fillStyle = dark;
-        for (let i = 0; i < 4; i++) {
-          const y = R(H * 0.1, H * 0.9);
-          const t = R(8, 18);
-          l.fillRect(0, y, W, t);
-          for (let x = R(0, 60); x < W; x += R(50, 110)) l.fillRect(x, y - 3, 6, t + 6); // flanges
-        }
-      }, 0.2);
-    } else if (region === 'shoreline') {
-      // a rhythmic lattice of columns and window frames
-      layer((l) => {
-        l.fillStyle = dark;
-        const pitch = R(46, 70);
-        for (let x = R(0, pitch); x < W; x += pitch) {
-          l.fillRect(x, 0, R(10, 18), H);
-          for (let y = R(10, 40); y < H; y += R(50, 80)) l.fillRect(x + 22, y, pitch - 34, R(20, 34));
-        }
-      }, 0.3);
-    } else {
-      // Shaded Citadel: faint fluted pillars, a touch lighter than the dark
-      layer((l) => {
-        l.fillStyle = U.rgba(U.mix(pal.interior, pal.light, 0.08));
-        for (let i = 0; i < 3; i++) {
-          const x = R(W * 0.1, W * 0.85);
-          const w = R(40, 70);
-          l.fillRect(x, 0, w, H);
-        }
-      }, 0.7);
-      layer((l) => {
-        l.fillStyle = dark;
-        for (let x = 0; x < W; x += 9) l.fillRect(x, 0, 2, H); // fluting
-      }, 0.25);
-    }
+    // (a surface map: the surface region's silhouettes in the sky over the
+    // ground, the complex's region's down in the rooms)
+    const surf = room.surf;
+    const under = decor.under;
+    const skyLine = surf ? room.underTop * cell : H;
+    const silhouettes = (reg, cl, fade) => {
+      const layer = (fn, a) => layer0(fn, a === undefined ? a : a * (fade || 1));
+      if (reg === 'outskirts') {
+        // pump towers and tanks far off, a couple of huge fans nearer
+        layer((l) => {
+          cl(l);
+          l.fillStyle = dark;
+          for (let x = R(-40, 40); x < W; x += R(70, 160)) {
+            const w = R(16, 46);
+            const h = R(H * 0.25, H * 0.7);
+            l.fillRect(x, H - h, w, h);
+            if (R() < 0.6) l.fillRect(x - w * 0.4, H - h - R(10, 30), w * 1.8, R(8, 16)); // a tank on top
+            if (R() < 0.5) l.fillRect(x + w * 0.4, H - h - R(30, 70), 3, R(30, 70)); // a mast
+          }
+        }, 0.16);
+        layer((l) => {
+          cl(l);
+          l.fillStyle = dark;
+          for (let i = 0; i < 2; i++) fan(l, R(W * 0.1, W * 0.9), R(H * 0.3, H * 0.75), R(40, 75), R);
+        }, 0.26);
+      } else if (reg === 'industrial') {
+        // huge gears at the open side (or an edge), pipe conduits crossing
+        layer((l) => {
+          cl(l);
+          l.fillStyle = dark;
+          const side = room.open === 'right' ? 1 : room.open === 'left' ? 0 : R() < 0.5 ? 1 : 0;
+          for (let i = 0; i < 3; i++) gear(l, side ? R(W * 0.78, W * 1.05) : R(-W * 0.05, W * 0.22), R(H * 0.15, H * 0.9), R(70, 130), R);
+        }, 0.22);
+        layer((l) => {
+          cl(l);
+          l.fillStyle = dark;
+          for (let i = 0; i < 4; i++) {
+            const y = R(H * 0.1, H * 0.9);
+            const t = R(8, 18);
+            l.fillRect(0, y, W, t);
+            for (let x = R(0, 60); x < W; x += R(50, 110)) l.fillRect(x, y - 3, 6, t + 6); // flanges
+          }
+        }, 0.2);
+      } else if (reg === 'shoreline') {
+        // a rhythmic lattice of columns and window frames
+        layer((l) => {
+          cl(l);
+          l.fillStyle = dark;
+          const pitch = R(46, 70);
+          for (let x = R(0, pitch); x < W; x += pitch) {
+            l.fillRect(x, 0, R(10, 18), H);
+            for (let y = R(10, 40); y < H; y += R(50, 80)) l.fillRect(x + 22, y, pitch - 34, R(20, 34));
+          }
+        }, 0.3);
+      } else {
+        // Shaded Citadel: faint fluted pillars, a touch lighter than the dark
+        layer((l) => {
+          cl(l);
+          l.fillStyle = U.rgba(U.mix(pal.interior, pal.light, 0.08));
+          for (let i = 0; i < 3; i++) {
+            const x = R(W * 0.1, W * 0.85);
+            const w = R(40, 70);
+            l.fillRect(x, 0, w, H);
+          }
+        }, 0.7);
+        layer((l) => {
+          cl(l);
+          l.fillStyle = dark;
+          for (let x = 0; x < W; x += 9) l.fillRect(x, 0, 2, H); // fluting
+        }, 0.25);
+      }
+    };
+    if (surf && under) {
+      // The sky over the ground: open air, clouds, and far off a ruined
+      // city, mountains, or nothing but cloud banks (one per map). Painted
+      // only above the ground line, each column down to its surface.
+      const kind = (decor.skyKind = ['city', 'city', 'mountains', 'mountains', 'clouds'][Math.floor(R() * 5)]);
+      const clipSky = (l) => {
+        l.beginPath();
+        for (let x = 0; x < C; x++) l.rect(x * cell, 0, cell + 0.5, (surf[x] + 1) * cell);
+        l.clip();
+      };
+      const foot = skyLine + cell; // (what stands far off stands behind the ground)
+      const tone = (k) => U.rgba(U.mix(U.mix(pal.sky, pal.fog, 0.3), pal.mass, k));
+      ctx.save();
+      clipSky(ctx);
+      const sg = ctx.createLinearGradient(0, 0, 0, foot);
+      sg.addColorStop(0, U.rgba(U.mix(pal.skyTop || pal.sky, pal.sky, 0.35)));
+      sg.addColorStop(0.65, U.rgba(U.mix(pal.sky, pal.light, 0.3)));
+      sg.addColorStop(1, U.rgba(U.mix(pal.fog, pal.light, 0.35)));
+      ctx.fillStyle = sg;
+      ctx.fillRect(0, 0, W, foot);
+      // the sun somewhere behind the haze
+      const sx = R(W * 0.15, W * 0.85);
+      const sy = R(foot * 0.15, foot * 0.5);
+      const sr = R(120, 260);
+      const sun = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
+      sun.addColorStop(0, U.rgba(pal.light, 0.35));
+      sun.addColorStop(1, U.rgba(pal.light, 0));
+      ctx.fillStyle = sun;
+      ctx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+      ctx.restore();
+      // clouds: puffs on a darker flat base, crisp
+      const clouds = (n, alpha, y0, y1, big) =>
+        layer((l) => {
+          clipSky(l);
+          for (let i = 0; i < n; i++) {
+            const cx = R(-0.1, 1.1) * W;
+            const cy = R(y0, y1) * foot;
+            const w = R(70, 230) * (big || 1);
+            const h = w * R(0.14, 0.24);
+            l.fillStyle = U.rgba(U.mix(pal.sky, pal.mass, 0.1));
+            l.beginPath();
+            l.ellipse(cx, cy + h * 0.3, w * 0.62, h * 0.45, 0, 0, U.TAU);
+            l.fill();
+            l.fillStyle = U.rgba(U.mix(pal.sky, pal.light, 0.5));
+            for (let k = 0; k < 6; k++) {
+              l.beginPath();
+              l.ellipse(cx + R(-w * 0.45, w * 0.45), cy + R(-h * 0.35, h * 0.1), w * R(0.18, 0.36), h * R(0.55, 0.95), 0, 0, U.TAU);
+              l.fill();
+            }
+          }
+        }, alpha);
+      clouds(kind === 'clouds' ? 9 : 5, 0.32, 0.05, 0.45);
+      if (kind === 'city') {
+        // a ruined city in three depths: far spires in the haze, then
+        // stepped towers with dark windows, then a few great blocks and
+        // chimneys; a gantry slung between two, a great wheel now and then
+        const tower = (l, x, w, top, broken) => {
+          l.fillRect(x, top, w, foot - top);
+          if (broken) for (let k = x; k < x + w; k += R(4, 9)) l.fillRect(k, top - R(0, 14), R(2, 5), R(2, 14));
+          else if (R() < 0.5) l.fillRect(x + w * R(0.2, 0.7), top - R(15, 45), R(2, 4), R(15, 45)); // a mast
+        };
+        layer((l) => {
+          clipSky(l);
+          l.fillStyle = tone(0.1);
+          for (let x = R(-30, 0); x < W; x += R(14, 40)) tower(l, x, R(10, 28), R(foot * 0.25, foot * 0.75), R() < 0.4);
+        }, 0.55);
+        layer((l) => {
+          clipSky(l);
+          l.fillStyle = tone(0.26);
+          const tops = [];
+          for (let x = R(-40, 0); x < W; x += R(40, 110)) {
+            const w = R(24, 60);
+            const top = R(foot * 0.3, foot * 0.8);
+            tower(l, x, w, top, R() < 0.6);
+            if (R() < 0.6) l.fillRect(x + w * 0.15, top - R(10, 30), w * 0.7, R(10, 30) + 1); // a stepped crown
+            tops.push([x, w, top]);
+          }
+          l.fillStyle = tone(0.38);
+          for (const [x, w, top] of tops) for (let y = top + 8; y < foot; y += R(9, 14)) for (let k = x + 4; k < x + w - 4; k += R(7, 11)) if (R() < 0.35) l.fillRect(k, y, 3, 4);
+          if (tops.length > 3 && R() < 0.7) {
+            const t = tops[1 + Math.floor(R() * (tops.length - 2))];
+            l.fillStyle = tone(0.26);
+            l.fillRect(t[0] - R(40, 90), t[2] + R(10, 40), t[1] + R(80, 180), R(5, 9));
+          }
+          if (R() < 0.5) gear(l, R(W * 0.1, W * 0.9), R(foot * 0.35, foot * 0.7), R(35, 70), R);
+        }, 0.6);
+        layer((l) => {
+          clipSky(l);
+          l.fillStyle = tone(0.45);
+          for (let i = 0; i < 2 + Math.floor(R() * 3); i++) {
+            const x = R(-20, W);
+            const w = R(50, 120);
+            const top = R(foot * 0.45, foot * 0.85);
+            tower(l, x, w, top, true);
+            if (R() < 0.6) l.fillRect(x + w * R(0.1, 0.6), top - R(40, 90), R(8, 14), R(40, 90) + 1); // a chimney
+          }
+        }, 0.55);
+      } else if (kind === 'mountains') {
+        // ridges, far to near, darker as they come closer; a ruined pylon
+        // or two along the nearer crests
+        const ridge = (yb, amp, k, alpha, pylons) =>
+          layer((l) => {
+            clipSky(l);
+            l.fillStyle = tone(k);
+            const ph = R(0, 10);
+            const f1 = R(0.003, 0.006);
+            const f2 = R(0.01, 0.02);
+            const crest = [];
+            l.beginPath();
+            l.moveTo(-10, foot);
+            for (let x = -10; x <= W + 20; x += R(6, 16)) {
+              const y = yb - amp * (0.6 * Math.abs(Math.sin(x * f1 + ph)) + 0.3 * Math.sin(x * f2 + ph * 2) + R(-0.06, 0.06));
+              l.lineTo(x, y);
+              crest.push([x, y]);
+            }
+            l.lineTo(W + 20, foot);
+            l.closePath();
+            l.fill();
+            for (let i = 0; i < pylons; i++) {
+              const [x, y] = crest[Math.floor(R() * crest.length)];
+              l.fillRect(x - 1, y - R(20, 40), 3, R(20, 40) + 4);
+              l.fillRect(x - 8, y - R(14, 30), 17, 2);
+            }
+          }, alpha);
+        ridge(foot * R(0.45, 0.6), foot * R(0.25, 0.4), 0.08, 0.6, 0);
+        ridge(foot * R(0.65, 0.75), foot * R(0.2, 0.32), 0.22, 0.65, 1);
+        ridge(foot * R(0.82, 0.92), foot * R(0.12, 0.22), 0.38, 0.6, 2);
+      } else {
+        // nothing but cloud: great banks low over the horizon
+        clouds(5, 0.45, 0.55, 0.9, 2.2);
+      }
+      silhouettes(under, (l) => {
+        l.beginPath();
+        l.rect(0, skyLine, W, H - skyLine);
+        l.clip();
+      });
+    } else silhouettes(region, () => {});
     // glows: Shoreline's red, Shaded's warm points
     const glow = (x, y, r, col, a) => {
       const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -1435,7 +1831,7 @@
       ctx.fillStyle = rg;
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
     };
-    if (region === 'shoreline') {
+    if ((under || region) === 'shoreline') {
       for (let i = 0; i < 2; i++) {
         const x = i === 0 ? R(0, W * 0.2) : R(W * 0.8, W);
         const y = R(H * 0.6, H * 0.95);
@@ -1680,6 +2076,28 @@
       for (let x = x0 + 1; x < x1; x += 3 + Math.floor(R() * 3)) l.fillRect(x * cell, y * cell + 4, 3, 10); // flanges
       k++;
     }
+    // the crust: rock weathered a different colour where it meets the open
+    // sky (the surface, the ruins on it), in hard bands fading into the
+    // mass a few cells in, its texture still showing through
+    if (pal.crust && room.skyOpen) {
+      const skyAir = (x, y) => x >= 0 && x < C && y >= 0 && y < Rows && room.skyOpen[y * C + x] === 1;
+      const crustCols = [U.rgba(pal.crust, 0.75), U.rgba(U.mix(pal.crust, pal.mass, 0.4), 0.6), U.rgba(U.mix(pal.crust, pal.mass, 0.7), 0.5), U.rgba(U.mix(pal.crust, pal.mass, 0.85), 0.4)];
+      for (let y = 0; y < Rows; y++) {
+        for (let x = 0; x < C; x++) {
+          if (!solid(x, y) || inBlock[y * C + x]) continue;
+          let d = 9;
+          for (let dy = -3; dy <= 3 && d > 0; dy++) for (let dx = -3; dx <= 3; dx++) if (skyAir(x + dx, y + dy)) d = Math.min(d, Math.max(Math.abs(dx), Math.abs(dy)) - 1);
+          if (d > 3 || (d > 0 && R() < 0.3 * d)) continue; // (ragged, not a neat outline)
+          l.fillStyle = crustCols[d];
+          if (d < 2) l.fillRect(x * cell, y * cell, cell, cell);
+          else {
+            // (a checker into the mass)
+            l.fillRect(x * cell, y * cell, cell / 2, cell / 2);
+            l.fillRect(x * cell + cell / 2, y * cell + cell / 2, cell / 2, cell / 2);
+          }
+        }
+      }
+    }
     // the lip on top faces, and roots off the ceilings
     const lip = U.rgba(U.mix(pal.mass, pal.light, 0.16));
     const root = U.rgba(U.mix(pal.mass, pal.near, 0.4));
@@ -1752,7 +2170,10 @@
     const Rows = room.R;
     const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
     const acc = pal.accent;
-    const region = decor.region;
+    const region0 = decor.region;
+    // (a surface map: the complex below the crust is the other region's)
+    const regionAt = (x, y) => (decor.under && room.surf && y > room.underTop - 2 ? decor.under : region0);
+    let region = region0;
     const vine = (x, y, len, col, w) => {
       if (fg) fg.plant(x, y, true);
       F.strokeStyle = col;
@@ -1778,6 +2199,7 @@
       for (let y = 1; y < Rows - 2; y++) {
         for (let x = 0; x < C; x++) {
           if (!solid(x, y - 1) || solid(x, y)) continue;
+          if (regionAt(x, y) !== region0) continue;
           const p = region === 'shoreline' ? (y > Rows * 0.5 ? 0.12 : 0.03) : 0.025;
           if (R() < p) vine((x + R()) * cell, y * cell, R(20, region === 'shoreline' ? 110 : 60), accCol, 1.2);
         }
@@ -1787,14 +2209,20 @@
     for (let y = 1; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         if (!solid(x, y) || solid(x, y - 1)) continue;
-        if (region === 'industrial' ? R() > 0.034 : region === 'shaded' ? true : R() > 0.07) continue;
+        region = regionAt(x, y);
+        // (thick on the open ground of a surface map)
+        const open = decor.under && room.skyOpen && room.skyOpen[(y - 1) * C + x] === 1;
+        const tall = open && region !== 'shaded' && R() < 0.14; // (tall reeds on the surface)
+        if (!tall && (region === 'industrial' ? R() > 0.034 : region === 'shaded' ? true : R() > 0.07)) continue;
         const bx = (x + R()) * cell;
         const by = y * cell;
         if (fg) fg.plant(bx, by);
         // (coral: a duller crimson, so it doesn't outshout the creatures)
-        F.strokeStyle = region === 'industrial' ? U.rgba(U.mix(U.mix(acc, '#7a6a70', 0.4), pal.mass, 0.3)) : accCol;
-        F.lineWidth = region === 'industrial' ? R(2, 3) : 1.4;
-        if (region === 'industrial') {
+        const ac = region !== region0 && pal.underAccent ? pal.underAccent : acc;
+        const coral = region === 'industrial' && !tall;
+        F.strokeStyle = coral ? U.rgba(U.mix(U.mix(ac, '#7a6a70', 0.4), pal.mass, 0.3)) : region !== region0 ? U.rgba(U.mix(ac, pal.mass, 0.25)) : accCol;
+        F.lineWidth = coral ? R(2, 3) : 1.4;
+        if (coral) {
           // coral: a branching fan, 3-5 cells tall
           const nb = 4 + Math.floor(R() * 6);
           const sc = R(0.8, 1.2);
@@ -1809,15 +2237,20 @@
             F.stroke();
           }
         } else {
-          for (let k = 0; k < 9; k++) {
+          const nk = tall ? 7 + Math.floor(R() * 7) : 9;
+          for (let k = 0; k < nk; k++) {
+            const hgt = tall ? R(16, 48) : R(6, 22);
+            const lean = R(-4, 4) * (tall ? 1.6 : 1);
             F.beginPath();
             F.moveTo(bx + k * 2 - 8, by);
-            F.lineTo(bx + k * 2 - 8 + R(-4, 4), by - R(6, 22));
+            if (tall) F.quadraticCurveTo(bx + k * 2 - 8, by - hgt * 0.6, bx + k * 2 - 8 + lean, by - hgt);
+            else F.lineTo(bx + k * 2 - 8 + lean, by - hgt);
             F.stroke();
           }
         }
       }
     }
+    region = region0;
     // cables: 2-4 sagging swags between two solid anchors 10-20 cells apart
     const anchors = [];
     for (let y = 1; y < Rows - 4; y++) for (let x = 1; x < C - 1; x++) if (solid(x, y) && (!solid(x + 1, y) || !solid(x - 1, y) || !solid(x, y + 1))) anchors.push([x, y]);
@@ -1882,14 +2315,21 @@
       return true;
     };
     const props = [];
+    // the girders under free-standing ledges first (the rest keep clear)
+    for (const sp of room.supports || []) {
+      const h = (sp.y1 - sp.y0) * cell;
+      for (let k = 0; k <= h; k += cell * 2) props.push({ kind: 'strut', x: (sp.cx + 0.5) * cell, y: sp.y0 * cell + k, y0: sp.y0 * cell, y1: sp.y1 * cell, r: cell * 0.6, seed: R(0, 1000), part: k > 0 });
+    }
     const taken = (x, y, r) => props.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + r + cell);
     const open = C * Rows;
     const want = U.clamp(Math.round(open / 110), 6, 28);
     let valves = 0;
-    for (let tries = 0; tries < want * 30 && props.length < want; tries++) {
+    const nStrut = props.length;
+    for (let tries = 0; tries < want * 30 && props.length - nStrut < want; tries++) {
       const cx = 2 + Math.floor(R() * (C - 4));
       const cy = 2 + Math.floor(R() * (Rows - 4));
       if (solid(cx, cy)) continue;
+      if (room.surf && cy < room.underTop) continue; // (not out in the open sky over a surface map)
       const roll = R();
       if (roll < 0.3 && solid(cx, cy + 1)) {
         // a junk pile on the floor
@@ -1930,6 +2370,7 @@
           while (b < C - 1 && !solid(b + 1, cy)) b++;
         }
         if (b - a < 4 || b - a > 40) continue;
+        if (room.surf && (vert ? a : cy) < room.underTop) continue; // (no pipe up a shaft into a surface map's sky)
         const pr = { kind: 'pipe', vert, x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, a: a * cell, b: (b + 1) * cell, t: R(6, 9), r: 6, seed: R(0, 1000), valve: valves++ % 3 === 0 };
         if (props.some((q) => q.kind === 'pipe' && q.vert === vert && Math.abs(vert ? q.x - pr.x : q.y - pr.y) < 3 * cell)) continue;
         props.push(pr);
@@ -1949,7 +2390,29 @@
       const lit = U.rgba(U.mix(base, pal.light, 0.18 + 0.5 * lightAt(q.x, q.y)));
       const C_ = (c) => (shadow ? shadow : U.rgba(c));
       const rim = shadow || lit;
-      if (q.kind === 'cog') {
+      if (q.kind === 'strut') {
+        // a lattice girder down to the floor: two rails, cross-braced
+        if (q.part) return; // (the rest of it, only there to keep props clear)
+        const w = cell * 0.7;
+        const x0 = q.x - w / 2;
+        l.fillStyle = C_(base);
+        l.fillRect(x0, q.y0, 2.5, q.y1 - q.y0);
+        l.fillRect(x0 + w - 2.5, q.y0, 2.5, q.y1 - q.y0);
+        l.strokeStyle = C_(deep);
+        l.lineWidth = 1.5;
+        l.beginPath();
+        for (let y = q.y0, k = 0; y < q.y1; y += w, k++) {
+          l.moveTo(k % 2 ? x0 + w : x0, y);
+          l.lineTo(k % 2 ? x0 : x0 + w, Math.min(q.y1, y + w));
+        }
+        l.stroke();
+        if (shadow) return;
+        l.fillStyle = rim;
+        l.fillRect(x0, q.y0, 1.2, q.y1 - q.y0);
+        // a foot plate on the floor
+        l.fillStyle = C_(deep);
+        l.fillRect(x0 - 3, q.y1 - 3, w + 6, 3);
+      } else if (q.kind === 'cog') {
         const cogs = [[q.x, q.y, q.r]];
         if (q.pair) cogs.push([q.x + q.r * 1.7, q.y + q.r * 0.6, q.r * 0.62]);
         for (const [x, y, R_] of cogs) {
@@ -2811,5 +3274,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, VARIANTS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();

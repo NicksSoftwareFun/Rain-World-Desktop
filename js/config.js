@@ -21,6 +21,8 @@
       seed: 0, // 0 = new background every load
       layout: 'experimental', // 'experimental' (rooms): carved like real Rain World rooms (js/rooms.js); 'ledges': ledges over open space, each map either in rows ('tiers': at shared heights, bridged by horizontal poles) or 'scatter'ed anywhere (both still accepted on their own)
       region: 'auto', // experimental layout: 'auto' (a different one each map) or outskirts / shoreline / industrial / shaded
+      surface: 'auto', // experimental layout: open ground on top, a complex of rooms below: 'auto' (about two maps in five), 'always' or 'never'
+      under: 'auto', // the complex's region under a surface map ('auto': Industrial under Shoreline, either under Outskirts)
       decorLedges: 7, // wallpaper ledges creatures can use
       decorPoles: 4, // extra free-standing poles (more are added wherever a ledge needs one)
       ledgePoles: 0.6, // chance a ledge gets a pole standing on it (linking up to a higher ledge if there is one)

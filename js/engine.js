@@ -191,7 +191,7 @@
 
     applyPalette() {
       // (an experimental map brings its region's palette)
-      this.pal = this.decor && this.decor.region && RW.Rooms ? RW.Rooms.palette(this.decor.region) : RW.PALETTES[this.cfg.world.palette] || RW.PALETTES.industrial;
+      this.pal = this.decor && this.decor.region && RW.Rooms ? this.decor.pal || RW.Rooms.palette(this.decor.region) : RW.PALETTES[this.cfg.world.palette] || RW.PALETTES.industrial;
       this.eco.palette = this.pal;
       this.ps = U.clamp(+this.cfg.world.pixelScale || 2, 1, 4);
       this.canvas.width = Math.ceil((this.W * this.zoom) / this.ps);

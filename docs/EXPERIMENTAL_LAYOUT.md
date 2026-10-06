@@ -131,3 +131,30 @@ plants round the water and a lot more manmade junk on the rock. Lizard
 territories are ovals fitted to the room's chambers, and yellow lizards
 hunt in pairs. Art review round 4 scored 7.5 (from 6.5); its fixes for
 junk size, dark-map water, waterfall width and surface flatness are in.
+
+## Update 3 (2026-10-06): surface maps, rock colours
+
+Surface maps (`surface` in js/rooms.js; `world.surface`: auto, about two
+maps in five where the region has one, or always / never): the ground is
+open to the sky across the whole top, the way many Rain World rooms show
+the surface over a complex (SL_A02, SL_B01, SU_A13, CC_B04, HI_B02). Rain
+and daylight fall on all of it. The ground rolls in terraces 3-9 cells
+wide on two slow waves, with a cliff now and then, and carries ruins:
+stilted decks on two or three pillars (with a ladder up), broken
+crenellated towers with a window, rubble heaps. Under a crust of 3-4
+cells, a complex of rooms is carved in another region's style (`UNDER`:
+Industrial under Shoreline, Industrial or Outskirts under Outskirts,
+Industrial under Industrial; `world.under` picks one), in one or two rows,
+joined by doorways and shafts, with a shaft (sometimes a wide skylight)
+down from the surface into each top room. The sky over the ground shows
+pale far towers, gantries and great wheels in the haze; the complex gets
+its own region's backdrop silhouettes, back-wall colour, props and
+accents (coral below, tall reeds on the open ground). No poles hang from
+the open sky, and sky openings are spread across the top (one every 24
+cells or so).
+
+Rock colours vary per map (`VARIANTS`): each region has its own palette
+plus a few alternatives (Shoreline: pale fog with mauve rock, rust-brown,
+blue-grey; Industrial: brown rust, steel blue; Outskirts: sepia, slate).
+Rock that meets the open sky is weathered to a `crust` colour, ragged and
+fading a few cells in.

@@ -317,7 +317,9 @@
       // Dead: a limp ragdoll until something eats it (or it rots away). A
       // carried corpse lets its own grabbed-branch hang it from the jaws.
       if (this.corpse) {
-        this.corpseT += dt;
+        // (the clock stops while it's carried, in a killer's jaws or a
+        // hand: it neither greys nor rots on the way)
+        if (!this.grabbedBy) this.corpseT += dt;
         if (this.corpseT > 100 && !this.grabbedBy) {
           this.alpha -= dt * 0.4;
           if (this.alpha <= 0) this.dead = true;

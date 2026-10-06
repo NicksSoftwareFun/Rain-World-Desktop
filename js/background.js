@@ -1258,7 +1258,10 @@
           const s0 = x;
           while (x < C && cells[x] !== 1) x++;
           if (x - s0 < 3) continue;
-          const left = (s0 * 7 + x * 13) % 2 === 0;
+          // (open sky right across, a surface map's: no rim to pour off; one
+          // edge at the screen's side: it pours off the other)
+          if (s0 === 0 && x === C) continue;
+          const left = s0 === 0 ? false : x === C ? true : (s0 * 7 + x * 13) % 2 === 0;
           out.push({ x: left ? s0 * cell + 2 : x * cell - 2, side: left ? 1 : -1, phase: s0 * 0.37 });
         }
       }

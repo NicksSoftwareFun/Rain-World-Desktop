@@ -461,6 +461,12 @@
             eng.regenerate(true);
             eng.restartWildlife();
           }),
+          // open ground on top, a complex of rooms below
+          this.select('surface maps', Wc, 'surface', ['auto', 'always', 'never'], () => {
+            if (Wc.layout !== 'experimental') return;
+            eng.regenerate(true);
+            eng.restartWildlife();
+          }),
           this.slider('ledges', Wc, 'decorLedges', 0, 14, 1),
           this.slider('poles', Wc, 'decorPoles', 0, 16, 1),
           this.slider('ledge poles', Wc, 'ledgePoles', 0, 1, 0.05),
