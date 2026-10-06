@@ -3699,39 +3699,159 @@
         l.fillRect(cxp, py + ph * 0.28, 1.5, ph * 0.44);
         });
       },
-      // a recessed fan in a square housing, a blade or two missing
+      // A ventilation fan set into the rock: a heavy bevelled housing (a
+      // corner broken away, now and then), the shroud's lip shadowing the
+      // well, blades each shaded like bent plate (one snapped off, showing
+      // the dark behind), a hub cap, a guard of wire rings and spokes or
+      // louvres over the bottom half, grime in the bottom of the well, rust
+      // weeping from the lower corners, a conduit off into the rock.
       fan(px, py, pw, ph) {
         const s = Math.min(pw, ph) * 0.92;
         const x = px + (pw - s) / 2;
         const y = py + (ph - s) / 2;
+        const cx = x + s / 2;
+        const cy = y + s / 2;
+        const r = s * 0.4;
+        // the conduit, behind the housing, off into the rock
+        if (R() < 0.6) {
+          const right = R() < 0.5;
+          const cyc = y + s * R(0.25, 0.75);
+          l.fillStyle = shade2;
+          l.fillRect(right ? x + s : px - 12, cyc + 3, (right ? px + pw + 12 - x - s : x - px + 12), 6);
+          l.fillStyle = plate;
+          l.fillRect(right ? x + s : px - 12, cyc, (right ? px + pw + 12 - x - s : x - px + 12), 6);
+          l.fillStyle = rimL;
+          l.fillRect(right ? x + s : px - 12, cyc, (right ? px + pw + 12 - x - s : x - px + 12), 1.2);
+        }
         castShadow((dx, dy) => l.rect(x + dx, y + dy, s, s));
+        // the housing: an outer frame and an inner face, both bevelled
         l.fillStyle = plate2;
         l.fillRect(x, y, s, s);
         bevelRect(x, y, s, s);
+        l.fillStyle = plate;
+        l.fillRect(x + 5, y + 5, s - 10, s - 10);
+        l.fillStyle = rimD;
+        l.fillRect(x + 5, y + 5, s - 10, 1.5);
+        l.fillRect(x + 5, y + 5, 1.5, s - 10);
+        l.fillStyle = rimL;
+        l.fillRect(x + 5, y + s - 6.5, s - 10, 1.5);
+        l.fillRect(x + s - 6.5, y + 5, 1.5, s - 10);
+        // a bolt at each corner, each with its glint and shadow
+        for (const [bx, by] of [[x + 3, y + 3], [x + s - 3, y + 3], [x + 3, y + s - 3], [x + s - 3, y + s - 3]]) {
+          l.fillStyle = rimD;
+          l.fillRect(bx - 1, by, 2.5, 2.5);
+          bolt(bx, by);
+        }
+        // the shroud: a raised ring round the well
+        l.fillStyle = rimD;
+        l.beginPath();
+        l.arc(cx + 1.5, cy + 2, r + 3, 0, U.TAU);
+        l.fill();
+        l.fillStyle = plate2;
+        l.beginPath();
+        l.arc(cx, cy, r + 3, 0, U.TAU);
+        l.fill();
+        bevelArc(cx, cy, r + 3, 1.5);
+        // the well
         l.fillStyle = hole;
         l.beginPath();
-        l.arc(x + s / 2, y + s / 2, s * 0.42, 0, U.TAU);
+        l.arc(cx, cy, r, 0, U.TAU);
         l.fill();
-        // the housing's lip shadowing the well, top and left
-        l.fillStyle = shade1;
-        l.beginPath();
-        l.arc(x + s / 2, y + s / 2, s * 0.42, 0, U.TAU);
-        l.arc(x + s / 2 + 3, y + s / 2 + 4, s * 0.4, 0, U.TAU, true);
-        l.fill('evenodd');
-        const nb = 5 + Math.floor(R() * 3);
-        const gone = Math.floor(R() * nb);
-        l.fillStyle = plate;
-        for (let i = 0; i < nb; i++) {
-          if (i === gone) continue;
-          const a = (i / nb) * U.TAU + R(0, 0.2);
+        // blades, each a bent plate: the leading half lit, the trailing
+        // half in shade, a shadow behind it on the well
+        const nb = 5 + Math.floor(R() * 4);
+        const gone = R() < 0.55 ? Math.floor(R() * nb) : -1;
+        const a0 = R(0, U.TAU);
+        const sweep = (U.TAU / nb) * R(0.42, 0.55);
+        const blade = (a, rr, col, from, to) => {
+          l.fillStyle = col;
           l.beginPath();
-          l.moveTo(x + s / 2, y + s / 2);
-          l.arc(x + s / 2, y + s / 2, s * 0.38, a, a + (U.TAU / nb) * 0.45);
+          l.moveTo(cx + Math.cos(a + sweep * from) * r * 0.22, cy + Math.sin(a + sweep * from) * r * 0.22);
+          l.arc(cx, cy, rr, a + sweep * from, a + sweep * to);
           l.closePath();
           l.fill();
+        };
+        for (let i = 0; i < nb; i++) {
+          const a = a0 + (i / nb) * U.TAU;
+          if (i === gone) {
+            // a stump, snapped off near the hub
+            blade(a, r * 0.42, plate, 0, 1);
+            continue;
+          }
+          l.save();
+          l.translate(2, 3);
+          blade(a, r * 0.93, shade1, 0, 1);
+          l.restore();
+          blade(a, r * 0.93, plate2, 0, 0.5);
+          blade(a, r * 0.93, plate, 0.5, 1);
+          // the lit leading edge
+          l.strokeStyle = rimL;
+          l.lineWidth = 1;
+          l.beginPath();
+          l.moveTo(cx + Math.cos(a) * r * 0.3, cy + Math.sin(a) * r * 0.3);
+          l.lineTo(cx + Math.cos(a) * r * 0.9, cy + Math.sin(a) * r * 0.9);
+          l.stroke();
         }
-        for (const [bx, by] of [[x + 4, y + 4], [x + s - 4, y + 4], [x + 4, y + s - 4], [x + s - 4, y + s - 4]]) bolt(bx, by);
-        chip(px, py, pw, ph, 1);
+        // the shroud's lip shadowing the well, top and left
+        l.fillStyle = shade1;
+        l.beginPath();
+        l.arc(cx, cy, r, 0, U.TAU);
+        l.arc(cx + 3, cy + 4, r * 0.95, 0, U.TAU, true);
+        l.fill('evenodd');
+        // grime gathered in the bottom of the well
+        l.fillStyle = earthD;
+        for (let t = -0.9; t <= 0.9; t += 0.15) {
+          const gx = cx + t * r * 0.8;
+          const gh = (1 - Math.abs(t)) * R(2, 5);
+          l.fillRect(gx - 2, cy + Math.sqrt(1 - t * t * 0.64) * r - gh - 1, 4, gh);
+        }
+        // the hub cap: a raised dome
+        l.fillStyle = rimD;
+        l.beginPath();
+        l.arc(cx + 1.5, cy + 2, r * 0.22, 0, U.TAU);
+        l.fill();
+        l.fillStyle = plate2;
+        l.beginPath();
+        l.arc(cx, cy, r * 0.22, 0, U.TAU);
+        l.fill();
+        l.fillStyle = rimL;
+        l.fillRect(cx - r * 0.1, cy - r * 0.12, r * 0.08 + 1, r * 0.08 + 1);
+        // the guard: wire rings and spokes, or louvres over the lower half
+        if (R() < 0.6) {
+          l.strokeStyle = trussC;
+          l.lineWidth = 1;
+          l.beginPath();
+          for (const k of [0.45, 0.75]) {
+            l.moveTo(cx + r * k, cy);
+            l.arc(cx, cy, r * k, 0, U.TAU);
+          }
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * U.TAU + 0.785;
+            l.moveTo(cx + Math.cos(a) * r * 0.22, cy + Math.sin(a) * r * 0.22);
+            l.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+          }
+          l.stroke();
+        } else {
+          l.save();
+          l.beginPath();
+          l.arc(cx, cy, r, 0, U.TAU);
+          l.clip();
+          for (let yy = cy + r * 0.15; yy < cy + r; yy += 6) {
+            l.fillStyle = shade1;
+            l.fillRect(cx - r, yy + 2, r * 2, 2.5);
+            l.fillStyle = plate2;
+            l.fillRect(cx - r, yy, r * 2, 2.5);
+            l.fillStyle = rimL;
+            l.fillRect(cx - r, yy, r * 2, 0.8);
+          }
+          l.restore();
+        }
+        // rust weeping from the lower corners
+        if (R() < 0.7) {
+          weep(x, x + s * 0.25, y + s - 2);
+          weep(x + s * 0.75, x + s, y + s - 2);
+        }
+        if (R() < 0.4) chip(px, py, pw, ph, 1);
       },
       // the old panels, chipped and cracked: a grille or a column of glyphs
       grille(px, py, pw, ph) {
