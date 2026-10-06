@@ -323,7 +323,9 @@
       // Scavenging: a corpse of something we eat is an easy meal to carry home.
       if (this.state === 'scavenge') {
         const c = this.prey;
-        if (!c || c.dead || !c.corpse || c.grabbedBy || this.stateT > 20) {
+        // (it sank, or the water came up over it: a lizard won't dive for
+        // it, so it gives up rather than paddling over it for good)
+        if (!c || c.dead || !c.corpse || c.grabbedBy || this.stateT > 20 || this.W.waterDepth(c.x, c.y) > 6) {
           this.prey = null;
           this.setState('wander');
         } else {
@@ -1011,6 +1013,7 @@
     prizeOf(c) {
       const f = c.holding && c.holding.corpse ? c.holding : c.state === 'scavenge' && c.prey && c.prey.corpse && !c.prey.grabbedBy ? c.prey : null;
       if (!f || f.dead || !this.diet.some((s) => (s.endsWith('*') ? f.species.startsWith(s.slice(0, -1)) : s === f.species))) return null;
+      if (!f.grabbedBy && this.W.waterDepth(f.x, f.y) > 6) return null; // (sunk: nobody's getting it)
       return f;
     }
     // In or close by our own territory?
@@ -1021,6 +1024,7 @@
     prizeLive(r) {
       const f = this.prize;
       if (!f || f.dead || !f.corpse) return !!r.holding;
+      if (!f.grabbedBy && this.W.waterDepth(f.x, f.y) > 6) return false; // (it sank)
       return !f.grabbedBy || f.grabbedBy === r || f.grabbedBy === this;
     }
     // How determined we are to win against c.

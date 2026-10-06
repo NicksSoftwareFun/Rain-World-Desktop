@@ -1157,6 +1157,61 @@ const checks = [
     ],
   },
   {
+    name: 'skyedges',
+    about: "on a surface map the sky runs off both sides of the screen: nothing climbs the screen's edge up into the sky or hangs off the top",
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.world.layout = 'experimental';
+        e.cfg.world.surface = 'always';
+        const was = {};
+        const cap = e.cfg.ecosystem.maxPopulation;
+        e.cfg.ecosystem.maxPopulation = 20;
+        for (const k of Object.keys(e.cfg.species)) {
+          was[k] = e.cfg.species[k].enabled;
+          e.cfg.species[k].enabled = ['lizard_blue', 'centipede', 'centipede_medium', 'slugcat'].includes(k);
+        }
+        const out = { maps: 0, onEdge: 0, samples: 0, who: {} };
+        for (const seed of [3, 11, 45]) {
+          e.seed = seed;
+          e.regenerate(true);
+          e.restartWildlife();
+          const W = e.world;
+          if (!e.decor.room || !e.decor.room.surf) continue;
+          out.maps++;
+          for (let i = 0; i < (mins / 3) * 3600; i++) {
+            e.tick(1 / 60);
+            if (i % 30) continue;
+            for (const c of e.eco.creatures) {
+              if (c.dead || c.isFlier || c.grabbedBy || c.leaving) continue;
+              out.samples++;
+              const m = c.mainPoint();
+              const cx = W.cellX(m.x);
+              const cy = W.cellY(m.y);
+              const edge = m.y < W.cell * 0.8 || m.x < W.cell * 0.8 || m.x > W.w - W.cell * 0.8;
+              // (standing on the ground or a pole at the edge is fine)
+              const held = W.solid(cx, cy + 1) || W.solid(cx, cy + 2) || W.pole(cx, cy) || W.pole(cx, cy + 1);
+              if (edge && !held) {
+                out.onEdge++;
+                out.who[c.species] = (out.who[c.species] || 0) + 1;
+              }
+            }
+          }
+        }
+        for (const k of Object.keys(was)) e.cfg.species[k].enabled = was[k];
+        e.cfg.ecosystem.maxPopulation = cap;
+        e.cfg.world.surface = 'auto';
+        e.cfg.world.layout = 'tiers';
+        return out;
+      }, T(3)),
+    judge: (m) => [
+      m.maps < 1 && 'no surface map came up',
+      // measured: 0-2, slugcats mid-jump (47 when the sky's edges were walls)
+      m.onEdge > 10 && `creatures hung off the screen's edge in the sky (${m.onEdge} samples: ${JSON.stringify(m.who)})`,
+    ],
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>
@@ -1231,6 +1286,7 @@ const COVERS = [
   [/js\/(background|drips)\.js/, ['rain']],
   [/js\/config\.js/, ['presets']],
   [/js\/(world|nav|engine|ecosystem)\.js|js\/creatures\/base\.js/, ['soak', 'bodies', 'centipedes', 'scramble', 'shelter', 'cover']],
+  [/js\/(world|engine)\.js/, ['skyedges']],
 ];
 if (args.includes('--changed')) {
   const { execSync } = await import('node:child_process');

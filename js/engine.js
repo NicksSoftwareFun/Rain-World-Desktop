@@ -184,6 +184,15 @@
         for (let y = 0; y < room.R; y++) a[y] = room.cells[y * room.C + x] !== 1 ? 1 : 0;
         return a;
       };
+      // (a surface map's sky runs off both sides: open air there, not a
+      // wall to climb or a ceiling to hang from)
+      // (the open air down from the top of the screen to the first rock)
+      const sky = (x) => {
+        const a = new Uint8Array(W.rows);
+        for (let y = 0; y < room.R && room.cells[y * room.C + x] !== 1; y++) a[y] = 1;
+        return a;
+      };
+      if (room.surf) return [top, room.open === 'left' ? side(0) : sky(0), room.open === 'right' ? side(room.C - 1) : sky(room.C - 1)];
       return [top, room.open === 'left' ? side(0) : null, room.open === 'right' ? side(room.C - 1) : null];
     }
 

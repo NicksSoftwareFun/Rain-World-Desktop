@@ -66,7 +66,10 @@ titles.
 - **Spawn weights**: when the spawner adds a creature it picks a species at
   random in proportion to `weight`, among enabled species below their `max`.
 - **`ecosystem.maxPopulation`**: the total the spawner keeps the screen near.
-  Each species has a `popCost` (a batfly counts 0, a Daddy Long Legs 4).
+  Each species has a `popCost` (a Daddy Long Legs counts 4; slugcats, small
+  centipedes, infant noodleflies and batflies 0; yellow lizards and
+  squidcadas, which come in pairs, 0.5 each). The sizes' caps: Compact 5,
+  Normal 8, Large 12, XL 18 (30% less on a room map).
 - **Level layout**: ledges (some split by a passage with a pole running up
   through it), vertical poles (from the floor, beside ledges, and standing on
   ledges up to higher ones) and horizontal poles (bridges between level

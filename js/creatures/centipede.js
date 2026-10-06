@@ -221,7 +221,8 @@
       if (this.state === 'hunt' && perceive && this.threatNear(170)) this.setState('wander');
       if (this.state === 'hunt') {
         const prey = this.prey;
-        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18)) {
+        // (a corpse that's sunk is given up on: nobody dives for it)
+        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18) || (prey.corpse && this.W.waterDepth(prey.x, prey.y) > 6)) {
           this.prey = null;
           this.setState('wander');
         } else {

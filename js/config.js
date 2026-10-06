@@ -4,8 +4,10 @@
 // Spawning: the spawner keeps the ecosystem near `ecosystem.maxPopulation`.
 // Each time it spawns it picks a species at random, in proportion to `weight`,
 // from the species that are enabled and below their own `max`.
-// `popCost` is how much one individual counts toward maxPopulation (a batfly
-// is a fraction of a slugcat; a Daddy Long Legs is several).
+// `popCost` is how much one individual counts toward maxPopulation (a Daddy
+// Long Legs is several; slugcats, small centipedes, infant noodleflies and
+// batflies are free; yellow lizards and squidcadas, which come in pairs, a
+// half each).
 (function () {
   'use strict';
   const RW = (window.RW = window.RW || {});
@@ -51,7 +53,7 @@
       showCycleHud: true,
     },
     ecosystem: {
-      maxPopulation: 12,
+      maxPopulation: 5,
       spawnPerMinute: 2.5, // new arrivals per minute while below the population cap
       startPopulated: true, // fill the screen immediately on load
       predation: true, // predators actually eat prey (off = chase, bite, release)
@@ -73,7 +75,7 @@
         enabled: true,
         weight: 4,
         max: 4,
-        popCost: 1,
+        popCost: 0, // free: they don't count toward max population (their own max still applies)
         params: {
           speed: 105,
           runSpeed: 175,
@@ -231,7 +233,7 @@
         enabled: true,
         weight: 1.5,
         max: 4, // (pack hunters: they come in pairs)
-        popCost: 1.2,
+        popCost: 0.5, // half each: they come in pairs
         params: {
           headColor: '#ffbf1c',
           bodyColor: '#120d06',
@@ -322,7 +324,7 @@
         enabled: true,
         weight: 5, // common: something for everyone to hunt
         max: 6,
-        popCost: 0.5,
+        popCost: 0, // free (the small ones)
         params: {
           segments: [6, 9],
           speed: 55,
@@ -391,7 +393,7 @@
         enabled: true,
         weight: 0, // never on their own
         max: 10,
-        popCost: 0.25,
+        popCost: 0, // free (they come with their parent)
         params: {
           escapeChance: 0,
         },
@@ -401,7 +403,7 @@
         enabled: true,
         weight: 1.2,
         max: 4,
-        popCost: 0.6,
+        popCost: 0.5, // half each: they come in pairs
         params: {
           flockSize: [2, 2], // pairs: more read as a swarm
           blackChance: 0.35,
@@ -417,10 +419,10 @@
   // and the art pixels get finer so zoomed-out creatures keep their detail;
   // population, spawn rate, weapons and each species' cap scale with it.
   RW.SIZE_PRESETS = {
-    compact: { label: 'Compact', mapSize: 1, pixelScale: 2.5, maxPopulation: 12, spawnPerMinute: 2.5, rocks: 15, spears: 3, caps: 1 },
-    normal: { label: 'Normal', mapSize: 1.4, pixelScale: 2, maxPopulation: 20, spawnPerMinute: 4, rocks: 28, spears: 6, caps: 1.7 },
-    large: { label: 'Large', mapSize: 1.8, pixelScale: 1.5, maxPopulation: 30, spawnPerMinute: 6, rocks: 42, spears: 8, caps: 2.5 },
-    xl: { label: 'XL', mapSize: 2.4, pixelScale: 1, maxPopulation: 45, spawnPerMinute: 9, rocks: 65, spears: 13, caps: 3.6 },
+    compact: { label: 'Compact', mapSize: 1, pixelScale: 2.5, maxPopulation: 5, spawnPerMinute: 2.5, rocks: 15, spears: 3, caps: 1 },
+    normal: { label: 'Normal', mapSize: 1.4, pixelScale: 2, maxPopulation: 8, spawnPerMinute: 4, rocks: 28, spears: 6, caps: 1.7 },
+    large: { label: 'Large', mapSize: 1.8, pixelScale: 1.5, maxPopulation: 12, spawnPerMinute: 6, rocks: 42, spears: 8, caps: 2.5 },
+    xl: { label: 'XL', mapSize: 2.4, pixelScale: 1, maxPopulation: 18, spawnPerMinute: 9, rocks: 65, spears: 13, caps: 3.6 },
   };
   // Wildlife: which creatures turn up (spawn weights; anything not listed
   // stays away), each mix chosen to show off a set of behaviours. `caps`
@@ -491,7 +493,8 @@
     cfg.ecosystem.spears = Math.round(P.spears * W);
     for (const k of Object.keys(cfg.species)) {
       const base = RW.BASE_CONFIG.species[k];
-      // batflies cost nothing toward the population, so they grow more slowly
+      // the free ones (batflies, slugcats...) cost nothing toward the
+      // population, so their own caps grow more slowly with the map
       const f = (base && base.popCost === 0 ? Math.pow(P.caps, 0.6) : P.caps) * ((wild.caps && wild.caps[k]) || 1);
       if (base) cfg.species[k].max = Math.max(1, Math.round(base.max * f));
     }
@@ -526,7 +529,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
-  RW.DEFAULT_CONFIG.rev = 2; // (see loadConfig)
+  RW.DEFAULT_CONFIG.rev = 3; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -540,10 +543,17 @@
         RW.U.deepMerge(cfg, raw);
         // rev 2: rooms became the default and tiers/scatter merged into
         // 'ledges'; an older save opens on rooms
-        if (!(raw.rev >= 2)) {
-          cfg.world.layout = 'experimental';
-          cfg.rev = 2;
+        if (!(raw.rev >= 2)) cfg.world.layout = 'experimental';
+        // rev 3: the population cap 60% lower, some creatures free and the
+        // pairs half each; an older save takes the new cap for its size and
+        // the new costs
+        if (!(raw.rev >= 3)) {
+          const P = RW.SIZE_PRESETS[cfg.presets && cfg.presets.size];
+          if (P) cfg.ecosystem.maxPopulation = P.maxPopulation;
+          else cfg.ecosystem.maxPopulation = Math.max(1, Math.round(cfg.ecosystem.maxPopulation * 0.4));
+          for (const k of Object.keys(cfg.species)) if (RW.BASE_CONFIG.species[k]) cfg.species[k].popCost = RW.BASE_CONFIG.species[k].popCost;
         }
+        cfg.rev = RW.DEFAULT_CONFIG.rev;
       }
     } catch (e) {
       /* storage blocked or corrupt — run on defaults */

@@ -146,8 +146,10 @@ away from the other until the last 90px.
 
 Creatures, items (`items.js`: fruit and fruit plants; `weapons.js`: rocks and
 spears), dens, the batfly nest(s). Spawning keeps the population near
-`maxPopulation` (each species has a `popCost`; batflies cost 0) from weighted
-species below their caps; forces a slugcat after 15 s without one; the nest
+`maxPopulation` (each species has a `popCost`: slugcats, small centipedes,
+infant noodleflies and batflies are free, yellow lizards and squidcadas a half
+each and checked as the pair they come out as; with nothing that counts about,
+anything fits) from weighted species below their caps; forces a slugcat after 15 s without one; the nest
 tops batflies up. Drawing order and the late translucent pass live here too.
 
 ## Level and weather (`js/background.js`, `js/drips.js`)
@@ -218,6 +220,9 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   Poles, bars, dens, fruit and nests scale with the number of rooms.
 - **Population**: `Ecosystem.maxPopulation()` is 30% lower on an
   experimental map (less open space).
+- **Sky edges**: a surface map's sky runs off both sides of the screen
+  (`Engine.openings`: the air down each side column to the first rock is
+  open), so nothing climbs the screen's edge up into the sky.
 - **Pits or water, never both.** `addPit`: 3-5 cells cut down through the
   floor to the bottom edge, a pole beside it. `World.setPits` splits the
   bottom border, `solid()` is open below a pit column and `inPit()` marks

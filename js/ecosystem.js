@@ -404,7 +404,11 @@
         if (!s.enabled || !(s.weight > 0)) continue;
         if (this.count(k) >= (s.max || 0)) continue;
         waiting.push(k);
-        if (pop + (s.popCost !== undefined ? +s.popCost : 1) > this.maxPopulation() + 0.01) continue;
+        // (a pair, for the species that come out two at a time)
+        const n = k === 'squidcada' || k === 'lizard_yellow' ? Math.min(2, (s.max || 0) - this.count(k)) : 1;
+        // (with nothing that counts about, anything fits: a Daddy Long Legs
+        // can still turn up on a small map)
+        if (pop > 0.01 && pop + n * (s.popCost !== undefined ? +s.popCost : 1) > this.maxPopulation() + 0.01) continue;
         entries.push([k, s.weight * this.varietyBoost(k)]);
       }
       const pick = U.weighted(entries);
