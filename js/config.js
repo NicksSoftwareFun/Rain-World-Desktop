@@ -124,6 +124,7 @@
         max: 2,
         popCost: 1.5,
         params: {
+          noSwim: true, // keeps out of the water (too heavy to climb back out)
           headColor: '#41f53c',
           bodyColor: '#0c0d10',
           length: 1.25,

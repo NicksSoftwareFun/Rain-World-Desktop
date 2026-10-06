@@ -289,6 +289,7 @@
         let y = sy2;
         let land = -1;
         for (let k = 0; k < MAX_FALL && y < W.rows; k++, y++) {
+          if (!c.swim && wet(W, sx2, y)) break; // (no dropping into water it can't swim out of)
           if (W.solid(sx2, y + 1)) {
             land = y;
             break;

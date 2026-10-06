@@ -48,7 +48,7 @@
         ceilCost: 1.8,
         poleCost: 1.4,
         fallCost: p.climbWalls ? 4 : 1, // climbers climb down rather than drop
-        swim: 4, // (they swim, clumsily, and would rather not)
+        swim: p.noSwim ? 0 : 4, // (they swim, clumsily, and would rather not; greens won't go in at all)
         back: !!p.backWalls,
         backCost: 1.6,
       };
