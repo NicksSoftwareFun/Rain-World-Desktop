@@ -526,6 +526,48 @@
       }
     }
 
+    // Slugcats never stand in one another: two on the ground (or one on
+    // the ground, one on a pole) keep a body's width apart, nudged aside
+    // (never into the rock); two on one pole keep a body's length apart,
+    // the lower one giving way. (In the air they may pass.)
+    separateSlugcats() {
+      const sc = [];
+      for (const c of this.creatures) {
+        if (c.species === 'slugcat' && c.hip && !c.dead && !c.corpse && !c.grabbedBy && !c.piping && !c.unpiping && !c.burrow && !c.tunnel && !c.leaving && (c.grounded || c.pole || c.perch)) sc.push(c);
+      }
+      const W = this.world;
+      for (let i = 0; i < sc.length; i++) {
+        for (let j = i + 1; j < sc.length; j++) {
+          const a = sc[i];
+          const b = sc[j];
+          const A = a.hip;
+          const B = b.hip;
+          const dx = B.x - A.x;
+          const dy = B.y - A.y;
+          const pa = a.pole || a.perch;
+          const pb = b.pole || b.perch;
+          if (pa && pb && pa === pb) {
+            // up and down one pole: the lower one drops back
+            if (Math.abs(dy) >= 16 || Math.abs(dx) > 8) continue;
+            const low = dy > 0 ? b : a;
+            if (low.perch) continue;
+            low.hip.y += Math.min(1.5, 16 - Math.abs(dy));
+            continue;
+          }
+          if (Math.abs(dx) >= 10 || Math.abs(dy) >= 14) continue;
+          const s = dx !== 0 ? Math.sign(dx) : a.id < b.id ? 1 : -1;
+          const push = Math.min(1.2, (10 - Math.abs(dx)) / 2);
+          // (one perched, or on a pole: it stays put, the other moves)
+          for (const [c, k] of [[a, -s], [b, s]]) {
+            if (c.perch || c.pole) continue;
+            const nx = c.hip.x + k * push * ((pa || pb) ? 2 : 1);
+            if (W.isSolidPt(nx + k * 6, c.hip.y) || W.isSolidPt(nx + k * 6, c.hip.y - 8)) continue;
+            c.hip.x = nx;
+          }
+        }
+      }
+    }
+
     // A corpse's colour drains away as it lies there: down to about a
     // quarter of its saturation over 40 s, and a little darker.
     // (Drawn on a little scratch canvas the corpse's size and greyed pixel
@@ -710,6 +752,7 @@
         if (c.y > Wd.h + 500 || c.y < -500 || c.x < -500 || c.x > Wd.w + 500 || !isFinite(c.x) || !isFinite(c.y)) c.remove();
       }
       this.separateLizards();
+      this.separateSlugcats();
       for (const it of this.items) it.update(dt);
       // The flood at its height carries off the dead under it: a passive
       // clean-up of the map, once a downpour.

@@ -1055,6 +1055,8 @@
     // a ceiling)
     perchable(pole) {
       const W = this.W;
+      // (one slugcat to a tip)
+      if (this.eco.creatures.some((c) => c !== this && c.perch === pole && !c.dead)) return false;
       return !W.isSolidPt(pole.x, pole.y1 - 6) && !W.isSolidPt(pole.x, pole.y1 - 26) && !W.isSolidPt(pole.x - 7, pole.y1 - 14) && !W.isSolidPt(pole.x + 7, pole.y1 - 14);
     }
     findPole(x, y) {
