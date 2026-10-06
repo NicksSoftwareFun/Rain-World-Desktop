@@ -2666,8 +2666,9 @@
         // a hose or a cable hanging in a loop from the ceiling
         if (taken(cx * cell, cy * cell, 2 * cell)) continue;
         props.push({ kind: 'hose', x: (cx + 0.5) * cell, y: cy * cell, w: R(1.5, 4) * cell, h: R(2, 5) * cell, r: 2 * cell, seed: R(0, 1000) });
-      } else if (roll < 0.45 && room4(cx, cy, 2, 2)) {
-        // a wall-mounted fan in its housing
+      } else if (roll < 0.3825 && room4(cx, cy, 2, 2)) {
+        // a wall-mounted fan in its housing (rarely: a couple a room at most)
+        if (props.filter((q) => q.kind === 'fan').length >= Math.max(1, Math.round(want / 14))) continue;
         const r = R(1, 1.8) * cell;
         if (taken(cx * cell, cy * cell, r)) continue;
         // it blows out into the room, toward its more open side, as far
@@ -2679,16 +2680,45 @@
         };
         const blow = open(1) >= open(-1) ? 1 : -1;
         props.push({ kind: 'fan', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, seed: R(0, 1000), blow, reach: (open(blow) + 0.5) * cell });
-      } else if (roll < 0.62 && room4(cx, cy, 1, 1)) {
+      } else if (roll < 0.42 && room4(cx, cy, 2, 1)) {
+        // a louvred vent in the wall
+        if (props.filter((q) => q.kind === 'vent').length >= Math.max(1, Math.round(want / 8))) continue;
+        const w = R(1.6, 3) * cell;
+        const h = R(1.1, 1.9) * cell;
+        if (taken(cx * cell, cy * cell, Math.max(w, h) / 2)) continue;
+        props.push({ kind: 'vent', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, w, h, r: Math.max(w, h) / 2, seed: R(0, 1000) });
+      } else if (roll < 0.52 && room4(cx, cy, 1, 1)) {
         const r = R(0.7, 3) * cell;
         if (r > 1.6 * cell && !room4(cx, cy, 3, 3)) continue;
         if (taken(cx * cell, cy * cell, r)) continue;
         props.push({ kind: 'cog', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, pair: R() < 0.35, seed: R(0, 1000) });
-      } else if (roll < 0.82 && room4(cx, cy, 3, 2)) {
+      } else if (roll < 0.62 && room4(cx, cy, 2, 1)) {
+        // an old glyph sign: hung on two chains from a ceiling close above,
+        // else bolted to the wall
+        const w = R(2, 3.4) * cell;
+        const h = R(1, 1.5) * cell;
+        if (taken(cx * cell, cy * cell, w / 2)) continue;
+        let up = 0;
+        while (up < 6 && !solid(cx, cy - up - 1)) up++;
+        const hangFrom = up < 6 && cy - up - 1 >= 0 && solid(cx - 1, cy - up - 1) && solid(cx + 1, cy - up - 1) ? (cy - up) * cell : null;
+        props.push({ kind: 'sign', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, w, h, r: w / 2, hangFrom, seed: R(0, 1000) });
+      } else if (roll < 0.72 && room4(cx, cy, 3, 2)) {
         const w = R(2.5, 4.5) * cell;
         const h = R(1.8, 3.2) * cell;
         if (taken(cx * cell, cy * cell, Math.max(w, h) / 2)) continue;
         props.push({ kind: 'machine', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, w, h, r: Math.max(w, h) / 2, seed: R(0, 1000) });
+      } else if (roll < 0.78 && room4(cx, cy, 2, 2)) {
+        // a window through to a dim room beyond
+        const w = R(1.6, 2.6) * cell;
+        const h = w * R(1.1, 1.5);
+        if (taken(cx * cell, cy * cell, h / 2)) continue;
+        props.push({ kind: 'window', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, w, h, r: h / 2, round: R() < 0.35, seed: R(0, 1000) });
+      } else if (roll < 0.85 && solid(cx, cy + 1) && solid(cx - 2, cy + 1) && solid(cx + 2, cy + 1) && room4(cx, cy - 1, 3, 1)) {
+        // a tank lying on its side on the floor, on two saddles
+        const w = R(3, 5) * cell;
+        const h = R(1.3, 1.9) * cell;
+        if (taken(cx * cell, (cy + 1) * cell - h / 2, w / 2)) continue;
+        props.push({ kind: 'tank', x: (cx + 0.5) * cell, y: (cy + 1) * cell, w, h, r: w / 2, seed: R(0, 1000) });
       } else {
         // a pipe run: along the wall from rock to rock (horizontal or up);
         // a third of the props at most
@@ -2839,7 +2869,7 @@
         l.fillStyle = C_(base);
         l.fillRect(q.x - h, q.y - h, h * 2, h * 2);
         if (shadow) return;
-        const dark = haze(U.mix(pal.interior, pal.mass, 0.85));
+        const dark = haze(U.mix(pal.interior, pal.mass, 0.62));
         l.fillStyle = rim;
         l.fillRect(q.x - h, q.y - h, h * 2, 1.2);
         l.fillRect(q.x - h, q.y - h, 1.2, h * 2);
@@ -2927,6 +2957,279 @@
         q.blade = mid;
         q.bladeLit = U.mix(mid, pal.light, 0.22);
         q.hole = deep;
+      } else if (q.kind === 'vent') {
+        // a louvred vent: a bevelled frame, the dark behind, slats angled
+        // down, each catching the light on its top edge and throwing a
+        // shadow onto the next; a slat gone now and then; grime run down
+        const x0 = q.x - q.w / 2;
+        const y0 = q.y - q.h / 2;
+        l.fillStyle = C_(base);
+        l.fillRect(x0, y0, q.w, q.h);
+        if (shadow) return;
+        const dark = haze(U.mix(pal.interior, pal.mass, 0.62));
+        l.fillStyle = rim;
+        l.fillRect(x0, y0, q.w, 1.2);
+        l.fillRect(x0, y0, 1.2, q.h);
+        l.fillStyle = C_(deep);
+        l.fillRect(x0, y0 + q.h - 1.5, q.w, 1.5);
+        l.fillRect(x0 + q.w - 1.5, y0, 1.5, q.h);
+        const ix = x0 + 3;
+        const iy = y0 + 3;
+        const iw = q.w - 6;
+        const ih = q.h - 6;
+        l.fillStyle = C_(dark);
+        l.fillRect(ix, iy, iw, ih);
+        const gap = r(4.5, 6);
+        const gone = r(0, 1) < 0.35 ? Math.floor(r(1, ih / gap - 1)) : -1;
+        let k = 0;
+        for (let y = iy + 1; y < iy + ih - 2; y += gap, k++) {
+          if (k === gone) continue;
+          l.fillStyle = C_(deep);
+          l.fillRect(ix, y + 2.2, iw, 1.4); // (its shadow on the next)
+          l.fillStyle = C_(mid);
+          l.fillRect(ix, y, iw, 2.4);
+          l.fillStyle = rim;
+          l.fillRect(ix, y, iw, 0.9);
+        }
+        for (const [bx, by] of [[x0 + 1.5, y0 + 1.5], [x0 + q.w - 3, y0 + 1.5], [x0 + 1.5, y0 + q.h - 3], [x0 + q.w - 3, y0 + q.h - 3]]) {
+          l.fillStyle = rim;
+          l.fillRect(bx, by, 1.4, 1.4);
+        }
+        l.fillStyle = C_(rust);
+        for (let i = 0, n = 1 + Math.floor(r(0, 3)); i < n; i++) {
+          const x = x0 + r(2, q.w - 3);
+          const len = r(4, 14);
+          l.fillRect(x, y0 + q.h, 1.5, len);
+          l.fillRect(x, y0 + q.h + len, 1, len * 0.4);
+        }
+      } else if (q.kind === 'sign') {
+        // an old glyph board, a corner broken off, hung on two chains (or
+        // bolted to the wall on two brackets), its glyphs worn faint
+        const x0 = q.x - q.w / 2;
+        const y0 = q.y - q.h / 2;
+        const cut = Math.min(q.w, q.h) * r(0.25, 0.45);
+        const corner = Math.floor(r(0, 4));
+        const outline = (dx, dy) => {
+          const pts = [[x0, y0], [x0 + q.w, y0], [x0 + q.w, y0 + q.h], [x0, y0 + q.h]];
+          const c = pts[corner];
+          const prev = pts[(corner + 3) % 4];
+          const next = pts[(corner + 1) % 4];
+          const toward = (a, b, d) => [a[0] + Math.sign(b[0] - a[0]) * d, a[1] + Math.sign(b[1] - a[1]) * d];
+          const poly = [];
+          for (let i = 0; i < 4; i++) {
+            if (i === corner) poly.push(toward(c, prev, cut), toward(c, next, cut * r(0.6, 1.2)));
+            else poly.push(pts[i]);
+          }
+          l.beginPath();
+          poly.forEach(([px, py], i) => (i ? l.lineTo(px + dx, py + dy) : l.moveTo(px + dx, py + dy)));
+          l.closePath();
+        };
+        // the chains (or brackets) first, behind it
+        l.strokeStyle = C_(deep);
+        l.fillStyle = C_(deep);
+        l.lineWidth = 1.4;
+        for (const fx of [0.22, 0.78]) {
+          const ax = x0 + q.w * fx;
+          if (q.hangFrom !== null && q.hangFrom !== undefined) {
+            for (let y = q.hangFrom; y < y0; y += 4) l.fillRect(ax - (Math.round(y / 4) % 2 ? 0.7 : 1.4), y, Math.round(y / 4) % 2 ? 1.4 : 2.8, 3);
+          } else {
+            l.fillRect(ax - 2, y0 - 4, 4, 5);
+          }
+        }
+        l.fillStyle = C_(base);
+        outline(0, 0);
+        l.fill();
+        if (shadow) return;
+        l.save();
+        outline(0, 0);
+        l.clip();
+        l.fillStyle = rim;
+        l.fillRect(x0, y0, q.w, 1.2);
+        l.fillRect(x0, y0, 1.2, q.h);
+        l.fillStyle = C_(deep);
+        l.fillRect(x0, y0 + q.h - 1.5, q.w, 1.5);
+        l.fillRect(x0 + q.w - 1.5, y0, 1.5, q.h);
+        // glyphs: rings, bars and chevrons, faint
+        const gc = C_(U.mix(base, pal.light, 0.22));
+        l.strokeStyle = gc;
+        l.fillStyle = gc;
+        l.lineWidth = 1.2;
+        const n = 2 + Math.floor(r(0, 3));
+        for (let i = 0; i < n; i++) {
+          const gx = x0 + q.w * ((i + 0.5) / n);
+          const gy = q.y;
+          const gs = Math.min(q.h * 0.28, (q.w / n) * 0.3);
+          const kind = Math.floor(r(0, 4));
+          l.beginPath();
+          if (kind === 0) l.arc(gx, gy, gs, 0, U.TAU);
+          else if (kind === 1) {
+            l.moveTo(gx - gs, gy + gs * 0.6);
+            l.lineTo(gx, gy - gs * 0.6);
+            l.lineTo(gx + gs, gy + gs * 0.6);
+          } else if (kind === 2) {
+            l.moveTo(gx, gy - gs);
+            l.lineTo(gx, gy + gs);
+            l.moveTo(gx - gs * 0.7, gy);
+            l.lineTo(gx + gs * 0.7, gy);
+          } else {
+            l.arc(gx, gy, gs * 0.6, 0, U.TAU);
+            l.moveTo(gx, gy + gs * 0.6);
+            l.lineTo(gx, gy + gs * 1.3);
+          }
+          l.stroke();
+        }
+        l.restore();
+        // rust weeping from the bottom edge
+        l.fillStyle = C_(rust);
+        for (let i = 0, k = Math.floor(r(0, 3)); i < k; i++) l.fillRect(x0 + r(3, q.w - 4), y0 + q.h - 1, 1.4, r(4, 12));
+      } else if (q.kind === 'window') {
+        // a window into a dim room beyond: a deep frame and sill, the far
+        // room hazy (pillars, a shaft of light), bars across, a few shards
+        // of glass left in the frame
+        const x0 = q.x - q.w / 2;
+        const y0 = q.y - q.h / 2;
+        const shape = (pad) => {
+          l.beginPath();
+          if (q.round) l.arc(q.x, q.y, q.w / 2 + pad, 0, U.TAU);
+          else {
+            const rr = q.w / 2 + pad;
+            l.moveTo(x0 - pad, y0 + q.h + pad);
+            l.lineTo(x0 - pad, y0 + rr);
+            l.arc(q.x, y0 + rr - pad, rr, Math.PI, 0);
+            l.lineTo(x0 + q.w + pad, y0 + q.h + pad);
+            l.closePath();
+          }
+        };
+        l.fillStyle = C_(base);
+        shape(3);
+        l.fill();
+        // the sill
+        if (!q.round) l.fillRect(x0 - 6, y0 + q.h + 2, q.w + 12, 4);
+        if (shadow) return;
+        l.fillStyle = rim;
+        if (!q.round) l.fillRect(x0 - 6, y0 + q.h + 2, q.w + 12, 1.2);
+        l.save();
+        shape(0);
+        l.clip();
+        const far = haze(U.mix(pal.interior, pal.fog || pal.interior, 0.35));
+        const farD = haze(U.mix(far, pal.mass, 0.35));
+        l.fillStyle = C_(farD);
+        l.fillRect(x0 - 2, y0 - 2, q.w + 4, q.h + 4);
+        // the far room: pillars, a floor line, a shaft of light
+        l.fillStyle = C_(U.mix(farD, far, 0.5));
+        for (let x = x0 + r(0, 6); x < x0 + q.w; x += r(8, 14)) l.fillRect(x, y0, r(3, 5), q.h);
+        l.fillRect(x0, y0 + q.h * 0.78, q.w, q.h * 0.22);
+        l.fillStyle = C_(U.mix(far, pal.light, 0.15));
+        const sx = x0 + q.w * r(0.2, 0.6);
+        l.beginPath();
+        l.moveTo(sx, y0);
+        l.lineTo(sx + q.w * 0.18, y0);
+        l.lineTo(sx + q.w * 0.35, y0 + q.h);
+        l.lineTo(sx + q.w * 0.15, y0 + q.h);
+        l.closePath();
+        l.fill();
+        // the frame's shadow across the top and left of the opening
+        l.fillStyle = C_(deep);
+        l.beginPath();
+        if (q.round) {
+          l.arc(q.x, q.y, q.w / 2, 0, U.TAU);
+          l.arc(q.x + 2, q.y + 3, q.w / 2 - 1, 0, U.TAU, true);
+          l.fill('evenodd');
+        } else {
+          l.fillRect(x0, y0, 3, q.h);
+          l.fillRect(x0, y0, q.w, q.w * 0.25);
+        }
+        // bars, and a few shards of glass
+        l.fillStyle = C_(base);
+        l.fillRect(q.x - 1, y0, 2.4, q.h);
+        l.fillRect(x0, q.y + q.h * 0.1, q.w, 2.4);
+        l.fillStyle = C_(U.mix(far, pal.light, 0.4));
+        for (let i = 0, n = 2 + Math.floor(r(0, 3)); i < n; i++) {
+          const ex = r(0, 1) < 0.5 ? x0 + 2 : x0 + q.w - 2;
+          const ey = y0 + r(q.h * 0.25, q.h * 0.9);
+          const sz = r(3, 6);
+          l.beginPath();
+          l.moveTo(ex, ey);
+          l.lineTo(ex + (ex < q.x ? sz : -sz), ey + sz * 0.4);
+          l.lineTo(ex, ey + sz);
+          l.closePath();
+          l.fill();
+        }
+        l.restore();
+        l.strokeStyle = rim;
+        l.lineWidth = 1;
+        l.beginPath();
+        if (q.round) l.arc(q.x, q.y, q.w / 2 + 2.5, Math.PI * 1.05, Math.PI * 1.75);
+        else l.arc(q.x, y0 + q.w / 2, q.w / 2 + 2.5, Math.PI * 1.05, Math.PI * 1.6);
+        l.stroke();
+        l.fillStyle = C_(rust);
+        for (let i = 0, k = Math.floor(r(0, 3)); i < k; i++) l.fillRect(x0 + r(0, q.w), y0 + q.h + (q.round ? 0 : 6), 1.4, r(4, 14));
+      } else if (q.kind === 'tank') {
+        // a tank on its side on two saddles: round-ended, banded, lit along
+        // the top and shaded under, a valve on top, rust patches, a pipe
+        // stub off one end
+        const h = q.h;
+        const x0 = q.x - q.w / 2;
+        const yB = q.y - 4; // (bottom of the body, over the saddles)
+        const y0 = yB - h;
+        const body = () => {
+          l.beginPath();
+          l.moveTo(x0 + h / 2, y0);
+          l.lineTo(x0 + q.w - h / 2, y0);
+          l.arc(x0 + q.w - h / 2, y0 + h / 2, h / 2, -Math.PI / 2, Math.PI / 2);
+          l.lineTo(x0 + h / 2, yB);
+          l.arc(x0 + h / 2, y0 + h / 2, h / 2, Math.PI / 2, Math.PI * 1.5);
+          l.closePath();
+        };
+        // saddles
+        l.fillStyle = C_(deep);
+        for (const fx of [0.25, 0.75]) l.fillRect(x0 + q.w * fx - 4, yB - 3, 8, q.y - yB + 3);
+        l.fillStyle = C_(base);
+        body();
+        l.fill();
+        const side = r(0, 1) < 0.5 ? -1 : 1;
+        l.fillRect(side < 0 ? x0 - 8 : x0 + q.w, y0 + h * 0.4, 8, 5);
+        if (shadow) return;
+        l.save();
+        body();
+        l.clip();
+        // round in section: lit along the top, rolling into shade beneath
+        l.fillStyle = C_(U.mix(mid, pal.light, 0.08));
+        l.fillRect(x0, y0 + h * 0.1, q.w, h * 0.3);
+        l.fillStyle = rim;
+        l.fillRect(x0, y0 + h * 0.18, q.w, 1.4);
+        l.fillStyle = C_(U.mix(base, deep, 0.5));
+        l.fillRect(x0, y0 + h * 0.55, q.w, h * 0.2);
+        l.fillStyle = C_(haze(U.mix(deep, pal.mass, 0.3)));
+        l.fillRect(x0, y0 + h * 0.75, q.w, h * 0.3);
+        // the welded seams where the dished ends meet the shell
+        l.strokeStyle = C_(deep);
+        l.lineWidth = 1.4;
+        for (const ex of [x0 + h / 2, x0 + q.w - h / 2]) {
+          l.beginPath();
+          l.ellipse(ex, y0 + h / 2, h * 0.14, h / 2, 0, 0, U.TAU);
+          l.stroke();
+        }
+        // bands
+        for (let x = x0 + q.w * r(0.15, 0.25); x < x0 + q.w - 4; x += q.w * r(0.22, 0.3)) {
+          l.fillStyle = C_(deep);
+          l.fillRect(x, y0, 3, h);
+          l.fillStyle = rim;
+          l.fillRect(x, y0, 1, h * 0.4);
+        }
+        // rust patches
+        l.fillStyle = C_(rust);
+        for (let i = 0, n = 1 + Math.floor(r(0, 3)); i < n; i++) l.fillRect(x0 + r(4, q.w - 10), y0 + r(h * 0.3, h * 0.7), r(4, 9), r(2, 4));
+        l.restore();
+        // a valve on top
+        const vx = x0 + q.w * r(0.35, 0.65);
+        l.fillStyle = C_(deep);
+        l.fillRect(vx - 1.5, y0 - 5, 3, 5);
+        l.strokeStyle = C_(U.mix(rust, base, 0.4));
+        l.lineWidth = 1.2;
+        l.beginPath();
+        l.arc(vx, y0 - 6, 3, 0, U.TAU);
+        l.stroke();
       } else if (q.kind === 'hose') {
         // hanging from the ceiling in a slack loop, a clamp at the top
         l.strokeStyle = C_(deep);

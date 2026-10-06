@@ -491,8 +491,13 @@ grates, vent rings, caged lamps (a few still faintly lit), junction boxes
 with conduits, valve wheels, looping cables, glyph plates, machine boxes.
 
 Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
-behind everything that moves): wall cogs, machine housings, wall fans,
-pipe runs (rock to rock, a third of the props at most, thicker and lighter
+behind everything that moves): wall cogs, machine housings, wall fans
+(rare: a room or so's worth, `want / 14`), louvred vents (capped at
+`want / 8`), old glyph signs (hung on two chains from a real ceiling a few
+cells up, else bolted to the wall; a corner broken off, glyphs worn faint),
+windows through to a hazy far room (arched or round, bars, a shaft of
+light, shards left in the frame), tanks lying on two saddles on a floor
+(lit along the top, shaded under, banded, weld seams, a valve), pipe runs (rock to rock, a third of the props at most, thicker and lighter
 than the climbable poles, a dull valve wheel on one in three), hoses
 hanging from ceilings and junk piles on floors; each a soft shadow and a
 rim of light (brighter near the openings), and a little haze so it reads
