@@ -105,7 +105,23 @@ Fliers have `isFlier`; ground predators only target one that `nearGround()`
 hasn't got half a cell closer in 8-10 s is dropped (`noHeadway`), and the
 target ignored for 20 s (`ignore`/`ignores`: the food, prey and weapon
 searches skip it; it still counts as a threat). Lizard hunts and
-scavenging, centipede hunts, slugcat foraging and fetching.
+scavenging, centipede hunts, slugcat foraging and fetching. With a
+complete route to the target, "closer" is measured down the route
+(`pather.remaining()`), not in a straight line, so a long climb round
+counts as headway. A lizard wandering does the same as a white lizard on
+its way to a lurking spot (`tripStalled`): it keeps on as long as it gets
+further down the route, however long the climb, and gives the goal up
+after 6 s without (or at once if there's no route), staying off that spot
+for 60 s (`badGoal`, skipped by `pickWander`).
+
+**Scares (slugcats).** A slugcat remembers what it ran from for 20 s (40
+s if it's the same one again; `scaredBy`, `dangersNow`): the food it was
+going for is ignored that long, food by a remembered danger or with one
+in the way is passed over for other food (`risky`: fruit, downed prey,
+underwater fruit, plants to throw at), food that turns risky is dropped,
+and its routes go round the danger where there's a way round
+(`pather.avoid` -> `Nav.findPath`'s `avoid`: extra cost close in). So it
+doesn't run up a pole, drop down for the same fruit and run again.
 
 **The red feud.** Species with `red: true` (red lizards, large centipedes)
 hunt the nearest other red creature within `FEUD_RANGE` (420 px,
@@ -188,7 +204,8 @@ tops batflies up. Drawing order and the late translucent pass live here too.
   scales it). Rain drops with a slanted rain shadow
   under ledges/windows (not beams), curtains, fog, the cycle HUD.
   `drips.js`: drips from undersides and ledge-end waterfalls (only in real
-  rain). In a room the rain shadow comes from the rock grid itself (each
+  rain); seeps along the screen's top edge only under a ceiling, never
+  where the top opens to the sky. In a room the rain shadow comes from the rock grid itself (each
   slanted rain line stops at the first rock cell, the screen-edge rock
   included), so rain only gets in through the openings; each opening to
   the sky has a waterfall down one side (`skyFalls`/`drawSkyFalls`: 4px of
@@ -311,7 +328,9 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   (`Creature.tryTunnel`/`tunnelStep`): head first, the body laid along the
   head's own trail (`layOnTrail`), up and down alike, in surges with a wave
   down the body and the legs pawing at the walls (`tunnelWiggle`; a
-  slugcat claws hand over hand, `limbTargets`). Meeting a bigger or
+  slugcat's hands and feet grip the passage walls, `limbTargets`: each held
+where it gripped while the body slides past, then moved ahead to a new
+grip, the sides staggered, scrabbling a little; `tGrips`). Meeting a bigger or
   hungrier creature head on, it wriggles, squeezes round (`tunnelReverse`:
   ends swapped, back out from the new lead along the points ahead of it,
   never back over its own body) and backs out, twice at most in one
@@ -470,8 +489,10 @@ The ground's colour (`paintTerrain`, `world.terrain`: 'strata', the
 default, or 'flat'): earthy strata under the floors only (walls, undersides
 and hanging blocks stay rock), measured down from the open air above on a
 4 px grid and bent round steps in the floor, wavy, thinning into the rock
-about four cells down, with its own grain (the rock's texture keeps off
-it); the floors get moss mats, litter and pebbles (`paintGroundAccents`).
+about four cells down (grey rock, with little colour of its own
+(`terrainTones` `grey`): a stronger earth tone, running about six cells
+down, and a darker rock beneath), with its own grain (the rock's texture
+keeps off it); the floors get moss mats, litter and pebbles (`paintGroundAccents`).
 
 Machinery in the rock (`paintJunk`): big pieces set into the masses
 (`KINDS`, mixed per region by `MIX`): a cog half swallowed in a broken

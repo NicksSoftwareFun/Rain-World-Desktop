@@ -25,6 +25,7 @@
       this.version = -1;
       this.complete = false;
       this.interval = 1.2;
+      this.avoid = null; // (places to route round: see Nav.findPath)
     }
     setGoal(x, y, urgent) {
       const changed = !this.goal || U.dist(this.goal.x, this.goal.y, x, y) > 30;
@@ -45,7 +46,7 @@
       }
       if (this.timer <= 0) {
         this.timer = this.interval * (0.75 + Math.random() * 0.5);
-        const r = Nav.findPath(W, x, y, this.goal.x, this.goal.y, this.caps, 4000);
+        const r = Nav.findPath(W, x, y, this.goal.x, this.goal.y, this.caps, 4000, this.avoid);
         this.nodes = r ? r.nodes : null;
         this.complete = r ? r.complete : false;
         this.i = 0;
@@ -936,11 +937,19 @@
     // threat). True when it gives up: the caller drops the chase.
     noHeadway(target, dt, secs) {
       const m = this.mainPoint();
-      const d = Math.hypot(target.x - m.x, target.y - m.y);
+      // (measured down the route there when it has one: a long climb round
+      // makes headway along its path, not in a straight line)
+      const pa = this.pather;
+      const routed = !!(pa && pa.nodes && pa.complete && pa.goal && Math.hypot(pa.goal.x - target.x, pa.goal.y - target.y) < this.W.cell * 5);
+      const d = routed ? pa.remaining() * this.W.cell : Math.hypot(target.x - m.x, target.y - m.y);
       const g = this.headway;
       if (!g || g.t !== target) {
-        this.headway = { t: target, best: d, T: 0 };
+        this.headway = { t: target, best: d, T: 0, routed };
         return false;
+      }
+      if (g.routed !== routed) {
+        g.routed = routed;
+        g.best = d;
       }
       if (d < g.best - this.W.cell * 0.5) {
         g.best = d;
@@ -952,6 +961,35 @@
       this.headway = null;
       this.ignore(target, 20);
       return true;
+    }
+    // Off somewhere (a wander goal): getting no further down the route for
+    // `secs`, or no route there at all: give it up and stay off that spot a
+    // while (pickWander skips it). True when it gives up.
+    tripStalled(dt, secs) {
+      const pa = this.pather;
+      const goal = pa && pa.goal;
+      if (!goal) return !!(this.trip = null);
+      let t = this.trip;
+      if (!t || t.x !== goal.x || t.y !== goal.y) t = this.trip = { x: goal.x, y: goal.y, best: Infinity, T: 0, age: 0 };
+      t.age += dt;
+      if (!pa.nodes) return false;
+      const left = pa.remaining();
+      if (left < t.best) {
+        t.best = left;
+        t.T = 0;
+      } else t.T += dt;
+      const noWay = !pa.complete && left === 0 && t.age > 1.5;
+      if (!noWay && t.T < secs) return false;
+      this.trip = null;
+      const bad = (this.badGoals || []).filter((q) => q.until > this.eco.t);
+      bad.push({ x: goal.x, y: goal.y, until: this.eco.t + 60 });
+      this.badGoals = bad;
+      pa.clear();
+      return true;
+    }
+    badGoal(x, y) {
+      const r = this.W.cell * 2;
+      return !!this.badGoals && this.badGoals.some((q) => q.until > this.eco.t && Math.abs(q.x - x) < r && Math.abs(q.y - y) < r);
     }
     ignore(t, secs) {
       if (!this.ignoring) this.ignoring = new Map();
@@ -1158,13 +1196,13 @@
     pickWander(caps, radius, filter, strict) {
       if (!filter && Math.random() < 0.6) {
         const g = this.exploreGoal(caps);
-        if (g) return g;
+        if (g && !this.badGoal(g.x, g.y)) return g;
       }
       const m = this.mainPoint();
       // somewhere it can actually get to, and not where it already is
       for (let k = 0; k < 6; k++) {
         const g = Nav.randomValid(this.W, caps, m.x, m.y, radius, filter);
-        if (!g || Math.hypot(g.x - m.x, g.y - m.y) < 60) continue;
+        if (!g || Math.hypot(g.x - m.x, g.y - m.y) < 60 || this.badGoal(g.x, g.y)) continue;
         const r = Nav.findPath(this.W, m.x, m.y, g.x, g.y, caps, 4000);
         if (r && r.complete) return g;
       }

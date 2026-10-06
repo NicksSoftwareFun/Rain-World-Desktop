@@ -2096,14 +2096,20 @@
     // an earth hue drawn from the region's rust, warmed; how far the surface
     // goes toward it depends how dark the rock is (dark rock: further)
     const earthHue = U.mix(U.mix('#7b5b3c', pal.rust || '#7a4a2a', 0.3), pal.light, 0.08);
-    const k = 0.24 + 0.16 * U.clamp((0.25 - lum(pal.mass)) / 0.2, 0, 1);
+    // grey rock (little colour of its own) goes further still, and darker
+    // deep down, so the fall from earthy surface to rock reads
+    const hm = U.hex(pal.mass);
+    const sat = (Math.max(...hm) - Math.min(...hm)) / Math.max(1, Math.max(...hm));
+    const grey = U.clamp((0.3 - sat) / 0.2, 0, 1);
+    const k = 0.24 + 0.16 * U.clamp((0.25 - lum(pal.mass)) / 0.2, 0, 1) + 0.34 * grey;
     const cool = U.mix(pal.mass, '#2b3036', 0.12); // (deep rock a touch cooler)
     return {
       earth: [1, 0.72, 0.48, 0.26, 0.1].map((f) => U.rgba(U.mix(pal.mass, earthHue, k * f))),
       rock: U.rgba(pal.mass),
-      deep: U.rgba(U.mix(cool, '#000000', 0.12)),
+      deep: U.rgba(U.mix(cool, '#000000', 0.12 + 0.14 * grey)),
       earthHue,
       k,
+      grey,
     };
   }
   function paintTerrain(l, decor, pal, solid, inBlock, style) {
@@ -2181,7 +2187,7 @@
         // along); nothing round the sides or under a ceiling
         if (cellsU >= 60) continue;
         const wave = (N - 0.5) * 1.6 + Math.sin(i / 11 + N * 2) * 0.35;
-        const e = (cellsU + wave) * 0.9;
+        const e = (cellsU + wave) * (0.9 - 0.32 * T.grey); // (grey rock: the bands run deeper, a longer fall)
         let t = e < 0.45 ? 0 : e < 1.1 ? 1 : e < 1.9 ? 2 : e < 2.9 ? 3 : e < 4 ? 4 : -1;
         // a darker seam between bands now and then
         if (t >= 1 && Math.abs((e % 1) - 0.5) < 0.04 && N > 0.55) t = 6;

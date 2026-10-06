@@ -50,7 +50,13 @@
           for (const p of decor.fruitPlants) this.free.push({ x: p.x + 2, y: p.y + 6, t: Math.random(), speed: U.rand(0.08, 0.25), wob: U.rand(0, 10) });
         }
         const nTop = Math.round(world.w / 160);
-        for (let i = 0; i < nTop; i++) this.free.push({ x: U.rand(10, world.w - 10), y: 0, t: Math.random(), speed: U.rand(0.1, 0.4), wob: U.rand(0, 10) });
+        for (let i = 0; i < nTop; i++) {
+          const x = U.rand(10, world.w - 10);
+          // (only under a ceiling: not where the top opens to the sky, nor in rock)
+          const cx = world.cellX(x);
+          if (!world.solid(cx, -1) || world.solid(cx, 0)) continue;
+          this.free.push({ x, y: 0, t: Math.random(), speed: U.rand(0.1, 0.4), wob: U.rand(0, 10) });
+        }
         // Trickles off a couple of ledge ends.
         this.trickles = [];
         if (decor) {

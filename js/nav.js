@@ -367,7 +367,10 @@
 
   // Returns {nodes, complete} or null. nodes excludes the start cell; each
   // node's type says how to get there from the previous one (WALK/FALL/JUMP).
-  function findPath(W, sx, sy, gx, gy, c, maxNodes) {
+  // `avoid` (optional): [{cx, cy, r}] places to keep away from (a danger
+  // remembered): each cell within r costs more the closer in, so a route
+  // goes round when there's a way round, and through only when there isn't.
+  function findPath(W, sx, sy, gx, gy, c, maxNodes, avoid) {
     maxNodes = maxNodes || 5000;
     const size = W.cols * W.rows;
     ensure(size);
@@ -419,6 +422,14 @@
 
       const relax = (ni, cost, type) => {
         if (closedStamp[ni] === stamp) return;
+        if (avoid) {
+          const ax = ni % cols;
+          const ay = (ni / cols) | 0;
+          for (const q of avoid) {
+            const d = Math.hypot(ax - q.cx, ay - q.cy);
+            if (d < q.r) cost += (q.r - d) * 3;
+          }
+        }
         const ng = g0 + cost;
         if (openStamp[ni] === stamp && gs[ni] <= ng) return;
         openStamp[ni] = stamp;

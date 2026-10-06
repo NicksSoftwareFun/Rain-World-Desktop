@@ -514,7 +514,14 @@
         if (this.idleT <= 0) this.setState('wander');
         return;
       }
-      if (this.readyForGoal(dt, 35, !!this.grip)) { // slow walkers need time for a long climb
+      // (like a white lizard's trip to its lurking spot: it keeps on for as
+      // long as it gets further down the route, however long the climb, and
+      // gives a spot up once it doesn't)
+      if (this.state === 'wander' && this.tripStalled(dt, 6)) {
+        this.goalCd = 0;
+        this.stateT = 99;
+      }
+      if (this.readyForGoal(dt, this.trip ? 60 : 35, !!this.grip)) { // slow walkers need time for a long climb
         // low-energy lizards stop to rest more often and for longer; a
         // low-energy white lizard lies still long enough to vanish (lurk)
         if (this.pather.goal && Math.random() < 0.2 + 0.35 * (1 - pe.energy) + (this.atHome() ? 0.2 : 0)) {

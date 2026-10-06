@@ -353,6 +353,7 @@
       this.hunger = Math.min(1, this.hunger + dt / 100);
       this.ignoreFoodT = (this.ignoreFoodT || 0) - dt;
       this.ignorePlantT = (this.ignorePlantT || 0) - dt;
+      if (perceive) this.pather.avoid = this.dangerZones();
       this.swimTo = null;
       this.speed = p.speed || 105;
       this.sleeping = false;
@@ -448,6 +449,7 @@
             this.quarry = t;
             if (this.state !== 'stalk') this.setState('stalk');
           } else if (this.state !== 'flee' || this.stateT > 1.5) {
+            this.scaredBy(t);
             const g = this.fleeGoal(this.caps, t.x, t.y, 380);
             if (g) this.pather.setGoal(g.x, g.y, true);
             this.setState('flee');
@@ -503,11 +505,11 @@
 
       // Prey knocked down by a rock: go and pick it up.
       if (perceive && this.hunger > 0.3 && this.state !== 'forage' && this.wants('meat')) {
-        let downed = this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1 && this.W.waterDepth(c.x, c.y) < 6);
+        let downed = this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], 320, (c) => c.stunT > 0.4 && c.canBeGrabbed() && (c.size || 1) <= 1 && this.W.waterDepth(c.x, c.y) < 6 && !this.ignores(c) && !this.risky(c.x, c.y));
         if (!downed) {
           // (a corpse only if we killed it: no scavenging)
           const c = this.nearestCorpse(['batfly', 'centipede', 'noodlefly_infant'], 320);
-          if (c && (c.size || 1) <= 1 && c.killedBy === this) downed = c;
+          if (c && (c.size || 1) <= 1 && c.killedBy === this && !this.ignores(c) && !this.risky(c.x, c.y)) downed = c;
         }
         if (downed) {
           this.food = downed;
@@ -548,7 +550,11 @@
           this.ignoreFood = f;
           this.ignoreFoodT = 30;
         }
-        if (!f || f.dead || f.heldBy || (f.claimedBy && f.claimedBy !== this) || this.stateT > 20 || unreachable || this.noHeadway(f, dt)) {
+        // (something that scared it lately is by it now, or in the way: some
+        // other food, or later)
+        const risky = f && perceive && this.risky(f.x, f.y);
+        if (risky) this.ignore(f, 15);
+        if (!f || f.dead || f.heldBy || (f.claimedBy && f.claimedBy !== this) || this.stateT > 20 || unreachable || risky || this.noHeadway(f, dt)) {
           this.food = null;
           this.setState('wander');
         } else {
@@ -570,7 +576,7 @@
         let best = null;
         let bd = this.hunger > 0.6 ? 700 : 450;
         for (const pp of eco.plants) {
-          if (!pp.under || !pp.ripe() || (pp.claimedBy && pp.claimedBy !== this) || (pp === this.ignorePlant && this.ignorePlantT > 0)) continue;
+          if (!pp.under || !pp.ripe() || (pp.claimedBy && pp.claimedBy !== this) || (pp === this.ignorePlant && this.ignorePlantT > 0) || this.risky(pp.tip().x, pp.tip().y)) continue;
           const tp = pp.tip();
           const d = U.dist(tp.x, tp.y, hip.x, hip.y);
           if (d < bd) {
@@ -853,11 +859,53 @@
     // go) or a red lizard (rocks don't faze them) or anything big; a rock to
     // flip other lizards, to down small prey for the taking, and for fruit.
     // A vine with ripe fruit near `from` (in clear sight, if `see`).
+    // ---- what it ran from lately ----
+    // A scare is remembered a while (whatever was after it, and the food it
+    // was going for then): food by it, or the far side of it, is passed over
+    // for other food, and routes go round it where they can, so it doesn't
+    // run up a pole, drop back down for the same fruit, and run again.
+    scaredBy(t) {
+      const eco = this.eco;
+      if (!this.dangers) this.dangers = new Map();
+      for (const [k, u] of this.dangers) if (u < eco.t) this.dangers.delete(k);
+      const n = (this.dangers.has(t) ? 2 : 1) * 20; // (again: longer)
+      this.dangers.set(t, eco.t + n);
+      const f = this.food;
+      if (f && this.state === 'forage') {
+        this.ignore(f, n);
+        this.food = null;
+      }
+      this.pather.avoid = this.dangerZones();
+    }
+    dangersNow() {
+      const out = [];
+      if (!this.dangers) return out;
+      for (const [c, u] of this.dangers) if (u > this.eco.t && !c.dead && !c.corpse && !c.leaving && !c.lurking) out.push(c);
+      return out;
+    }
+    // Food at (x, y) by a danger, or with one in the way there.
+    risky(x, y) {
+      const hip = this.hip;
+      for (const c of this.dangersNow()) {
+        if (U.dist(c.x, c.y, x, y) < 160) return true;
+        const dx = x - hip.x;
+        const dy = y - hip.y;
+        const L2 = dx * dx + dy * dy || 1;
+        const k = ((c.x - hip.x) * dx + (c.y - hip.y) * dy) / L2;
+        if (k > 0 && k < 1 && U.dist(c.x, c.y, hip.x + dx * k, hip.y + dy * k) < 90) return true;
+      }
+      return false;
+    }
+    dangerZones() {
+      const W = this.W;
+      const d = this.dangersNow();
+      return d.length ? d.map((c) => ({ cx: W.cellX(c.x), cy: W.cellY(c.y), r: Math.max(4, Math.round(140 / W.cell)) })) : null;
+    }
     ripePlant(from, range, see) {
       return this.eco.plants.find((pp) => {
         if (!pp.ripe() || pp.under) return false; // (no throwing through water)
         const tp = pp.tip();
-        if (U.dist(tp.x, tp.y, from.x, from.y) > range) return false;
+        if (U.dist(tp.x, tp.y, from.x, from.y) > range || this.risky(tp.x, tp.y)) return false;
         return !see || this.W.lineClear(from.x, from.y - 8, tp.x, tp.y + 5);
       });
     }
@@ -1034,6 +1082,7 @@
         if (it.dead || it.heldBy || (it.claimedBy && it.claimedBy !== this)) continue;
         if ((it === this.ignoreFood && this.ignoreFoodT > 0) || this.ignores(it)) continue;
         if (this.W.waterDepth(it.x, it.y) > 6) continue; // (on land, or floating; never down under)
+        if (this.risky(it.x, it.y)) continue; // (not past what it ran from just now)
         const d = U.dist2(it.x, it.y, this.hip.x, this.hip.y);
         if (d < bd) {
           bd = d;
@@ -1806,6 +1855,7 @@
 
     limbTargets(shoulder) {
       const hip = this.hip;
+      if (!this.tunnel) this.tGrips = null;
       const f = this.faceS;
       const feet = [];
       const hands = [];
@@ -1819,8 +1869,11 @@
         feet.push({ x: hip.x + 3 + w, y: hip.y + 10 }, { x: hip.x - 3 - w, y: hip.y + 10 });
         hands.push({ x: shoulder.x + 7, y: shoulder.y - 4 - w }, { x: shoulder.x - 7, y: shoulder.y - 4 + w });
       } else if (this.tunnel) {
-        // squeezing through a passage: clawing forward hand over hand, the
-        // feet shoving behind
+        // squeezing through a passage: hands and feet pressed flat to the
+        // walls either side, each held where it gripped while the body slides
+        // on past, then shifted ahead for a new grip (hand over hand, the
+        // feet shoving behind), scrabbling a little at the wall
+        const W = this.W;
         const hd = this.head;
         let dx = hd.x - hip.x;
         let dy = hd.y - hip.y;
@@ -1828,11 +1881,38 @@
         dx /= dl;
         dy /= dl;
         const c = this.crawlPhase || 0;
-        for (const k of [0, Math.PI]) {
-          const s = Math.sin(c + k);
-          const side = k ? -1 : 1;
-          hands.push({ x: hd.x + dx * (3 + s * 4) - dy * side * 4, y: hd.y + dy * (3 + s * 4) + dx * side * 4 });
-          feet.push({ x: hip.x - dx * (5 - s * 3) - dy * side * 3, y: hip.y - dy * (5 - s * 3) + dx * side * 3 });
+        // (how far to the wall out to one side: about half a cell in a passage)
+        const wall = (x, y, nx, ny) => {
+          for (let t = 2; t <= 10; t++) {
+            const qx = W.cellX(x + nx * t);
+            const qy = W.cellY(y + ny * t);
+            if (W.solid(qx, qy) && W.passage(qx, qy) < 0) return t - 0.5; // (a passage's own cells are solid too)
+          }
+          return 7;
+        };
+        const G = this.tGrips || (this.tGrips = [null, null, null, null]);
+        for (let i = 0; i < 4; i++) {
+          const arm = i < 2;
+          const side = i % 2 ? -1 : 1;
+          const base = arm ? hd : hip;
+          const nx = -dy * side;
+          const ny = dx * side;
+          let g = G[i];
+          const along = g ? (g.x - base.x) * dx + (g.y - base.y) * dy : 0;
+          // (fallen behind, or out of reach: a new grip ahead; the sides stagger)
+          const behind = arm ? -4 + (side < 0 ? 2.5 : 0) : -10 + (side < 0 ? 3 : 0);
+          if (!g || along < behind || Math.hypot(g.x - base.x, g.y - base.y) > (arm ? 12 : 14)) {
+            const ahead = arm ? 5 : 1;
+            const ax = base.x + dx * ahead;
+            const ay = base.y + dy * ahead;
+            const t = Math.min(wall(ax, ay, nx, ny), 9);
+            g = G[i] = { x: ax + nx * t, y: ay + ny * t, sx: g ? g.sx : base.x, sy: g ? g.sy : base.y };
+          }
+          // (the limb moves over to its grip quickly, not in a blink)
+          g.sx += (g.x - g.sx) * 0.45;
+          g.sy += (g.y - g.sy) * 0.45;
+          const wig = Math.sin(c * 2.2 + i * 1.7) * 0.9;
+          (arm ? hands : feet).push({ x: g.sx + dx * wig, y: g.sy + dy * wig });
         }
       } else if (this.swimming) {
         // swimming: the arms reach and pull in turn, the legs kick behind
