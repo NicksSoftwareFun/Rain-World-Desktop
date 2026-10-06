@@ -1318,6 +1318,60 @@ const checks = [
     ],
   },
   {
+    name: 'ambush',
+    about: 'white lizards lie in wait up high (a ceiling or a ledge lip), invisible, and drop on prey below; nothing flees from one while it is hidden',
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.world.layout = 'experimental';
+        const S = e.cfg.species;
+        const was = {};
+        for (const k in S) {
+          was[k] = [S[k].enabled, S[k].max];
+          S[k].enabled = ['lizard_white', 'slugcat', 'centipede', 'batfly'].includes(k);
+        }
+        S.lizard_white.max = 2;
+        const cap = e.cfg.ecosystem.maxPopulation;
+        e.cfg.ecosystem.maxPopulation = 10;
+        const out = { lurk: 0, hiddenLurk: 0, drops: 0, fled: 0 };
+        for (const seed of [4, 9]) {
+          e.seed = seed;
+          e.regenerate(true);
+          e.restartWildlife();
+          for (let i = 0; i < (mins / 2) * 3600; i++) {
+            e.tick(1 / 60);
+            // (each drop counted as it starts)
+            for (const c of e.eco.creatures) {
+              if (c.species !== 'lizard_white') continue;
+              if (c.ambushT > 0 && !c.dropSeen) out.drops++;
+              c.dropSeen = c.ambushT > 0;
+            }
+            if (i % 30) continue;
+            for (const c of e.eco.creatures) {
+              if (c.species !== 'lizard_white' || c.dead || c.corpse) continue;
+              if (c.state === 'lurk') {
+                out.lurk++;
+                if (c.camo < 0.1) out.hiddenLurk++;
+                for (const o of e.eco.creatures) if (o.species === 'slugcat' && o.state === 'flee' && o.threat === c && o.stateT > 0.6) out.fled++;
+              }
+            }
+          }
+        }
+        for (const k in was) [S[k].enabled, S[k].max] = was[k];
+        e.cfg.ecosystem.maxPopulation = cap;
+        e.cfg.world.layout = 'tiers';
+        return out;
+      }, T(3)),
+    judge: (m) => [
+      // measured: 60-400 lurking samples a run, 0-1 fleeing
+      m.lurk < 10 && `white lizards hardly lay in wait (${m.lurk} samples)`,
+      m.lurk >= 10 && m.hiddenLurk < m.lurk * 0.5 && `white lizards in wait weren't hidden (${m.hiddenLurk} of ${m.lurk})`,
+      m.fled > 4 && `slugcats fled a hidden white lizard (${m.fled} samples)`,
+    ],
+    warn: (m) => !m.drops && 'no white lizard dropped on anything this run',
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>
@@ -1382,7 +1436,7 @@ const checks = [
 const COVERS = [
   [/js\/water\.js/, ['water']],
   [/js\/rooms\.js/, ['experimental', 'water']],
-  [/js\/creatures\/lizard\.js/, ['bodies', 'scramble', 'jumps', 'reds', 'corpses', 'packs']],
+  [/js\/creatures\/lizard\.js/, ['bodies', 'scramble', 'jumps', 'reds', 'corpses', 'packs', 'ambush']],
   [/js\/creatures\/centipede\.js/, ['bodies', 'centipedes', 'reds']],
   [/js\/creatures\/slugcat\.js/, ['scramble', 'jumps', 'throws', 'fruit', 'transients']],
   [/js\/creatures\/dropwig\.js/, ['dropwigs']],

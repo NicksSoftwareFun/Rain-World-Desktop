@@ -456,7 +456,9 @@
       }
       if (this.state === 'flee') {
         this.speed = p.runSpeed || 170;
-        if (this.stateT < 3.5) return;
+        // (what it ran from has vanished, a white lizard gone still: out of
+        // sight, out of mind)
+        if (this.stateT < 3.5 && !(this.threat && this.threat.lurking)) return;
         this.setState('wander');
       }
 

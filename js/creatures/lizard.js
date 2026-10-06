@@ -349,6 +349,10 @@
         }
       }
 
+      // Ambush (white lizards): up to a ceiling over open floor, still and
+      // invisible, and down on whatever passes below.
+      if (this.p.ambush && !this.holding && this.fullT <= 0 && this.ambush(dt, perceive)) return;
+
       // Hunting
       if (perceive && this.fullT <= 0) {
         const vision = this.p.vision || 300;
@@ -525,6 +529,127 @@
         if (g) this.pather.setGoal(g.x, g.y, true);
         this.stateT = 0;
       }
+    }
+
+    // A white lizard's ambush: pick a spot up high, on a ceiling or a ledge's
+    // lip, over open floor ('lurkgo'), get there, then keep still ('lurk') and
+    // vanish (see the camouflage in update); the others don't see it as a
+    // threat then (lurking). Prey passing below: it lets go and drops on
+    // it, turning into an ordinary hunt. True while it's busy at it.
+    ambush(dt, perceive) {
+      const W = this.W;
+      const head = this.spine.pts[0];
+      if (this.state === 'hunt' || this.state === 'scavenge') return false;
+      if (this.state !== 'lurk' && this.state !== 'lurkgo') {
+        if (!perceive || (this.state !== 'wander' && this.state !== 'idle')) return false;
+        if (this.lurkCd > this.eco.t) return false; // (no luck getting anywhere lately: hunting as usual a while)
+        const spot = this.lurkSpot();
+        if (!spot) return false;
+        this.spot = spot;
+        this.setState('lurkgo');
+      }
+      const sp = this.spot;
+      if (this.state === 'lurkgo') {
+        this.speed *= 0.85;
+        this.pather.interval = 1.2;
+        this.pather.setGoal(sp.x, sp.y);
+        // (getting nowhere along the way, or no way there at all: a long
+        // climb round to a ceiling makes headway down its path, not
+        // straight toward the spot)
+        const pa = this.pather;
+        const rem = pa.nodes ? pa.remaining() : null;
+        if (rem !== null && (this.lurkBest === undefined || rem < this.lurkBest)) {
+          this.lurkBest = rem;
+          this.lurkStall = 0;
+        } else this.lurkStall = (this.lurkStall || 0) + dt;
+        const noWay = pa.nodes && !pa.complete && this.stateT > 1.5;
+        if (noWay || this.lurkStall > 8 || this.stateT > 50) {
+          this.lurkBest = undefined;
+          this.lurkStall = 0;
+          this.lurkFails = (this.lurkFails || 0) + 1;
+          if (this.lurkFails >= 3) {
+            this.lurkFails = 0;
+            this.lurkCd = this.eco.t + 30;
+          }
+          (this.badSpots = this.badSpots || []).push({ x: sp.x, y: sp.y, until: this.eco.t + 60 });
+          this.spot = null;
+          this.setState('wander');
+          return false;
+        }
+        // (there, or as good as: clinging just under the ceiling, or on the
+        // ledge's lip)
+        if (U.dist(head.x, head.y, sp.x, sp.y) < W.cell * 1.1 && this.grip) {
+          this.lurkBest = undefined;
+          this.lurkStall = 0;
+          this.lurkFails = 0;
+          this.setState('lurk');
+          this.pather.clear();
+        }
+        return true;
+      }
+      // lurking: hanging still on the ceiling
+      this.pather.clear();
+      this.speed = 0;
+      this.lash = 0;
+      if (this.stateT > (this.p.patience || 60) || !this.grip) {
+        this.spot = null;
+        this.setState('wander');
+        return false;
+      }
+      if (!perceive) return true;
+      // something to eat passing below (led a little for its pace)?
+      const prey = this.nearestOf(this.diet, W.cell * 11, (c) => {
+        if (c.grabbedBy || c.isFlier || !c.nearGround(40 * this.L)) return false;
+        const dy = c.y - head.y;
+        const lx = c.x + (c.vx || 0) * 0.35;
+        return dy > W.cell * 1.5 && dy < W.cell * 10 && Math.abs(lx - head.x) < W.cell * 1.6 && W.lineClear(head.x, head.y + 6, c.x, c.y);
+      });
+      if (prey) {
+        // let go and drop on it
+        this.prey = prey;
+        this.setState('hunt');
+        this.noticeT = 0;
+        this.dropT = 0.6;
+        this.ambushT = 1.4;
+        this.vx = U.clamp((prey.x + (prey.vx || 0) * 0.35 - head.x) * 2.2, -160, 160);
+        // (off a ceiling it just lets go; off a ledge's lip, a hop out over it)
+        const onFloor = this.grip && this.grip.ny < -0.5;
+        this.vy = onFloor ? -140 : 40;
+        if (onFloor && Math.abs(this.vx) < 60) this.vx = 60 * (Math.sign(prey.x - head.x) || 1);
+        this.spot = null;
+      }
+      return true;
+    }
+    // Somewhere high over open floor (where things pass): a ceiling cell with
+    // a drop under it, or the lip of a ledge with a drop beside it; not by a
+    // batfly nest, another white lizard's spot, or a spot it lately couldn't
+    // get to.
+    lurkSpot() {
+      const W = this.W;
+      const eco = this.eco;
+      const head = this.spine.pts[0];
+      const bad = (this.badSpots || []).filter((q) => q.until > eco.t);
+      this.badSpots = bad;
+      const others = eco.creatures.filter((c) => c !== this && c.spot && c.p && c.p.ambush).map((c) => c.spot);
+      const near = (list, x, y, r) => list.some((q) => Math.abs(q.x - x) < r && Math.abs(q.y - y) < r);
+      // (open below, a floor in reach of the drop: 4-10 cells down)
+      const dropBelow = (cx, cy) => {
+        let k = 1;
+        while (k <= 10 && !W.solid(cx, cy + k)) k++;
+        return k >= 4 && k <= 10;
+      };
+      const ok = (cx, cy) => {
+        if (W.solid(cx, cy)) return false;
+        // a ceiling over a drop, or the lip of a ledge with a drop beside it
+        const ceiling = W.solid(cx, cy - 1) && dropBelow(cx, cy);
+        const lip = !ceiling && W.solid(cx, cy + 1) && [-1, 1].some((sd) => !W.solid(cx + sd, cy) && !W.solid(cx + sd, cy + 1) && dropBelow(cx + sd, cy));
+        if (!ceiling && !lip) return false;
+        const x = W.centerX(cx);
+        const y = W.centerY(cy);
+        if (eco.rainOn && eco.heavyRain && eco.heavyRain() && eco.rainOn(x, y)) return false;
+        return !near(eco.nests || [], x, y, W.cell * 2.5) && !near(bad, x, y, W.cell * 1.5) && !near(others, x, y, W.cell * 4);
+      };
+      return Nav.randomValid(W, this.caps, head.x, head.y, 420, ok) || Nav.randomValid(W, this.caps, head.x, head.y, 800, ok);
     }
 
     // -------------------------------------------------------------- weapons --
@@ -1788,10 +1913,28 @@
       if (this.p.camouflage) {
         // only while stalking or hunting: fades see-through when still (never
         // fully invisible); otherwise in plain sight
-        const sneaking = this.state === 'hunt' || this.state === 'stalk';
-        const visible = !sneaking || this.lungeT > 0 || this.holding ? 1 : U.clamp(speedNow / 140, 0.35, 1);
+        // (lying in ambush: gone altogether, bar a faint shimmer)
+        const sneaking = this.state === 'hunt' || this.state === 'stalk' || this.state === 'lurkgo';
+        const visible = this.state === 'lurk' && !this.lungeT && !this.holding ? 0.03 : !sneaking || this.lungeT > 0 || this.holding ? 1 : U.clamp(speedNow / 140, 0.35, 1);
         this.camo += (visible - this.camo) * U.approach(visible > this.camo ? 6 : 0.7, dt);
-        this.lurking = this.camo < 0.4;
+        // (in ambush it's hidden from the start, not only once faded)
+        this.lurking = this.camo < 0.4 || this.state === 'lurk';
+        // dropping from an ambush: steer onto the prey below, and take it
+        // the moment it's in reach, as a dropwig does
+        if (this.ambushT > 0) {
+          this.ambushT -= dt;
+          const pr = this.prey;
+          if (pr && !pr.dead && !pr.grabbedBy && this.state === 'hunt') {
+            const pm = pr.mainPoint();
+            const hd = this.spine.pts[0];
+            if (!this.grip) this.vx = U.clamp(this.vx + U.clamp((pm.x + (pr.vx || 0) * 0.15 - hd.x) * 8, -500, 500) * dt, -170, 170);
+            if (U.dist(hd.x, hd.y, pm.x, pm.y) < 20 * this.L && this.eco.cfg.ecosystem.predation && this.grab(pr)) {
+              this.eatT = 0;
+              this.prey = null;
+              this.ambushT = 0;
+            }
+          } else this.ambushT = 0;
+        }
       }
     }
 

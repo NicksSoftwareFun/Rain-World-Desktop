@@ -186,7 +186,7 @@
           speed: 46, // wiki baseSpeed 3.8 x 12
           huntSpeed: 78,
           climbWalls: true,
-          climbCeilings: false,
+          climbCeilings: true, // (to hang in ambush)
           poles: true,
           vision: 396,
           mass: 2.1, // wiki bodyMass
@@ -198,6 +198,8 @@
           spines: 0,
           pattern: 'spots',
           camouflage: true,
+          ambush: true, // hangs invisible from a ceiling and drops on prey below (see Lizard.ambush)
+          patience: 60, // seconds on one spot
         },
       },
       lizard_red: {
@@ -537,7 +539,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
-  RW.DEFAULT_CONFIG.rev = 7; // (see loadConfig)
+  RW.DEFAULT_CONFIG.rev = 8; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -571,6 +573,8 @@
         if (!(raw.rev >= 5)) for (const k of PAIRS) if (cfg.species[k] && cfg.species[k].max % 2) cfg.species[k].max += 1;
         // rev 7: the cyan lizard's body back to black (rev 6 had it cyan)
         if (!(raw.rev >= 7) && cfg.species.lizard_cyan) cfg.species.lizard_cyan.params.bodyColor = RW.BASE_CONFIG.species.lizard_cyan.params.bodyColor;
+        // rev 8: white lizards climb ceilings (to hang in ambush)
+        if (!(raw.rev >= 8) && cfg.species.lizard_white) Object.assign(cfg.species.lizard_white.params, { climbCeilings: true, ambush: true });
         cfg.rev = RW.DEFAULT_CONFIG.rev;
       }
     } catch (e) {
