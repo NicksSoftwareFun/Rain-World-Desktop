@@ -2211,18 +2211,28 @@
         ctx.fill();
       }
       if (this.p.antennae) this.drawAntenna(ctx, u, 0);
-      // a white lizard's nose feelers: two fine whiskers off the snout,
-      // twitching
+      // a white lizard's nose feelers: four fine feelers fanned off the
+      // snout like a mole's, from up to a little down, each twitching to
+      // its own beat
       if (this.p.feelers) {
         ctx.strokeStyle = this.p.feelers;
         ctx.lineWidth = Math.max(u, 0.55);
         ctx.beginPath();
-        for (const [k, oy] of [[0, -3.6], [1, -2.2]]) {
-          const w = Math.sin(this.age * 5.5 + k * 2.1) * 0.9;
+        [[-1.05, 6.5, -4.2], [-0.55, 7.5, -3.2], [-0.05, 7, -2.2], [0.45, 5.5, -1.2]].forEach(([ang, len, oy], k) => {
+          const w = Math.sin(this.age * (5 + k * 0.9) + k * 2.1) * 0.12;
+          const a0 = ang + w;
+          const x1 = 16.4 + Math.cos(a0) * len;
+          const y1 = oy + Math.sin(a0) * len;
+          // (each bowed a little, curling up at the tip)
+          const mx = 16.4 + Math.cos(a0 + 0.25) * len * 0.55;
+          const my = oy + Math.sin(a0 + 0.25) * len * 0.55;
           ctx.moveTo(16.2, oy);
-          ctx.quadraticCurveTo(20 + k, oy - 2.6 + w, 23.5 + k * 1.5, oy - 5.5 + w * 1.6 - k);
-        }
+          ctx.quadraticCurveTo(mx, my, x1, y1);
+        });
         ctx.stroke();
+        // a bead at the tip of the snout they spring from
+        ctx.fillStyle = this.p.feelers;
+        ctx.fillRect(15.8, -4.4, Math.max(u * 1.6, 1.4), 3.4);
       }
 
       // tooth marks: small irregular black ticks on the upper jaw along the
