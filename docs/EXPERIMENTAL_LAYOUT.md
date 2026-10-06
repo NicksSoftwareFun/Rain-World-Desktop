@@ -158,8 +158,17 @@ the open sky, and sky openings are spread across the top (one every 24
 cells or so).
 
 Rock colours vary per map (`VARIANTS`): each region has its own palette
-plus a few alternatives (Shoreline: pale fog with mauve rock, rust-brown,
-blue-grey; Industrial: brown rust, steel blue; Outskirts: sepia, slate).
+plus alternatives, each tagged dark, mid or bright. A map picks a tone
+first (`TONES`: about a third each), then a variant of that tone in its
+region (the nearest tone where it has none), so bright maps are as common
+as dark ones. Bright variants have pale daylight skies, light back walls
+and mid-tone rock, still darker than the walls behind it: Outskirts
+overcast lilac and sandstone noon; Shoreline red rock (light red walls,
+a grey-green sky) and sea-mist; Industrial red rock and pale concrete.
+Outskirts night and Industrial soot are dark; the Shaded Citadel has a
+dusk. A surface map's complex takes a variant of the same tone. The
+Citadel comes up on 15% of maps, the other three regions 28% each.
+`world.variant` forces one (for previews).
 Rock that meets the open sky is weathered to a `crust` colour, ragged and
 fading a few cells in.
 

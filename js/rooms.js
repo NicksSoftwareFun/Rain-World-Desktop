@@ -73,23 +73,39 @@
   // SL_A02 and SL_B01).
   const VARIANTS = {
     outskirts: [
-      {},
-      { mass: '#1a130e', crust: '#3b2c22', interior: '#544c46', skyTop: '#c9c1ac', skyBot: '#a39a86', fog: '#b6ad98', sky: '#c4bba5' }, // sepia (CC_B04)
-      { mass: '#131619', crust: '#2c3338', interior: '#47505a' }, // slate
+      { tone: 'mid' },
+      { tone: 'mid', mass: '#1a130e', crust: '#3b2c22', interior: '#544c46', skyTop: '#c9c1ac', skyBot: '#a39a86', fog: '#b6ad98', sky: '#c4bba5' }, // sepia (CC_B04)
+      { tone: 'mid', mass: '#131619', crust: '#2c3338', interior: '#47505a' }, // slate
+      { tone: 'dark', mass: '#0d0812', crust: '#241a2c', interior: '#2b2833', sky: '#6c7480', skyTop: '#7a828d', skyBot: '#535a66', fog: '#626a76', far: '#4f4d5f', mid: '#312838' }, // night
+      // bright: pale daylight, the rock a mid-tone (still darker than the room behind it)
+      { tone: 'bright', mass: '#3b3541', crust: '#5b5062', interior: '#8f8b98', sky: '#d6dbe1', skyTop: '#e1e5ea', skyBot: '#bcc3cc', fog: '#c6ccd4', far: '#a3a8b4', mid: '#6e6d7c', light: '#ffffff' }, // overcast lilac
+      { tone: 'bright', mass: '#4a3a2c', crust: '#6c5541', interior: '#a8987f', sky: '#d9ccb1', skyTop: '#e3d7be', skyBot: '#c0af91', fog: '#cfc1a5', far: '#a09178', mid: '#706452', light: '#fff8e8' }, // sandstone noon
     ],
     shoreline: [
-      {},
-      { mass: '#1d1118', crust: '#3c2531', interior: '#465450', sky: '#c3c8c9', skyTop: '#cbd0d1', skyBot: '#a8afb0', fog: '#b7bdbe', far: '#8b9394', mid: '#5c6566', light: '#f4f6f4', rain: '#e1e6e6' }, // pale fog, mauve rock
-      { mass: '#1a1013', crust: '#432a2b', interior: '#3a443c' }, // rust-brown rock
-      { mass: '#0f1416', crust: '#253438', sky: '#9fb0ae', interior: '#3a4a48' }, // blue-grey
+      { tone: 'dark' },
+      { tone: 'mid', mass: '#1d1118', crust: '#3c2531', interior: '#465450', sky: '#c3c8c9', skyTop: '#cbd0d1', skyBot: '#a8afb0', fog: '#b7bdbe', far: '#8b9394', mid: '#5c6566', light: '#f4f6f4', rain: '#e1e6e6' }, // pale fog, mauve rock
+      { tone: 'dark', mass: '#1a1013', crust: '#432a2b', interior: '#3a443c' }, // rust-brown rock
+      { tone: 'dark', mass: '#0f1416', crust: '#253438', sky: '#9fb0ae', interior: '#3a4a48' }, // blue-grey
+      // bright: red rock over light red walls under a grey-green sky
+      { tone: 'bright', mass: '#3f201e', crust: '#62312c', interior: '#a87a72', sky: '#a9b6ab', skyTop: '#bac5bb', skyBot: '#919e93', fog: '#a4b0a5', far: '#7f8c82', mid: '#5b665d', light: '#eef3ec', rain: '#d9e2da' }, // red rock
+      { tone: 'bright', mass: '#34413d', crust: '#4d5f58', interior: '#93a39b', sky: '#d3dbd6', skyTop: '#dfe5e1', skyBot: '#b6c1bb', fog: '#c5cfc9', far: '#97a49d', mid: '#66746d', light: '#ffffff', rain: '#e8eeea' }, // sea-mist day
     ],
     industrial: [
-      {},
-      { mass: '#1a1311', crust: '#3c2b24', interior: '#56504a' }, // brown rust
-      { mass: '#0f1419', crust: '#26323d', interior: '#3f4b58' }, // steel blue
+      { tone: 'mid' },
+      { tone: 'mid', mass: '#1a1311', crust: '#3c2b24', interior: '#56504a' }, // brown rust
+      { tone: 'mid', mass: '#0f1419', crust: '#26323d', interior: '#3f4b58' }, // steel blue
+      { tone: 'dark', mass: '#08080e', crust: '#211d1e', interior: '#2b2f33', sky: '#6d6a60', skyTop: '#7b786d', skyBot: '#55534a', fog: '#605e54', far: '#4a4c54', mid: '#2a2c36' }, // soot
+      { tone: 'bright', mass: '#3a201c', crust: '#5c342c', interior: '#a07d70', sky: '#b0b8ad', skyTop: '#bfc6bb', skyBot: '#97a094', fog: '#aab2a7', far: '#848c81', mid: '#5f665c', light: '#f2f4ee' }, // red rock
+      { tone: 'bright', mass: '#3c3e45', crust: '#575a62', interior: '#9ea2a6', sky: '#d6d4c8', skyTop: '#e0ded3', skyBot: '#bdbbae', fog: '#c8c6ba', far: '#a3a296', mid: '#727166', light: '#ffffff' }, // pale concrete
     ],
-    shaded: [{}],
+    shaded: [
+      { tone: 'dark' },
+      { tone: 'mid', mass: '#2a2633', crust: '#3e3749', interior: '#4f4a5e', sky: '#6c667c', skyTop: '#7a7489', skyBot: '#4a4558', fog: '#5a546c', far: '#4b465a', mid: '#38344a', light: '#cfc6e6' }, // dusk
+    ],
   };
+  // How often each tone comes up: a third dark, a third mid, a third
+  // bright (a region without that tone takes its nearest).
+  const TONES = [['dark', 0.32], ['mid', 0.34], ['bright', 0.34]];
   // The complex under a surface map: whose style its rooms are carved in.
   const UNDER = { shoreline: ['industrial'], outskirts: ['industrial', 'outskirts'], industrial: ['industrial'] };
   const UNDER_ARCH = { industrial: ['stacked', 'stacked', 'cruciform'], outskirts: ['cruciform', 'stacked'], shoreline: ['cruciform', 'cruciform', 'stacked'] };
@@ -98,12 +114,28 @@
   //   force: a variant's index to use (world.variant), else picked at random
   function makePalette(region, under, R, force) {
     const vs = VARIANTS[region] || [{}];
-    const pick = R() < 0.35 ? vs[0] : vs[Math.floor(R() * vs.length)];
+    // a tone first, then one of the region's variants in it
+    let r = R();
+    let tone = TONES[TONES.length - 1][0];
+    for (const [t, w] of TONES) {
+      if (r < w) {
+        tone = t;
+        break;
+      }
+      r -= w;
+    }
+    const order = { dark: ['dark', 'mid', 'bright'], mid: ['mid', 'dark', 'bright'], bright: ['bright', 'mid', 'dark'] }[tone];
+    let pool = [];
+    for (const t of order) if (!pool.length) pool = vs.filter((q) => (q.tone || 'mid') === t);
+    const pick = pool[Math.floor(R() * pool.length)] || vs[0];
     const v = force >= 0 && vs[force] ? vs[force] : pick;
     const P = Object.assign({}, REGIONS[region].pal, v);
     if (!P.crust) P.crust = U.rgba(U.mix(P.mass, P.rust, 0.28));
     if (under) {
-      const uv = (VARIANTS[under] || [{}])[Math.floor(R() * (VARIANTS[under] || [{}]).length)];
+      // (the complex's back walls in a variant of the same tone where it has one)
+      const uvs = VARIANTS[under] || [{}];
+      const same = uvs.filter((q) => (q.tone || 'mid') === (v.tone || 'mid'));
+      const uv = (same.length ? same : uvs)[Math.floor(R() * (same.length ? same : uvs).length)];
       const up = Object.assign({}, REGIONS[under].pal, uv);
       P.interior = up.interior;
       P.underAccent = up.accent;
@@ -1425,8 +1457,14 @@
   function pickRegion(cfg, R) {
     const want = cfg.world.region;
     if (want && REGIONS[want]) return want;
-    const keys = Object.keys(REGIONS);
-    return keys[Math.floor(R() * keys.length)];
+    // (the Shaded Citadel, dark and enclosed, less often than the others)
+    const W = { outskirts: 0.283, shoreline: 0.283, industrial: 0.284, shaded: 0.15 };
+    let r = R();
+    for (const k of Object.keys(REGIONS)) {
+      if (r < (W[k] || 0)) return k;
+      r -= W[k] || 0;
+    }
+    return 'industrial';
   }
 
   function generate(W, H, cfg, rnd, opts) {
@@ -3290,5 +3328,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, VARIANTS, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, VARIANTS, TONES, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();
