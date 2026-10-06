@@ -2496,6 +2496,37 @@
         ctx.fillRect(15.8, -4.4, Math.max(u * 1.6, 1.4), 3.4);
       }
 
+      // jagged teeth (black, as in the game): with the mouth open, a ragged
+      // row of fangs along each
+      // jaw's edge, sticking out into the gap (longer the wider it gapes),
+      // uneven in length, the bigger ones toward the back
+      if (jawA > 0.12) {
+        const g = Math.min(1, (jawA - 0.12) / 0.5);
+        const tw = Math.max(u * 1.6, 1.3);
+        let kk = 0;
+        ctx.fillStyle = ink;
+        ctx.beginPath();
+        for (let x = 1.5; x <= 15.4; x += tw * 1.15, kk++) {
+          const h = g * Math.max(u * 2.4, 2) * [1.25, 0.7, 1, 0.55, 1.1][kk % 5] * (1.15 - (x / 15.4) * 0.35);
+          ctx.moveTo(x, 0.5);
+          ctx.lineTo(x + tw, 0.5);
+          ctx.lineTo(x + tw * 0.45, 0.5 + h);
+        }
+        ctx.fill();
+        kk = 0;
+        ctx.fillStyle = ink;
+        ctx.beginPath();
+        for (let x = 2.2; x <= 15; x += tw * 1.3, kk++) {
+          const h = g * Math.max(u * 2.2, 1.8) * [0.8, 1.2, 0.6, 1.05][kk % 4] * (1.1 - (x / 15) * 0.3);
+          const r0 = rot(x, 0.6);
+          const r1 = rot(x + tw, 0.6);
+          const r2 = rot(x + tw * 0.55, 0.6 - h);
+          ctx.moveTo(r0[0], r0[1]);
+          ctx.lineTo(r1[0], r1[1]);
+          ctx.lineTo(r2[0], r2[1]);
+        }
+        ctx.fill();
+      }
       // tooth marks: small irregular black ticks on the upper jaw along the
       // mouth line (gap at the snout tip); lower ones only show when it gapes
       const toothW = Math.max(u * 1.5, 1);
