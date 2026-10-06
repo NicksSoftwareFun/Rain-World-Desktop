@@ -429,10 +429,14 @@ the complex's back walls, a `crust` colour for rock open to the sky,
 Passing clouds (`js/sky.js`, `RW.Sky`, built after each background paint):
 a tileable fractal value-noise field cut at a share of cover (a quantile,
 so the amount of cloud is what's asked for), lit by the cloud above each
-pixel (bright tops, grey bellies) and dithered to a few tones. Over a
-surface map's open sky two layers drift by (`drawClouds`, right after the
-background, masked to where the painted sky still shows: `decor.skyMask`,
-less the play layer). Every room open to the sky gets their shadows: the
+pixel (bright tops, grey bellies) in eleven flat tones with a smooth
+edge (not dithered: two dithered layers sliding over each other crawled
+like changing glyphs). Over a surface map's open sky two layers drift by
+(`drawClouds`, right after the background, masked to where the painted sky
+still shows: `decor.skyMask`, less the play layer), and a third of small
+low clouds drifts quicker in front of the skyline and mountains, behind
+the ground (`front`, masked by `decor.airMask`: all the air above the
+ground). Every room open to the sky gets their shadows: the
 field summed down each column, slanted along the beams (`decor.beamSlant`),
 kept to where the sun reaches (the light map), drawn over everything as a
 darkening and, in the gaps, a `screen` glint (`drawShade`, after the

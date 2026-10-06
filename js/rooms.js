@@ -1859,17 +1859,27 @@
         m.height = ctx.canvas.height;
         const mg = m.getContext('2d');
         const mi = mg.createImageData(aw, sh);
+        // (and the air mask: everything above the ground, the far scenery
+        // too, for the low clouds that drift in front of it)
+        const a = document.createElement('canvas');
+        a.width = aw;
+        a.height = ctx.canvas.height;
+        const ag = a.getContext('2d');
+        const ai = ag.createImageData(aw, sh);
         for (let y = 0; y < sh; y++) {
           for (let x = 0; x < aw; x++) {
             const cx = Math.min(C - 1, Math.floor(x / kk / cell));
             if (y >= surf[cx] * cell * kk) continue;
             const i = (y * aw + x) * 4;
+            ai.data[i + 3] = 255;
             if (Math.abs(after[i] - before[i]) + Math.abs(after[i + 1] - before[i + 1]) + Math.abs(after[i + 2] - before[i + 2]) > 6) continue;
             mi.data[i + 3] = 255;
           }
         }
         mg.putImageData(mi, 0, 0);
+        ag.putImageData(ai, 0, 0);
         decor.skyMask = m;
+        decor.airMask = a;
       }
       silhouettes(under, (l) => {
         l.beginPath();

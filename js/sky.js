@@ -8,9 +8,12 @@
 // The clouds are a tileable fractal noise field (value noise, five
 // octaves, stretched wide), cut off at a cover level with a soft edge and
 // lit from above by how much cloud lies over each pixel (thin tops bright,
-// thick bellies grey), then snapped to a few dithered levels so they sit
-// with the pixel art. The shadow on the ground is the same field summed
-// down each column, slanted along the sun's beams.
+// thick bellies grey), then snapped to a few flat tones so they sit with
+// the pixel art (no dithering: two dithered layers sliding over each other
+// crawled like changing glyphs). A third layer of small low clouds drifts
+// in front of the far scenery (the skyline, the mountains), behind the
+// ground. The shadow on the ground is the same field summed down each
+// column, slanted along the sun's beams.
 //
 //   const sky = new RW.Sky(); sky.build(bgCanvas, decor, pal, W);
 //   sky.update(dt, phase, intensity); sky.drawClouds(ctx); ... sky.drawShade(ctx);
@@ -18,8 +21,6 @@
   'use strict';
   const RW = window.RW;
   const U = RW.U;
-
-  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 
   // Value noise, periodic across x (period px lattice cells), smooth.
   function makeNoise(seed) {
@@ -77,7 +78,7 @@
     return d;
   }
 
-  // Lit from above, dithered to a few levels, into a canvas.
+  // Lit from above, in a few flat tones, into a canvas.
   function paint(d, w, h, lit, dark, alpha, haze, hazeK) {
     const c = document.createElement('canvas');
     c.width = w;
@@ -94,12 +95,12 @@
         const i = y * w + x;
         const a = d[i];
         if (a > 0) {
-          const th = BAYER[(y & 3) * 4 + (x & 3)];
-          // the light left after the cloud above it: tops bright, bellies grey
+          // the light left after the cloud above it: tops bright, bellies
+          // grey, in eleven flat tones; the edge a smooth fade
           const b = Math.exp(-depth * 0.03);
-          const lv = Math.floor(b * 6 + th) / 6; // (six tones)
-          const av = Math.floor(a * 3 + th) / 3; // (three steps of edge)
-          if (av > 0) {
+          const lv = Math.round(b * 10) / 10;
+          const av = a * a * (3 - 2 * a);
+          if (av > 0.02) {
             const k = 4 * i;
             for (let ch = 0; ch < 3; ch++) o[k + ch] = U.lerp(U.lerp(D[ch], L[ch], lv), Hz[ch], hazeK);
             o[k + 3] = 255 * alpha * av;
@@ -152,6 +153,25 @@
         const farF = field(fw, fh, seed + 99, { cells: 9, stretch: 3.4, cover: cover - 0.06, band: 0.6, spread: 0.45 });
         this.layers.push({ img: paint(farF, fw, fh, lit, dark, 0.5, pal.fog, 0.45), speed: 1.6, x: 0 });
         this.layers.push({ img: paint(near, fw, fh, lit, dark, 0.85, pal.fog, 0.15), speed: 4.5, x: 0 });
+        // small low clouds, in front of the skyline: a few scraps, low in
+        // the sky, quicker
+        if (decor.airMask) {
+          const lowF = field(fw, fh, seed + 271, { cells: 14, stretch: 3, cover: 0.09, band: 0.6, spread: 0.32 });
+          this.front = { img: paint(lowF, fw, fh, lit, U.mix(dark, lit, 0.4), 0.9, pal.fog, 0.12), speed: 7.5, x: 0 };
+          const am = document.createElement('canvas');
+          am.width = aw;
+          am.height = ah;
+          const ag = am.getContext('2d');
+          ag.drawImage(decor.airMask, 0, 0);
+          if (canvas._bg && canvas._bg.play) {
+            ag.globalCompositeOperation = 'destination-out';
+            ag.drawImage(canvas._bg.play, 0, 0);
+          }
+          this.airMask = am;
+          this.frontCv = document.createElement('canvas');
+          this.frontCv.width = aw;
+          this.frontCv.height = skyH;
+        } else this.front = null;
         // where the sky shows: the painted sky, less whatever stands in
         // front of it (the play layer: ground, ruins, poles)
         const m = document.createElement('canvas');
@@ -227,8 +247,9 @@
       this.strength = Math.pow(1 - overcast, 1.3);
       const wind = 1 + intensity * 1.5;
       for (const l of this.layers) l.x = (l.x + dt * l.speed * wind) % this.fw;
+      if (this.front) this.front.x = (this.front.x + dt * this.front.speed * wind) % this.fw;
       this.off = (this.off + dt * 4.5 * wind) % this.fw;
-      const key = Math.floor(this.off) + ':' + Math.round(this.strength * 40);
+      const key = Math.floor(this.off) + ':' + Math.round(this.strength * 40) + ':' + (this.front ? Math.floor(this.front.x) : 0);
       if (key !== this.last) {
         this.last = key;
         this.rebuild();
@@ -255,6 +276,21 @@
         }
         g.globalCompositeOperation = 'destination-in';
         g.drawImage(this.mask, 0, 0);
+        if (this.front) {
+          const f = this.frontCv.getContext('2d');
+          f.globalCompositeOperation = 'source-over';
+          f.clearRect(0, 0, aw, this.skyH);
+          const x = -Math.floor(this.front.x);
+          f.drawImage(this.front.img, x, 0);
+          f.drawImage(this.front.img, x + this.fw, 0);
+          if (this.overcast > 0.02) {
+            f.globalCompositeOperation = 'source-atop';
+            f.fillStyle = U.rgba(U.mix(this.pal.rain, this.pal.mass, 0.55), 0.6 * this.overcast);
+            f.fillRect(0, 0, aw, this.skyH);
+          }
+          f.globalCompositeOperation = 'destination-in';
+          f.drawImage(this.airMask, 0, 0);
+        }
       }
       const s = this.strength;
       if (s < 0.02) return;
@@ -315,6 +351,7 @@
     drawClouds(ctx) {
       if (!this.ok || !this.layers.length) return;
       ctx.drawImage(this.cloudCv, 0, 0);
+      if (this.front) ctx.drawImage(this.frontCv, 0, 0);
     }
     // Over everything the sun lights (creatures and plants too), before
     // the water and the rain.
