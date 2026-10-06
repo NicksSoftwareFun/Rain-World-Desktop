@@ -2573,35 +2573,53 @@
       }
       const bend = this.antA || 0;
       const F = this.antF || 0;
+      // A thick, tapering fleshy stalk (as in the game, not an insect's
+      // feeler): the head's colour at the root, flushing pink toward the end,
+      // which splits into a little fan of short tips. Laid back it runs along
+      // the neck with the end curling up; flared it stands up off the back of
+      // the head, leaning back toward the tail.
       const base = this.headColor;
-      const segCol = U.rgba(U.scale(base, far ? 0.45 : 0.8));
-      const jointCol = U.rgba(far ? U.scale(base, 0.6) : U.mix(base, '#ffffff', 0.25));
+      const pink = '#e8968a';
+      const shade = (c) => (far ? U.scale(c, 0.55) : c);
       let x = far ? 0.2 : -1.4;
       let y = -6.2;
-      let a = U.lerp(-2.95, -1.95, F) + (far ? 0.18 + 0.12 * F : 0); // (back, or up when flared)
-      const segs = 6;
-      ctx.lineWidth = Math.max(u * 1.3, 0.85) + u; // (a pixel thicker than a hairline)
+      let a = U.lerp(-3.2, -1.85, F) + (far ? 0.12 + 0.1 * F : 0); // (back, or up when flared)
+      const segs = 4;
+      ctx.lineCap = 'round';
       for (let k = 0; k < segs; k++) {
-        // each segment bends a little more than the one before: a floppy
-        // whip, sagging toward its tip
-        // (laid back, the tips lift a touch; flared, they sweep back toward
-        // the tail, not forward over the snout like an insect's)
-        a += bend * (0.35 + k * 0.18) + (k > 1 ? U.lerp(0.05, -0.14, F) : 0);
-        const len = 3.6 - k * 0.22;
+        // (laid back, each segment lifts a little more than the last, so the
+        // end curls up; flared, they lean back a touch)
+        a += bend * (0.35 + k * 0.2) + (k > 0 ? U.lerp(k > 1 ? 0.06 + k * 0.08 : 0, -0.07, F) : 0);
+        const len = 5.4 - k * 0.45;
         const nx = x + Math.cos(a) * len;
         const ny = y + Math.sin(a) * len;
-        ctx.strokeStyle = segCol;
+        ctx.strokeStyle = U.rgba(shade(U.mix(base, pink, Math.max(0, (k - 1) / (segs - 2)) * (0.3 + 0.55 * F))));
+        ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * (3 - k * 0.55);
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(nx, ny);
         ctx.stroke();
-        // the joint: a bead a shade lighter
-        ctx.fillStyle = jointCol;
-        const j = Math.max(u * 1.4, 0.9) + u;
-        ctx.fillRect(nx - j / 2, ny - j / 2, j, j);
+        // a dark band where the root meets the flushed part
+        if (k === 1) {
+          ctx.fillStyle = U.rgba(shade(U.scale(base, 0.55)));
+          const j = Math.max(u * 1.4, 0.9) + u;
+          ctx.fillRect(x - j / 2, y - j / 2, j, j);
+        }
         x = nx;
         y = ny;
       }
+      // the fan of tips
+      ctx.strokeStyle = U.rgba(shade(U.mix(base, pink, 0.55 + 0.35 * F)));
+      ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * 0.5;
+      for (const da of [-0.5, 0, 0.5]) {
+        const ta = a + da * (0.7 + 0.6 * F);
+        const tl = da ? 2.3 : 2.8;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(ta) * tl, y + Math.sin(ta) * tl);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
     }
   }
 
