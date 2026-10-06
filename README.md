@@ -53,6 +53,9 @@ titles.
     a size also puts the World and Rain cycle settings back to their defaults. Bigger
     maps get more rows of ledges and proportionally more poles, fruit plants
     and batfly nests, so there's no empty space. Compact is the old default.
+    On a phone or tablet each size shows more map than on a desktop (the
+    screen is small but its pixels are dense): Normal on a phone is what
+    XL used to be there, and XL comes near a desktop's XL.
   - **Wildlife**: Balanced (the default), Lizard turf wars, Slugcat hunters,
     Centipede hunt, Ambushers, Daddy's buffet, Flyers, Peaceful. Sets the spawn
     weights to show off a set of behaviours; creatures that aren't in the new

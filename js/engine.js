@@ -89,9 +89,9 @@
       }
       return best;
     }
-    tryGrab(x, y) {
+    tryGrab(x, y, c) {
       const hand = this.hand;
-      const best = this.creatureAt(x, y);
+      const best = c && !c.dead && !c.leaving && c.grabbedBy !== hand ? c : this.creatureAt(x, y);
       if (!best) return false;
       this.dropHand();
       if (best.grabbedBy) best.grabbedBy.release(); // snatched from a predator's jaws
@@ -132,9 +132,7 @@
 
     init(keepSeed) {
       const cfg = this.cfg;
-      // Map size 1 shows the world at 2x magnification; a bigger map zooms out.
-      const map = +cfg.world.mapSize || (cfg.world.creatureScale ? 2 / cfg.world.creatureScale : 1);
-      this.zoom = U.clamp(2 / map, 0.5, 3);
+      this.zoom = this.zoomFor(window.innerWidth, window.innerHeight);
       this.W = Math.max(320, window.innerWidth) / this.zoom;
       this.H = Math.max(240, window.innerHeight) / this.zoom;
       // The canvas covers exactly the area the map was made for: on a
@@ -194,11 +192,17 @@
       this.pal = this.decor && this.decor.region && RW.Rooms ? this.decor.pal || RW.Rooms.palette(this.decor.region) : RW.PALETTES[this.cfg.world.palette] || RW.PALETTES.industrial;
       this.eco.palette = this.pal;
       this.ps = U.clamp(+this.cfg.world.pixelScale || 2, 1, 4);
+      // zoomed out further on a touch screen: art pixels shrink with it, as
+      // chunky against the world as on a desktop (never under one screen
+      // pixel, nor finer than the size's own setting below one)
+      const zr = this.zoom / (this.zoomDesk || this.zoom);
+      if (zr < 1) this.ps = Math.max(Math.min(this.ps, 1), this.ps * zr);
       this.canvas.width = Math.ceil((this.W * this.zoom) / this.ps);
       this.canvas.height = Math.ceil((this.H * this.zoom) / this.ps);
       this.spriteCanvas.width = this.canvas.width;
       this.spriteCanvas.height = this.canvas.height;
       this.eco.artPx = this.ps / this.zoom; // world units per art pixel
+      this.eco.zoom = this.zoom;
       this.weather.artPx = this.eco.artPx;
       this.light = this.currentLight();
       this.lightKey = RW.Background.Light.key(this.light);
@@ -324,9 +328,42 @@
       }
     }
 
+    // How far the map is zoomed (screen pixels per world unit). Map size 1
+    // shows the world at 2x magnification; a bigger map zooms out. On a
+    // phone or tablet (a finger for a pointer: a small screen with dense
+    // pixels) each size zooms out further, so the map gets nearer what a
+    // desktop monitor shows: Normal on a phone is what XL used to be, XL
+    // near a desktop's XL. Never more map than that size gets on a 1920 x
+    // 1080 monitor, though (a big tablet would otherwise get a huge one).
+    zoomFor(vw, vh) {
+      const cfg = this.cfg;
+      const map = +cfg.world.mapSize || (cfg.world.creatureScale ? 2 / cfg.world.creatureScale : 1);
+      let zoom = 2 / map;
+      this.zoomDesk = U.clamp(zoom, 0.3, 3); // (what a desktop monitor gets)
+      const touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+      if (touch) {
+        // map size on a touch screen: Compact 1 -> 2, Normal 1.4 -> 2.4,
+        // Large 1.8 -> 3.4, XL 2.4 -> 5.2 (straight lines between)
+        const P = [[0, 0], [1, 2], [1.4, 2.4], [1.8, 3.4], [2.4, 5.2]];
+        let m = map * 2;
+        for (let i = 1; i < P.length; i++) {
+          if (map <= P[i][0] || i === P.length - 1) {
+            const [a, A] = P[i - 1];
+            const [b, B] = P[i];
+            m = A + ((map - a) / (b - a)) * (B - A);
+            break;
+          }
+        }
+        const desk = (1920 * 1080) / Math.pow(2 / map, 2); // (that size's world on a desktop)
+        zoom = Math.max(2 / m, Math.sqrt((Math.max(320, vw) * Math.max(240, vh)) / desk));
+      }
+      return U.clamp(zoom, 0.3, 3);
+    }
+
     resize() {
-      const w = Math.max(320, window.innerWidth) / this.zoom;
-      const h = Math.max(240, window.innerHeight) / this.zoom;
+      const z = this.zoomFor(window.innerWidth, window.innerHeight);
+      const w = Math.max(320, window.innerWidth) / z;
+      const h = Math.max(240, window.innerHeight) / z;
       if (Math.abs(w - this.W) < 1 && Math.abs(h - this.H) < 1) return;
       this.regenerate(false);
     }
@@ -425,7 +462,7 @@
         const moved = (pr.touch ? 12 : 6) / this.zoom;
         if (performance.now() - pr.t > hold || (pt && Math.hypot(pt.x - pr.x, pt.y - pr.y) > moved)) {
           this.press = null;
-          this.tryGrab(pr.x, pr.y);
+          this.tryGrab(pr.x, pr.y, pr.c); // (the one pressed: on a zoomed-out map it may be small)
         }
       }
       const hand = this.hand;

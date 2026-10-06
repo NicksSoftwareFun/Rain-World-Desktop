@@ -18,7 +18,13 @@ Fixed 60 Hz simulation (`tick`), rendering decoupled (`render`).
 
 - **World size**: `zoom = 2 / mapSize`; the world is the window size divided
   by `zoom`, in *world units* (a 1080p screen at map size 1 is 960x540).
-  Everything in the simulation works in world units.
+  Everything in the simulation works in world units. On a touch screen
+  (`pointer: coarse`) `Engine.zoomFor` zooms each size out further (map
+  size 1, 1.4, 1.8, 2.4 act as 2, 2.4, 3.4, 5.2), never giving more world
+  than that size gets on a 1920x1080 monitor; the art pixels shrink with
+  it (`ps` scaled by the extra zoom, not below 1 or the size's own), the
+  creature labels keep their screen size, and a press grabs the creature
+  it was on.
 - **Pixel scale** `ps` (1, 1.5, 2, 2.5, 3; 2.5 for the Compact size): the canvas is `world * zoom / ps`
   pixels, upscaled with `image-rendering: pixelated`. `eco.artPx` is world
   units per art pixel.

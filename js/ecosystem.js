@@ -774,8 +774,11 @@
     // what it's doing.
     drawLabels(ctx) {
       const all = this.cfg.debug.showLabels;
+      // (never smaller on screen than at the desktop's XL zoom: a phone's
+      // zoomed-out map scales them back up)
+      const L = Math.max(1, 0.8 / (this.zoom || 1));
       ctx.save();
-      ctx.font = '10px "Cascadia Mono", Consolas, monospace';
+      ctx.font = `${10 * L}px "Cascadia Mono", Consolas, monospace`;
       ctx.textBaseline = 'middle';
       for (const c of this.creatures) {
         if (c.dead) continue;
@@ -786,22 +789,22 @@
         const sp = this.cfg.species[c.species];
         const name = ((sp && sp.label) || c.species).toLowerCase();
         const text = `${name} \u00b7 ${c.corpse ? 'dead' : c.state}${c.swimming ? ' (swimming)' : ''}`;
-        const w = ctx.measureText(text).width + 10;
+        const w = ctx.measureText(text).width + 10 * L;
         // (below the body while its menu is open over it)
         const below = !!c.menuOpen;
-        const x = Math.round(m.x + 12);
-        const y = Math.round(m.y + (below ? 22 : -20));
+        const x = Math.round(m.x + 12 * L);
+        const y = Math.round(m.y + (below ? 22 : -20) * L);
         ctx.globalAlpha = a * c.alpha;
         ctx.fillStyle = 'rgba(8,10,10,0.72)';
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(x, y - 7, w, 14, 7);
-        else ctx.rect(x, y - 7, w, 14);
+        if (ctx.roundRect) ctx.roundRect(x, y - 7 * L, w, 14 * L, 7 * L);
+        else ctx.rect(x, y - 7 * L, w, 14 * L);
         ctx.fill();
         ctx.fillStyle = 'rgba(232,226,200,0.95)';
-        ctx.fillText(text, x + 5, y + 0.5);
+        ctx.fillText(text, x + 5 * L, y + 0.5 * L);
         // a tick back to the body
-        if (below) ctx.fillRect(x - 1, m.y + 4, 1, Math.max(0, y - 6 - m.y - 4));
-        else ctx.fillRect(x - 1, y + 6, 1, Math.max(0, m.y - y - 10));
+        if (below) ctx.fillRect(x - L, m.y + 4 * L, L, Math.max(0, y - 6 * L - m.y - 4 * L));
+        else ctx.fillRect(x - L, y + 6 * L, L, Math.max(0, m.y - y - 10 * L));
       }
       ctx.restore();
     }
