@@ -2023,7 +2023,8 @@
         const sx = -fy * side;
         const sy = fx * side;
         const r = leg.reach;
-        const fwd = (l.at <= 2 ? 0.3 : -0.1) + (leg.forward - 0.45) * 0.4;
+        // (front feet reach forward, hind feet trail back: splayed, not an X)
+        const fwd = (l.at <= 2 ? 0.6 : -0.5) + (leg.forward - 0.45) * 0.3;
         // (seen from above the legs look longer than they are side on: the
         // feet stay tucked in closer)
         const ix = h.x + fx * r * fwd * 0.85 + sx * r * 0.6;
@@ -2290,10 +2291,10 @@
       fy /= fl;
       const sgn = l.at <= 2 ? -1 : 1;
       if (this.onBack) {
-        // (from above: the elbows and knees stick out sideways, front ones
-        // back, hind ones forward, like a gecko on glass)
+        // (from above: the elbows and knees stick out sideways, a little
+        // back at the front and forward at the back, like a gecko on glass)
         const side = l.near ? 1 : -1;
-        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1 * 0.85, leg.l2 * 0.85, -fy * side * 0.6 + fx * sgn * 0.8, fx * side * 0.6 + fy * sgn * 0.8);
+        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1 * 0.85, leg.l2 * 0.85, -fy * side * 0.9 + fx * sgn * 0.3, fx * side * 0.9 + fy * sgn * 0.3);
         return { kx: k.kx, ky: k.ky, ex: k.ex, ey: k.ey };
       }
       const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1, leg.l2, fx * sgn, fy * sgn);
