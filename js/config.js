@@ -127,6 +127,7 @@
           climbWalls: false,
           climbCeilings: false,
           poles: false,
+          shelterEarly: 35, // seconds sooner than the rest it makes for a den before the downpour (slow, and it can't climb out of the flood)
           vision: 280,
           mass: 7.5, // wiki bodyMass
           chargeRate: 1.0, // wiki loungeTendency: chance to pounce from afar

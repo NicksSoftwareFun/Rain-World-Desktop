@@ -141,6 +141,13 @@
         if (y > m.y - 30 || dThreat < 120 || dMe > 450) continue;
         cands.push({ x, y, sc: (m.y - y) / 100 + dThreat / 300 - dMe / 400 + Math.random() * 0.3 });
       }
+      // the tip of a pole up out of reach (balanced on: see perch)
+      for (const p of W.poles) {
+        const dThreat = U.dist(p.x, p.y1, fx, fy);
+        const dMe = U.dist(p.x, p.y1, m.x, m.y);
+        if (p.y1 > m.y - 30 || dThreat < 120 || dMe > 450 || !this.perchable(p)) continue;
+        cands.push({ x: p.x, y: p.y1 + 6, sc: (m.y - p.y1) / 100 + dThreat / 300 - dMe / 400 + 0.4 + Math.random() * 0.3 });
+      }
       cands.sort((a, b) => b.sc - a.sc);
       const t = this.threat;
       let fallback = null;
@@ -224,6 +231,7 @@
         if (c.ny < -0.6) this.grounded = true;
       }
       this.pole = null;
+      this.perch = null;
       this.jumping = false;
       this.lie += (1 - this.lie) * U.approach(6, dt);
       this.look += (this.facing - this.look) * U.approach(6, dt);
@@ -285,6 +293,7 @@
       this.tail.shift(dx, dy);
     }
     knockLoose() {
+      this.perch = null;
       if (this.pole) {
         this.pole = null;
         this.jumping = false;
@@ -295,10 +304,12 @@
     onUnburrowed() {
       super.onUnburrowed();
       this.pole = null;
+      this.perch = null;
       this.jumping = false;
     }
     onGrabbed() {
       this.pole = null;
+      this.perch = null;
       this.jumping = false;
       if (this.holding) this.release();
       if (this.item) {
@@ -317,6 +328,7 @@
       this.vx = Math.sign(this.hip.x - by.x) * 220;
       this.grounded = false;
       this.pole = null;
+      this.perch = null;
       this.threat = by;
       this.setState('flee');
     }
@@ -680,7 +692,7 @@
       if (this.state === 'rest') {
         this.pather.clear();
         this.restT -= dt;
-        this.sleeping = this.stateT > 3;
+        this.sleeping = this.stateT > 3 && !this.perch; // (not balanced on a pole: it looks about)
         if (this.restT <= 0) this.setState('wander');
         return;
       }
@@ -692,9 +704,17 @@
         this.stateT = 99;
       }
       if (this.readyForGoal(dt, 16, footing)) {
-        if (this.pather.goal && Math.random() < 0.3 && this.grounded) {
+        if (this.pather.goal && Math.random() < (this.perch ? 0.75 : 0.3) && this.grounded) {
           this.setState('rest');
-          this.restT = U.rand(3, 12);
+          this.restT = this.perch ? U.rand(3, 8) : U.rand(3, 12);
+          return;
+        }
+        // now and then: up a pole nearby, to balance on its tip a while
+        const perch = !this.perch && Math.random() < 0.22 ? this.perchGoal(420) : null;
+        if (perch) {
+          this.pather.setGoal(perch.x, perch.y, true);
+          this.stateT = 0;
+          this.stuckT = 0;
           return;
         }
         // only meat will do (had fruit already): go where the batflies are
@@ -866,6 +886,7 @@
       this.flip = { t: 0, target: target || null, thrown: !target, dir, ang: 0 };
       this.flipCd = 1.2;
       this.pole = null;
+      this.perch = null;
       this.grounded = false;
       this.jumping = true;
       this.jumpTarget = null;
@@ -970,6 +991,21 @@
     }
 
     // --------------------------------------------------------- physics ----
+    // The top of a pole near enough to balance on, if any.
+    perchGoal(range) {
+      const hip = this.hip;
+      const W = this.W;
+      const opts = W.poles.filter((p) => p.y2 - p.y1 > W.cell * 2 && U.dist(p.x, p.y1, hip.x, hip.y) < range && this.perchable(p) && !(W.hasWater && W.hasWater() && W.waterDepth(p.x, p.y1 + 6) >= 0));
+      if (!opts.length) return null;
+      const p = opts[Math.floor(Math.random() * opts.length)];
+      return { x: p.x, y: p.y1 + 6 };
+    }
+    // A pole with open air over its tip, to balance on (not one hung from
+    // a ceiling)
+    perchable(pole) {
+      const W = this.W;
+      return !W.isSolidPt(pole.x, pole.y1 - 6) && !W.isSolidPt(pole.x, pole.y1 - 26) && !W.isSolidPt(pole.x - 7, pole.y1 - 14) && !W.isSolidPt(pole.x + 7, pole.y1 - 14);
+    }
     findPole(x, y) {
       for (const p of this.W.poles) {
         if (Math.abs(p.x - x) < 11 && y > p.y1 - 4 && y < p.y2 && !this.W.isSolidPt(p.x, y)) return p;
@@ -1019,6 +1055,7 @@
       this.jumping = true;
       this.grounded = false;
       this.pole = null;
+      this.perch = null;
       this.facing = Math.sign(this.vx) || this.facing;
     }
 
@@ -1088,42 +1125,95 @@
           hip.x += this.vx * dt;
           hip.y += this.vy * dt;
         }
+      } else if (this.perch) {
+        // Balancing on the tip of a pole: upright, swaying a little, arms
+        // out; off again down the pole, with a spring from the top, or a
+        // hop to the side.
+        const pole = this.perch;
+        this.perchT = (this.perchT || 0) + dt;
+        hip.x += (pole.x + Math.sin(this.age * 2.1) * 1.3 - hip.x) * U.approach(8, dt);
+        hip.y += (pole.y1 - R - hip.y) * U.approach(10, dt);
+        this.vx = 0;
+        this.vy = 0;
+        if (this.perchT > 1.2 && Math.random() < dt * 0.4) this.facing = -this.facing; // (looking about)
+        if (node) {
+          const onSamePole = Math.abs(node.x - pole.x) < cell * 0.6 && W.pole(node.cx, node.cy) && node.y > hip.y + 4;
+          if (node.type === Nav.JUMP) {
+            // crouch on the tip, then spring
+            if (!(this.crouchT > 0)) {
+              this.crouchT = 0.18;
+              this.facing = Math.sign(node.x - hip.x) || this.facing;
+            }
+            this.crouchT -= dt;
+            if (this.crouchT <= 0) {
+              this.perch = null;
+              this.launch(node);
+            }
+          } else if (onSamePole) {
+            this.perch = null;
+            this.pole = pole;
+          } else if (Math.abs(node.x - pole.x) > cell * 0.6 || node.y < hip.y - cell) {
+            // a hop off the side
+            this.perch = null;
+            this.vx = Math.sign(node.x - hip.x) * speed;
+            this.vy = node.y < hip.y - 4 ? -300 : -120;
+            this.facing = Math.sign(this.vx) || this.facing;
+          }
+        }
       } else if (this.pole) {
         const pole = this.pole;
         hip.x += (pole.x - hip.x) * 0.25;
         this.vx = 0;
-        let tvy = 0;
-        if (node) {
-          const onSamePole = Math.abs(node.x - pole.x) < cell * 0.6 && W.pole(node.cx, node.cy);
-          if (node.type === Nav.JUMP) {
-            this.launch(node);
-          } else if (onSamePole) {
-            const dy = node.y - hip.y;
-            tvy = Math.abs(dy) > 2 ? Math.sign(dy) * (this.p.climbSpeed || 80) : 0;
-            this.climbPhase += Math.abs(this.vy) * dt * 0.25;
-          } else if (this.cornerAhead(hip)) {
-            // the ledge right beside the pole: scramble up over the lip
-            // (after a slip, hang on a moment before trying again)
-            if (this.scrambleCd <= 0) {
-              this.startScramble(this.cornerAhead(hip), hip, R + 1, R + 1, 0.8);
-              this.pole = null;
-            }
-          } else {
-            // Step or drop off the pole toward the next node.
-            this.pole = null;
-            this.vx = Math.sign(node.x - hip.x) * speed;
-            this.vy = node.y < hip.y - 4 ? -260 : -60;
-            this.facing = Math.sign(this.vx) || this.facing;
-          }
+        // at the top with nowhere further to go (or about to spring from
+        // it): up onto the tip, if there's room over it
+        const top = hip.y < pole.y1 + cell * 0.8;
+        const prevTop = prev && node && node.type === Nav.JUMP && Math.abs(prev.x - pole.x) < cell * 0.6 && prev.y < pole.y1 + cell;
+        if (top && (!node || prevTop) && this.perchable(pole)) {
+          this.perch = pole;
+          this.perchT = 0;
+          this.pole = null;
+          this.crouchT = 0;
         }
-        if (this.pole) {
-          this.vy += (tvy - this.vy) * U.approach(10, dt); // ease into and out of climbing
-          hip.y = U.clamp(hip.y + this.vy * dt, pole.y1 + 2, pole.y2);
-          // reached the ground at the foot of the pole (but not while
-          // setting off upward from it: the climb eases in from a standstill)
-          if (tvy >= 0 && W.isSolidPt(hip.x, hip.y + R)) {
-            this.pole = null;
-            this.grounded = true;
+        if (!this.perch) {
+          let tvy = 0;
+          if (node) {
+            const onSamePole = Math.abs(node.x - pole.x) < cell * 0.6 && W.pole(node.cx, node.cy);
+            // (leaving the pole: up to the take-off point first, a little
+            // above it, not from low down where the leap clips the corner)
+            const below = prev && Math.abs(prev.x - pole.x) < cell * 0.6 && (node.type === Nav.JUMP || node.y < hip.y - 4) ? hip.y - (Math.max(pole.y1 + 3, prev.y - 3)) : 0;
+            if (below > 2) {
+              tvy = -(this.p.climbSpeed || 80);
+              this.climbPhase += Math.abs(this.vy) * dt * 0.25;
+            } else if (node.type === Nav.JUMP) {
+              this.launch(node);
+            } else if (onSamePole) {
+              const dy = node.y - hip.y;
+              tvy = Math.abs(dy) > 2 ? Math.sign(dy) * (this.p.climbSpeed || 80) : 0;
+              this.climbPhase += Math.abs(this.vy) * dt * 0.25;
+            } else if (this.cornerAhead(hip)) {
+              // the ledge right beside the pole: scramble up over the lip
+              // (after a slip, hang on a moment before trying again)
+              if (this.scrambleCd <= 0) {
+                this.startScramble(this.cornerAhead(hip), hip, R + 1, R + 1, 0.8);
+                this.pole = null;
+              }
+            } else {
+              // Step or drop off the pole toward the next node.
+              this.pole = null;
+              this.vx = Math.sign(node.x - hip.x) * speed;
+              this.vy = node.y < hip.y - 4 ? -260 : -60;
+              this.facing = Math.sign(this.vx) || this.facing;
+            }
+          }
+          if (this.pole) {
+            this.vy += (tvy - this.vy) * U.approach(10, dt); // ease into and out of climbing
+            hip.y = U.clamp(hip.y + this.vy * dt, pole.y1 + 2, pole.y2);
+            // reached the ground at the foot of the pole (but not while
+            // setting off upward from it: the climb eases in from a standstill)
+            if (tvy >= 0 && W.isSolidPt(hip.x, hip.y + R)) {
+              this.pole = null;
+              this.grounded = true;
+            }
           }
         }
       } else {
@@ -1233,6 +1323,10 @@
         }
       }
       if (this.pole) this.grounded = false;
+      if (this.perch) {
+        this.grounded = true; // (standing, on the tip)
+        this.jumping = false;
+      }
 
       // The backflip: the body turns over once; at the top of the jump the
       // spear goes straight down.
@@ -1264,7 +1358,7 @@
       if (!this.jumping) this.longLeap = false;
       const windup = this.longJump && this.crouchT > 0;
       // flat for a rest or a long-jump windup; half stretched out mid-pounce
-      const lieT = windup || (this.state === 'rest' && this.grounded && this.stateT > 1) ? 1 : this.longLeap ? 0.6 : 0;
+      const lieT = windup || (this.state === 'rest' && this.grounded && !this.perch && this.stateT > 1) ? 1 : this.longLeap ? 0.6 : 0;
       this.lie += (lieT - this.lie) * U.approach(lieT > this.lie ? (windup ? 14 : 2.5) : 9, dt);
       this.updateHead(dt, false);
       this.updateTail(dt);
@@ -1301,6 +1395,7 @@
       this.swimming = d > (was ? -1 : 4) && !(this.pole && d < 14);
       if (this.swimming && !was) {
         this.pole = null;
+        this.perch = null;
         this.jumping = false;
         this.flip = null;
         this.crouchT = 0;
@@ -1424,6 +1519,10 @@
       } else if (this.crouchT > 0) {
         tx = hip.x + this.facing * 6;
         ty = hip.y - 10;
+      } else if (this.perch) {
+        // upright on the tip, head up, looking about
+        tx = hip.x + this.facing * 3;
+        ty = hip.y - 17;
       } else if (this.state === 'eat' || this.state === 'rest') {
         tx = hip.x + this.facing * 7;
         ty = hip.y - 11;
@@ -1452,7 +1551,7 @@
       const dy = h.y - hip.y;
       const d = Math.hypot(dx, dy) || 1;
       // a long body: the head sits well clear of the hips
-      const L = U.lerp(this.state === 'eat' || this.state === 'rest' ? 13 : 18, 16, this.lie);
+      const L = U.lerp((this.state === 'eat' || this.state === 'rest') && !this.perch ? 13 : 18, 16, this.lie);
       h.x = hip.x + (dx / d) * L;
       h.y = hip.y + (dy / d) * L;
       this.W.collideCircle(h, 5.5);

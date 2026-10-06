@@ -149,6 +149,9 @@ try {
       // Wallpaper builds look for the helper on the page's own origin.
       await page.goto(`http://localhost:${port}/`);
       await page.waitForFunction(() => window.RW_APP && window.RW_APP.provider.connected, null, { timeout: 10000 });
+      // (the geometry arrives a frame or two after the connection: give it
+      // a moment rather than racing it)
+      await page.waitForFunction(() => window.RW_APP.engine.world.dynamicSolids.length >= 3, null, { timeout: 5000 }).catch(() => {});
       const solids = await page.evaluate(() => window.RW_APP.engine.world.dynamicSolids.length);
       if (solids < 3) fail(`wallpaper: expected helper geometry, got ${solids} rects`);
       await page.evaluate(() => window.RW_APP.engine.stop());

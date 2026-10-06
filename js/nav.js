@@ -156,6 +156,7 @@
       const ju = c.jumpUp;
       const x0 = W.centerX(cx);
       const y0 = W.centerY(cy);
+      const onPole = c.poles && W.pole(cx, cy) && !W.solid(cx, cy + 1);
       for (let ty = -ju; ty <= 4; ty++) {
         for (let tx = -jx; tx <= jx; tx++) {
           if (Math.abs(tx) <= 1 && Math.abs(ty) <= 1) continue;
@@ -183,8 +184,16 @@
             }
             if (!gap) continue;
           }
+          // Off a pole: climb up level with or above where it's going first
+          // (leaping up from low on the pole clips the ledge's corner); a
+          // jump up only where the pole doesn't reach that high.
+          let extra = 0;
+          if (onPole && ty <= 0 && W.pole(cx, tcy - 1) && !W.solid(cx, tcy - 1)) {
+            if (ty < 0) continue;
+            extra = 2.5;
+          }
           if (!arcClear(W, x0, y0, W.centerX(tcx), W.centerY(tcy))) continue;
-          list.push(tcy * W.cols + tcx, Math.hypot(tx, ty) * 1.3 + 4);
+          list.push(tcy * W.cols + tcx, Math.hypot(tx, ty) * 1.3 + 4 + extra);
         }
       }
       // Ceiling leapers (dropwigs): straight up from a floor to the

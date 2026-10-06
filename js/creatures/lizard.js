@@ -1482,7 +1482,10 @@
         } else if (node && node.type === Nav.JUMP) {
           // a leap: get to the take-off point first
           const prev = this.pather.previous();
-          if (g && (!prev || U.dist(head.x, head.y, prev.x, prev.y) < cell * 0.9)) {
+          // (off a pole: from level with the take-off point or above, not
+          // from below it, where the leap clips the ledge's corner)
+          const lowOnPole = prev && W.pole(prev.cx, prev.cy) && head.y > prev.y + 3;
+          if (g && (!prev || (U.dist(head.x, head.y, prev.x, prev.y) < cell * 0.9 && !lowOnPole))) {
             this.leapWind = 0.14;
             this.leapNode = node;
           } else if (prev) {

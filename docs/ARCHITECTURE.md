@@ -432,6 +432,17 @@ foreground). Rebuilt only when the drift moves a pixel. Strongest in the
 morning; as the cycle runs on and the rain comes the sky goes overcast,
 the clouds greyer, and the shadows fade out.
 
+Leaving a pole: the planner won't leap up off a pole that reaches higher
+(it climbs to level with the landing, or above, and goes from there; a
+level leap costs a little more where it could climb first), and slugcats
+and lizards climb to the take-off point (a little above it) before
+springing, rather than leaping from low down and clipping the corner.
+Slugcats balance on pole tips (`Slugcat.perch`, any pole with open air
+over it): they spring from the tip when the route jumps from the top,
+sometimes climb one to rest a while when wandering (looking about, never
+asleep), and count tips out of reach as places to flee to. A species'
+`shelterEarly` (green lizards: 35 s) sends it to a den that much sooner.
+
 Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
 behind everything that moves): wall cogs, machine housings, wall fans,
 pipe runs (rock to rock, a third of the props at most, thicker and lighter

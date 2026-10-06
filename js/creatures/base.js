@@ -1168,7 +1168,9 @@
     // moment in the run-up to the downpour, so they trickle in.
     shelterTime() {
       const warn = this.eco.cfg.rain.shelterWarnSeconds ?? 45;
-      if (this.shelterLead === undefined) this.shelterLead = U.rand(Math.min(18, warn), warn);
+      // (shelterEarly: a slow species that can't climb, a green lizard, sets
+      // off this many seconds sooner, or the flood catches it on the way)
+      if (this.shelterLead === undefined) this.shelterLead = U.rand(Math.min(18, warn), warn) + (this.p.shelterEarly || 0);
       return this.eco.shelterSoon(this.shelterLead);
     }
     wantsToLeave(dt) {
