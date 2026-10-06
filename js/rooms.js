@@ -3080,17 +3080,403 @@
       else l.fillRect(cx - w / 2 - 1.5, cy + len - 6, w + 3, 2.5);
       k++;
     }
-    // recessed panels in the big masses: a sunken plate with a lit top and
-    // left rim, holding a grille, a round vent or a column of glyphs
+    // Machinery buried in the big masses: never a plain box. A big cog
+    // half swallowed by the rock, a ragged break showing a bundle of pipes
+    // (one snapped), a porthole hatch or a pressure door with its wheel, a
+    // piston or tank with pipes running off into the rock, patched hull
+    // plating with a plate torn away, a crevice of sagging cables, a
+    // recessed fan; the old grille and glyph panels chipped and cracked.
+    // Rust weeps down from some of them.
     const plate = U.rgba(U.mix(pal.mass, pal.light, 0.06));
+    const plate2 = U.rgba(U.mix(pal.mass, pal.light, 0.1));
     const rimL = U.rgba(U.mix(pal.mass, pal.light, 0.17));
     const rimD = U.rgba(U.mix(pal.mass, '#000000', 0.35));
     const hole = U.rgba(U.mix(pal.mass, '#000000', 0.45));
+    const massC = U.rgba(pal.mass);
+    const rustC = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.45), '#000000', 0.1));
+    const bolt = (x, y) => {
+      l.fillStyle = rimL;
+      l.fillRect(x - 1, y - 1, 2, 2);
+    };
+    // a ragged outline round a rectangle: the edge stepped in and out
+    const ragged = (x, y, w, h, j) => {
+      l.beginPath();
+      const step = 6;
+      for (let t = 0; t <= w; t += step) l.lineTo(x + t, y + R(-j, j * 0.4));
+      for (let t = 0; t <= h; t += step) l.lineTo(x + w + R(-j * 0.4, j), y + t);
+      for (let t = w; t >= 0; t -= step) l.lineTo(x + t, y + h + R(-j * 0.4, j));
+      for (let t = h; t >= 0; t -= step) l.lineTo(x + R(-j, j * 0.4), y + t);
+      l.closePath();
+    };
+    // the rock taking a bite back out of a corner or two (it's been here
+    // longer than whatever was built into it)
+    const chip = (x, y, w, h, n) => {
+      l.fillStyle = massC;
+      for (let i = 0; i < n; i++) {
+        const cx = R() < 0.5 ? x : x + w;
+        const cy = R() < 0.5 ? y : y + h;
+        const s = R(5, 14);
+        l.fillRect(cx - s / 2 + (cx === x ? -2 : 2), cy - s / 2 + (cy === y ? -2 : 2), s, s * R(0.5, 1));
+        l.fillRect(cx - s * 0.25 + (cx === x ? s * 0.2 : -s * 0.6), cy - s * 0.25 + (cy === y ? s * 0.3 : -s * 0.6), s * 0.5, s * 0.4);
+      }
+    };
+    const crack = (x, y, dx, dy, len) => {
+      l.strokeStyle = rimD;
+      l.lineWidth = 1;
+      l.beginPath();
+      l.moveTo(x, y);
+      for (let t = 0; t < len; t += 5) {
+        x += dx * 5 + R(-2, 2);
+        y += dy * 5 + R(-2, 2);
+        l.lineTo(x, y);
+      }
+      l.stroke();
+    };
+    const weep = (x0, x1, y) => {
+      l.fillStyle = rustC;
+      for (let x = x0 + R(2, 8); x < x1 - 2; x += R(6, 16)) if (R() < 0.6) l.fillRect(x, y, R(1.5, 3), R(10, 34));
+    };
+    const gearAt = (cx, cy, r, teeth) => {
+      l.fillStyle = plate2;
+      l.beginPath();
+      for (let i = 0; i < teeth * 2; i++) {
+        const a = (i / (teeth * 2)) * U.TAU;
+        const rr = i % 2 ? r : r * 0.84;
+        const a2 = ((i + 1) / (teeth * 2)) * U.TAU;
+        l.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+        l.lineTo(cx + Math.cos(a2) * rr, cy + Math.sin(a2) * rr);
+      }
+      l.closePath();
+      l.fill();
+      l.strokeStyle = rimL;
+      l.lineWidth = 1.5;
+      l.beginPath();
+      l.arc(cx, cy, r * 0.9, Math.PI * 1.05, Math.PI * 1.75);
+      l.stroke();
+      l.fillStyle = hole;
+      const sp = 5;
+      for (let i = 0; i < sp; i++) {
+        const a = (i / sp) * U.TAU + r;
+        l.beginPath();
+        l.moveTo(cx + Math.cos(a) * r * 0.3, cy + Math.sin(a) * r * 0.3);
+        l.arc(cx, cy, r * 0.68, a, a + (U.TAU / sp) * 0.55);
+        l.closePath();
+        l.fill();
+      }
+      l.fillStyle = rimL;
+      l.beginPath();
+      l.arc(cx, cy, r * 0.16, 0, U.TAU);
+      l.fill();
+    };
+    const KINDS = {
+      // a cog half swallowed: its socket broken open, the rock over the rest
+      cog(px, py, pw, ph) {
+        const r = Math.min(pw, ph) * R(0.55, 0.75);
+        const cx = px + pw * R(0.3, 0.7);
+        const cy = py + ph * (R() < 0.5 ? R(0.15, 0.35) : R(0.65, 0.85));
+        l.fillStyle = hole;
+        ragged(px + 4, py + 4, pw - 8, ph - 8, 5);
+        l.fill();
+        l.save();
+        ragged(px + 4, py + 4, pw - 8, ph - 8, 5);
+        l.clip();
+        gearAt(cx, cy, r, Math.max(10, Math.round(r / 3)));
+        if (R() < 0.6) gearAt(cx + r * 1.3 * (R() < 0.5 ? -1 : 1), cy + r * 0.5, r * 0.55, 9);
+        l.restore();
+        crack(px + pw * R(0.2, 0.8), py + ph, R(-0.3, 0.3), 1, R(10, 30));
+      },
+      // a break in the rock with a run of pipes through it, one snapped
+      pipes(px, py, pw, ph) {
+        const vert = ph > pw * 0.9 ? true : R() < 0.3;
+        l.fillStyle = hole;
+        ragged(px + 2, py + 2, pw - 4, ph - 4, 7);
+        l.fill();
+        l.save();
+        ragged(px + 2, py + 2, pw - 4, ph - 4, 7);
+        l.clip();
+        const n = 2 + Math.floor(R() * 3);
+        const span = vert ? pw : ph;
+        let o = R(4, 10);
+        const broke = Math.floor(R() * n);
+        const big = Math.floor(R() * n); // (one main, the rest thinner)
+        // (a rect across the run (along it at t, w long; across at o, d deep)
+        const R2 = (t, oo, len2, d) => (vert ? l.fillRect(px + oo, py + t, d, len2) : l.fillRect(px + t, py + oo, len2, d));
+        for (let i = 0; i < n && o < span - 6; i++) {
+          const w = i === big ? R(13, 18) : R(5, 9);
+          const len = vert ? ph : pw;
+          const cut = i === broke ? R(0.3, 0.7) * len : len;
+          // round: a lit side, the body, a shadowed side
+          l.fillStyle = plate2;
+          R2(0, o, cut, w);
+          l.fillStyle = rimL;
+          R2(0, o + w * 0.18, cut, Math.max(1.5, w * 0.16));
+          l.fillStyle = rimD;
+          R2(0, o + w - Math.max(1.5, w * 0.22), cut, Math.max(1.5, w * 0.22));
+          // flanges standing proud of it, far apart, with their bolts
+          for (let t = R(14, 40); t < cut - 8; t += R(48, 80)) {
+            l.fillStyle = plate2;
+            R2(t, o - 2.5, 5, w + 5);
+            l.fillStyle = rimL;
+            R2(t, o - 2.5, 1.5, w + 5);
+            l.fillStyle = rimD;
+            R2(t + 3.5, o - 2.5, 1.5, w + 5);
+          }
+          if (cut < len) {
+            l.fillStyle = hole;
+            if (vert) l.fillRect(px + o + 1, py + cut - 2, w - 2, 3);
+            else l.fillRect(px + cut - 2, py + o + 1, 3, w - 2);
+            weep(vert ? px + o : px + cut - 4, vert ? px + o + w : px + cut, vert ? py + cut : py + o + w);
+          }
+          o += w + R(4, 9);
+        }
+        l.restore();
+      },
+      // a round porthole hatch (bolts, a cross of bars or a wheel), or a
+      // rounded pressure door with hinges and its wheel
+      hatch(px, py, pw, ph) {
+        if (R() < 0.55 || pw < ph * 1.1) {
+          const r = Math.min(pw, ph) * 0.45;
+          const cx = px + pw / 2;
+          const cy = py + ph / 2;
+          l.fillStyle = plate2;
+          l.beginPath();
+          l.arc(cx, cy, r, 0, U.TAU);
+          l.fill();
+          l.fillStyle = hole;
+          l.beginPath();
+          l.arc(cx, cy, r * 0.72, 0, U.TAU);
+          l.fill();
+          for (let i = 0; i < 10; i++) bolt(cx + Math.cos((i / 10) * U.TAU) * r * 0.86, cy + Math.sin((i / 10) * U.TAU) * r * 0.86);
+          l.strokeStyle = rimL;
+          l.lineWidth = 2;
+          l.beginPath();
+          if (R() < 0.5) {
+            l.moveTo(cx - r * 0.7, cy);
+            l.lineTo(cx + r * 0.7, cy);
+            l.moveTo(cx, cy - r * 0.7);
+            l.lineTo(cx, cy + r * 0.7);
+          } else {
+            l.arc(cx, cy, r * 0.42, 0, U.TAU);
+            for (let i = 0; i < 4; i++) {
+              const a = (i / 4) * U.TAU + 0.4;
+              l.moveTo(cx, cy);
+              l.lineTo(cx + Math.cos(a) * r * 0.42, cy + Math.sin(a) * r * 0.42);
+            }
+          }
+          l.stroke();
+          l.strokeStyle = rimD;
+          l.beginPath();
+          l.arc(cx, cy, r, Math.PI * 0.1, Math.PI * 0.9);
+          l.stroke();
+        } else {
+          const dw = Math.min(pw * 0.7, ph * 1.2);
+          const dx = px + (pw - dw) / 2;
+          const rr = Math.min(dw, ph) * 0.3;
+          l.fillStyle = plate2;
+          l.beginPath();
+          if (l.roundRect) l.roundRect(dx, py + 3, dw, ph - 6, rr);
+          else l.rect(dx, py + 3, dw, ph - 6);
+          l.fill();
+          l.strokeStyle = rimL;
+          l.lineWidth = 1.5;
+          l.stroke();
+          l.fillStyle = rimD;
+          l.fillRect(dx - 4, py + ph * 0.25, 6, 7);
+          l.fillRect(dx - 4, py + ph * 0.65, 6, 7);
+          const wx = dx + dw * 0.6;
+          const wy = py + ph / 2;
+          l.strokeStyle = rimL;
+          l.lineWidth = 2;
+          l.beginPath();
+          l.arc(wx, wy, Math.min(dw, ph) * 0.18, 0, U.TAU);
+          l.moveTo(wx - Math.min(dw, ph) * 0.18, wy);
+          l.lineTo(wx + Math.min(dw, ph) * 0.18, wy);
+          l.stroke();
+          for (let y = py + 9; y < py + ph - 9; y += 8) bolt(dx + dw - 5, y);
+        }
+        chip(px, py, pw, ph, 1);
+      },
+      // a piston or a tank: a capsule with bands and a gauge, pipes running
+      // off it into the rock
+      tank(px, py, pw, ph) {
+        const vert = ph > pw;
+        const tw = vert ? pw * R(0.45, 0.6) : pw * 0.85;
+        const th = vert ? ph * 0.85 : ph * R(0.5, 0.65);
+        const tx = px + (pw - tw) / 2;
+        const ty = py + (ph - th) / 2;
+        // the pipes first, behind it
+        l.fillStyle = plate;
+        if (vert) {
+          l.fillRect(tx + tw * 0.4, py - 10, tw * 0.2, ty - py + 12);
+          l.fillRect(tx + tw * 0.35, ty + th - 2, tw * 0.3, py + ph - ty - th + 12);
+        } else {
+          l.fillRect(px - 10, ty + th * 0.4, tx - px + 12, th * 0.2);
+          l.fillRect(tx + tw - 2, ty + th * 0.35, px + pw - tx - tw + 12, th * 0.3);
+        }
+        l.fillStyle = plate2;
+        l.beginPath();
+        if (l.roundRect) l.roundRect(tx, ty, tw, th, Math.min(tw, th) * 0.45);
+        else l.rect(tx, ty, tw, th);
+        l.fill();
+        l.fillStyle = rimL;
+        if (vert) l.fillRect(tx + 3, ty + th * 0.2, 2, th * 0.6);
+        else l.fillRect(tx + tw * 0.2, ty + 3, tw * 0.6, 2);
+        l.fillStyle = rimD;
+        const bands = 2 + Math.floor(R() * 2);
+        for (let i = 1; i <= bands; i++) {
+          if (vert) l.fillRect(tx - 1, ty + (th * i) / (bands + 1), tw + 2, 3);
+          else l.fillRect(tx + (tw * i) / (bands + 1), ty - 1, 3, th + 2);
+        }
+        // a gauge, its needle somewhere in the red
+        const gx = tx + tw * 0.5;
+        const gy = ty + th * (vert ? 0.3 : 0.5);
+        const gr = Math.min(tw, th) * 0.14;
+        l.fillStyle = hole;
+        l.beginPath();
+        l.arc(gx, gy, gr, 0, U.TAU);
+        l.fill();
+        l.strokeStyle = rimL;
+        l.lineWidth = 1;
+        l.beginPath();
+        l.arc(gx, gy, gr, 0, U.TAU);
+        const na = R(-2.6, -0.5);
+        l.moveTo(gx, gy);
+        l.lineTo(gx + Math.cos(na) * gr * 0.85, gy + Math.sin(na) * gr * 0.85);
+        l.stroke();
+        if (R() < 0.5) weep(tx, tx + tw, ty + th);
+      },
+      // hull plating: overlapping riveted plates, one torn away
+      plates(px, py, pw, ph) {
+        const n = 3 + Math.floor(R() * 3);
+        const torn = Math.floor(R() * n);
+        for (let i = 0; i < n; i++) {
+          const w = pw * R(0.35, 0.6);
+          const h = ph * R(0.4, 0.7);
+          const x = px + R(0, pw - w);
+          const y = py + R(0, ph - h);
+          if (i === torn) {
+            l.fillStyle = hole;
+            ragged(x, y, w, h, 4);
+            l.fill();
+            // ribs showing behind
+            l.fillStyle = plate;
+            for (let t = x + 5; t < x + w - 3; t += 9) l.fillRect(t, y + 2, 2, h - 4);
+            continue;
+          }
+          l.fillStyle = i % 2 ? plate : plate2;
+          l.fillRect(x, y, w, h);
+          l.fillStyle = rimL;
+          l.fillRect(x, y, w, 1.5);
+          l.fillStyle = rimD;
+          l.fillRect(x, y + h - 1.5, w, 1.5);
+          for (let t = x + 4; t < x + w - 2; t += 7) {
+            bolt(t, y + 4);
+            bolt(t, y + h - 4);
+          }
+        }
+        chip(px, py, pw, ph, 2);
+        if (R() < 0.6) weep(px, px + pw, py + ph - 4);
+      },
+      // a crevice with a bundle of cables sagging through it
+      cables(px, py, pw, ph) {
+        l.fillStyle = hole;
+        ragged(px, py + ph * 0.25, pw, ph * 0.5, 6);
+        l.fill();
+        const n = 4 + Math.floor(R() * 3);
+        for (let i = 0; i < n; i++) {
+          const y0 = py + ph * R(0.3, 0.52);
+          const y1 = py + ph * R(0.3, 0.52);
+          const sag = ph * R(0.06, 0.18);
+          l.strokeStyle = i % 3 === 0 ? rimL : i % 3 === 1 ? plate2 : U.rgba(U.mix(pal.mass, pal.rust, 0.35));
+          l.lineWidth = R(2, 4);
+          l.beginPath();
+          l.moveTo(px - 2, y0);
+          l.quadraticCurveTo(px + pw / 2, Math.max(y0, y1) + sag, px + pw + 2, y1);
+          l.stroke();
+        }
+        // a clamp across them
+        l.fillStyle = plate2;
+        l.fillRect(px + pw * R(0.25, 0.7), py + ph * 0.28, 5, ph * 0.44);
+      },
+      // a recessed fan in a square housing, a blade or two missing
+      fan(px, py, pw, ph) {
+        const s = Math.min(pw, ph) * 0.92;
+        const x = px + (pw - s) / 2;
+        const y = py + (ph - s) / 2;
+        l.fillStyle = plate2;
+        l.fillRect(x, y, s, s);
+        l.fillStyle = rimL;
+        l.fillRect(x, y, s, 1.5);
+        l.fillRect(x, y, 1.5, s);
+        l.fillStyle = hole;
+        l.beginPath();
+        l.arc(x + s / 2, y + s / 2, s * 0.42, 0, U.TAU);
+        l.fill();
+        const nb = 5 + Math.floor(R() * 3);
+        const gone = Math.floor(R() * nb);
+        l.fillStyle = plate;
+        for (let i = 0; i < nb; i++) {
+          if (i === gone) continue;
+          const a = (i / nb) * U.TAU + R(0, 0.2);
+          l.beginPath();
+          l.moveTo(x + s / 2, y + s / 2);
+          l.arc(x + s / 2, y + s / 2, s * 0.38, a, a + (U.TAU / nb) * 0.45);
+          l.closePath();
+          l.fill();
+        }
+        for (const [bx, by] of [[x + 4, y + 4], [x + s - 4, y + 4], [x + 4, y + s - 4], [x + s - 4, y + s - 4]]) bolt(bx, by);
+        chip(px, py, pw, ph, 1);
+      },
+      // the old panels, chipped and cracked: a grille or a column of glyphs
+      grille(px, py, pw, ph) {
+        l.fillStyle = plate;
+        l.fillRect(px, py, pw, ph);
+        l.fillStyle = rimL;
+        l.fillRect(px, py, pw, 2);
+        l.fillRect(px, py, 2, ph);
+        l.fillStyle = rimD;
+        l.fillRect(px, py + ph - 2, pw, 2);
+        l.fillRect(px + pw - 2, py, 2, ph);
+        l.fillStyle = hole;
+        if (R() < 0.5) {
+          for (let y = py + 6; y < py + ph - 6; y += 5) l.fillRect(px + 6, y, pw - 12, 2.5);
+        } else {
+          l.fillStyle = rimL;
+          for (let gx = px + 8; gx < px + pw - 8; gx += 9) {
+            for (let gy = py + 7; gy < py + ph - 10; gy += 11) {
+              l.fillRect(gx, gy, 2, R(4, 8));
+              if (R() < 0.6) l.fillRect(gx - 2, gy + R(0, 5), 6, 2);
+            }
+          }
+        }
+        chip(px, py, pw, ph, 2);
+        crack(px + R(0, pw), py + R(0, ph), R(-1, 1), R(-1, 1), R(12, 30));
+      },
+    };
+    // (what the region builds into its walls)
+    const MIX = {
+      industrial: [['cog', 3], ['pipes', 3], ['tank', 3], ['plates', 2], ['hatch', 2], ['fan', 2], ['cables', 1], ['grille', 1]],
+      shoreline: [['pipes', 3], ['hatch', 3], ['plates', 2], ['cables', 2], ['tank', 1], ['fan', 1], ['grille', 1], ['cog', 1]],
+      outskirts: [['fan', 3], ['grille', 2], ['cables', 2], ['cog', 2], ['pipes', 2], ['hatch', 1], ['plates', 1]],
+      shaded: [['grille', 3], ['hatch', 2], ['plates', 2], ['cables', 2], ['pipes', 1], ['cog', 1]],
+    };
+    const pickKind = (cy) => {
+      const reg = decor.under && room.surf && cy > room.underTop - 2 ? decor.under : decor.region;
+      const mix = MIX[reg] || MIX.industrial;
+      let tot = 0;
+      for (const [, w] of mix) tot += w;
+      let r = R() * tot;
+      for (const [k, w] of mix) {
+        if (r < w) return k;
+        r -= w;
+      }
+      return mix[0][0];
+    };
     let rockN = 0;
     for (let i = 0; i < cells.length; i++) if (cells[i] === 1) rockN++;
-    for (let k = 0, tries = 0; k < rockN / 220 && tries < 1500; tries++) {
-      const w = 6 + Math.floor(R() * 5);
-      const h = 4 + Math.floor(R() * 3);
+    for (let k = 0, tries = 0; k < rockN / 200 && tries < 1500; tries++) {
+      const w = 5 + Math.floor(R() * 6);
+      const h = 4 + Math.floor(R() * 4);
       const x0 = Math.floor(R() * (C - w));
       const y0 = Math.floor(R() * (Rows - h));
       let ok = true;
@@ -3101,38 +3487,13 @@
       const py = y0 * cell + cell / 2;
       const pw = (w - 1) * cell;
       const ph = (h - 1) * cell;
-      l.fillStyle = plate;
-      l.fillRect(px, py, pw, ph);
-      l.fillStyle = rimL;
-      l.fillRect(px, py, pw, 2);
-      l.fillRect(px, py, 2, ph);
-      l.fillStyle = rimD;
-      l.fillRect(px, py + ph - 2, pw, 2);
-      l.fillRect(px + pw - 2, py, 2, ph);
-      const kind = R();
-      if (kind < 0.4) {
-        l.fillStyle = hole;
-        for (let y = py + 6; y < py + ph - 6; y += 5) l.fillRect(px + 6, y, pw - 12, 2.5);
-      } else if (kind < 0.7) {
-        const r = Math.min(pw, ph) * 0.32;
-        l.fillStyle = hole;
-        l.beginPath();
-        l.arc(px + pw / 2, py + ph / 2, r, 0, U.TAU);
-        l.fill();
-        l.fillStyle = rimL;
-        for (let a = 0; a < 6; a++) {
-          const ang = (a / 6) * U.TAU;
-          l.fillRect(px + pw / 2 + Math.cos(ang) * r * 0.6 - 1, py + ph / 2 + Math.sin(ang) * r * 0.6 - 1, 2, 2);
-        }
-      } else {
-        l.fillStyle = rimL;
-        for (let gx = px + 8; gx < px + pw - 8; gx += 9) {
-          for (let gy = py + 7; gy < py + ph - 10; gy += 11) {
-            l.fillRect(gx, gy, 2, R(4, 8));
-            if (R() < 0.6) l.fillRect(gx - 2, gy + R(0, 5), 6, 2);
-          }
-        }
-      }
+      l.save();
+      // (kept to the rock it's set in)
+      l.beginPath();
+      l.rect(x0 * cell, y0 * cell, w * cell, h * cell);
+      l.clip();
+      KINDS[pickKind(y0)](px, py, pw, ph);
+      l.restore();
       for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) used[y * C + x] = 2;
       k++;
     }
@@ -3195,14 +3556,21 @@
         }
       }
     }
-    // grates, vents, glyph panels and machine boxes set into rock faces
-    for (let k = 0, tries = 0; k < area / 110 && tries < 900; tries++) {
+    // Fixtures set into rock faces (spaced out, never in rows): a grate, a
+    // round vent ring, a caged lamp, a junction box with a conduit off
+    // along the face, a valve wheel on a stub, a cable looping down, a
+    // glyph plate, now and then a machine box.
+    const fixed = [];
+    const dk = U.rgba(U.mix(pal.mass, '#000000', 0.42));
+    for (let k = 0, tries = 0; k < area / 180 && tries < 900; tries++) {
       const x = Math.floor(R() * C);
       const y = Math.floor(R() * Rows);
       if (!solid(x, y)) continue;
       // a face: rock here, open air beside (left, right or below)
       const face = !solid(x - 1, y) ? 'l' : !solid(x + 1, y) ? 'r' : !solid(x, y + 1) ? 'b' : !solid(x, y - 1) ? 't' : null;
       if (!face || face === 't') continue;
+      if (fixed.some(([fx, fy]) => Math.abs(fx - x) + Math.abs(fy - y) < 3)) continue;
+      fixed.push([x, y]);
       // (one or two cells across, standing a few px proud of the face, so
       // the rock's outline isn't a clean line)
       const big = R() < 0.4 && (face === 'b' ? solid(x + 1, y) && !solid(x + 1, y + 1) : solid(x, y + 1) && (face === 'l' ? !solid(x - 1, y + 1) : !solid(x + 1, y + 1)));
@@ -3211,30 +3579,96 @@
       const by = y * cell + 2 + (face === 'b' ? proud : 0);
       const w = (big && face === 'b' ? 2 * cell : cell) - 4;
       const h = (big && face !== 'b' ? 2 * cell : cell) - 4;
+      const cx = bx + w / 2;
+      const cy = by + h / 2;
+      // the open side (where things stick out to)
+      const ox = face === 'l' ? -1 : face === 'r' ? 1 : 0;
       const kind = R();
-      l.fillStyle = metalD;
-      l.fillRect(bx, by, w, h);
-      if (kind < 0.35) {
-        // a grate: slats in a rim
-        l.fillStyle = U.rgba(U.mix(pal.mass, '#000000', 0.4));
-        for (let i = 2; i < w - 1; i += 3) l.fillRect(bx + i, by + 2, 1.5, h - 4);
-        l.strokeStyle = metal;
-        l.lineWidth = 1.5;
-        l.strokeRect(bx, by, w, h);
-      } else if (kind < 0.6 && face !== 'b') {
-        // a round vent
-        l.fillStyle = U.rgba(U.mix(pal.mass, '#000000', 0.45));
+      if (kind < 0.2) {
+        // a grate: slats in a rim, a bolt at each corner
+        l.fillStyle = metalD;
+        l.fillRect(bx, by, w, h);
+        l.fillStyle = dk;
+        for (let i = 3; i < w - 2; i += 3) l.fillRect(bx + i, by + 3, 1.5, h - 6);
+        l.fillStyle = metalL;
+        for (const [px2, py2] of [[bx + 1, by + 1], [bx + w - 2.5, by + 1], [bx + 1, by + h - 2.5], [bx + w - 2.5, by + h - 2.5]]) l.fillRect(px2, py2, 1.5, 1.5);
+      } else if (kind < 0.34) {
+        // a round vent: a ring, dark inside, a bar across
+        const r = Math.min(w, h) * 0.45;
+        l.fillStyle = metal;
         l.beginPath();
-        l.arc(bx + w / 2, by + h / 2, w * 0.35, 0, U.TAU);
+        l.arc(cx, cy, r, 0, U.TAU);
+        l.fill();
+        l.fillStyle = dk;
+        l.beginPath();
+        l.arc(cx, cy, r * 0.7, 0, U.TAU);
+        l.fill();
+        l.fillStyle = metalL;
+        l.fillRect(cx - r * 0.7, cy - 0.75, r * 1.4, 1.5);
+      } else if (kind < 0.48) {
+        // a caged lamp: a dome on a bracket, bars over it; most dead, a
+        // few still glowing faintly
+        const lx = face === 'b' ? cx : face === 'l' ? bx - 2 : bx + w + 2;
+        const ly = face === 'b' ? by + h + 3 : cy;
+        l.fillStyle = metal;
+        l.fillRect(face === 'b' ? lx - 4 : Math.min(lx, cx) - 1, face === 'b' ? by + h - 3 : ly - 2, face === 'b' ? 8 : Math.abs(lx - cx) + 2, 4);
+        const lit = R() < 0.3;
+        l.fillStyle = lit ? U.rgba(U.mix(pal.glow || '#ffd29a', pal.mass, 0.35)) : metalD;
+        l.beginPath();
+        l.arc(lx, ly, 4, 0, U.TAU);
         l.fill();
         l.strokeStyle = metalL;
         l.lineWidth = 1;
         l.beginPath();
-        l.moveTo(bx + w / 2 - w * 0.35, by + h / 2);
-        l.lineTo(bx + w / 2 + w * 0.35, by + h / 2);
+        l.arc(lx, ly, 5, 0, U.TAU);
+        l.moveTo(lx - 5, ly);
+        l.lineTo(lx + 5, ly);
+        l.moveTo(lx, ly - 5);
+        l.lineTo(lx, ly + 5);
         l.stroke();
-      } else if (kind < 0.8) {
-        // a panel of old glyphs
+      } else if (kind < 0.62) {
+        // a junction box, a conduit running off it along the face
+        l.fillStyle = metal;
+        l.fillRect(bx + 2, by + 2, w - 4, h - 4);
+        l.fillStyle = metalL;
+        l.fillRect(bx + 2, by + 2, w - 4, 1.5);
+        l.fillStyle = metalD;
+        const run = R(1.5, 4) * cell;
+        if (face === 'b') l.fillRect(R() < 0.5 ? bx - run : bx + w, cy - 2, run, 4);
+        else l.fillRect(cx - 2, R() < 0.5 ? by - run : by + h, 4, run);
+        l.fillStyle = rust;
+        l.fillRect(bx + w - 6, by + 4, 2, 2);
+      } else if (kind < 0.72 && face !== 'b') {
+        // a valve wheel on a short stub
+        const sx = ox > 0 ? bx + w : bx - 6;
+        l.fillStyle = metal;
+        l.fillRect(sx, cy - 2, 6, 4);
+        const wx = ox > 0 ? bx + w + 7 : bx - 7;
+        l.strokeStyle = U.rgba(U.mix(rust, pal.light, 0.1));
+        l.strokeStyle = metalL;
+        l.lineWidth = 1.5;
+        l.beginPath();
+        l.arc(wx, cy, 4.5, 0, U.TAU);
+        l.moveTo(wx - 4.5, cy);
+        l.lineTo(wx + 4.5, cy);
+        l.moveTo(wx, cy - 4.5);
+        l.lineTo(wx, cy + 4.5);
+        l.stroke();
+      } else if (kind < 0.82) {
+        // a cable out of a socket, looping down and back in lower
+        l.fillStyle = metalD;
+        l.fillRect(cx - 3, cy - 3, 6, 6);
+        l.strokeStyle = metal;
+        l.lineWidth = 2;
+        l.beginPath();
+        l.moveTo(cx, cy);
+        const dx2 = ox || (R() < 0.5 ? -1 : 1);
+        l.bezierCurveTo(cx + dx2 * R(10, 22), cy + R(8, 18), cx + dx2 * R(4, 12), cy + R(20, 36), cx, cy + R(24, 40));
+        l.stroke();
+      } else if (kind < 0.92) {
+        // a plate of old glyphs
+        l.fillStyle = metalD;
+        l.fillRect(bx, by, w, h);
         l.fillStyle = metalL;
         for (let i = 0; i < 3; i++) {
           const gx = bx + 2 + i * 4;
@@ -3243,6 +3677,8 @@
         }
       } else {
         // a machine box with a bolted rim and a dead lamp
+        l.fillStyle = metalD;
+        l.fillRect(bx, by, w, h);
         l.fillStyle = metal;
         l.fillRect(bx, by, w, 2);
         l.fillRect(bx, by + h - 2, w, 2);

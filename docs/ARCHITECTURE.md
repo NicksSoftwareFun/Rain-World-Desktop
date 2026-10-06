@@ -443,6 +443,17 @@ sometimes climb one to rest a while when wandering (looking about, never
 asleep), and count tips out of reach as places to flee to. A species'
 `shelterEarly` (green lizards: 35 s) sends it to a den that much sooner.
 
+Machinery in the rock (`paintJunk`): big pieces set into the masses
+(`KINDS`, mixed per region by `MIX`): a cog half swallowed in a broken
+socket, a ragged break showing a run of pipes (one main, the rest
+thinner, flanged, one snapped and weeping rust), a porthole hatch or a
+pressure door with its wheel, a piston or tank with pipes off into the
+rock, patched hull plating with a plate torn away, a crevice of sagging
+cables, a recessed fan with a blade gone, and the old grille and glyph
+panels chipped and cracked. Small fixtures on rock faces, spaced out:
+grates, vent rings, caged lamps (a few still faintly lit), junction boxes
+with conduits, valve wheels, looping cables, glyph plates, machine boxes.
+
 Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
 behind everything that moves): wall cogs, machine housings, wall fans,
 pipe runs (rock to rock, a third of the props at most, thicker and lighter
