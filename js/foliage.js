@@ -251,8 +251,13 @@
         const g = p.give;
         // (underwater: a slow drift in the current, whatever the rain)
         let sway = p.wet ? 0.05 * Math.sin(t * 0.8 + p.phase) : wind * Math.sin(t * (1.7 + 0.3 * Math.sin(p.phase)) + p.phase) + wind * 0.5;
-        // (a fan's draught: a steady lean, fluttering)
-        if (p.fan && !p.wet) sway += p.fan * (0.75 + 0.2 * Math.sin(t * 6.3 + p.phase) + 0.12 * Math.sin(t * 11.7 + p.phase * 3));
+        // (a fan's draught: a steady lean; leaves and stems flutter in it,
+        // a chain only drifts, slow and heavy)
+        if (p.fan && !p.wet) {
+          sway += p.rigid
+            ? p.fan * 0.7 * (0.8 + 0.2 * Math.sin(t * 1.4 + p.phase) + 0.08 * Math.sin(t * 0.55 + p.phase * 2))
+            : p.fan * (0.75 + 0.2 * Math.sin(t * 6.3 + p.phase) + 0.12 * Math.sin(t * 11.7 + p.phase * 3));
+        }
         let push = 0;
         for (let i = 0; i < pts.length; i += 3) {
           const x = pts[i];
@@ -267,7 +272,12 @@
           push += pts[i + 2];
         }
         const target = sway * g;
-        p.v += ((target - p.a) * 26 - p.v * 5) * dt + U.clamp(push * 0.0009 * g, -0.12, 0.12);
+        // (a chain is heavy: a softer spring, more damped, so it eases over
+        // rather than snapping back and forth)
+        const kS = p.rigid ? 10 : 26;
+        const kD = p.rigid ? 6.5 : 5;
+        const kP = p.rigid ? 0.00045 : 0.0009; // (and harder to knock about)
+        p.v += ((target - p.a) * kS - p.v * kD) * dt + U.clamp(push * kP * g, -0.12, 0.12);
         p.a = U.clamp(p.a + p.v * dt, -0.6, 0.6);
         if (p.tip) p.tip.dx = p.a * p.len;
         // the pose nearest its lean (the tip's shift, a * reach)
