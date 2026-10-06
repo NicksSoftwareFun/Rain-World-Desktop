@@ -76,6 +76,15 @@
       this.lastX = x;
       this.lastY = y;
       this.pers = U.personality(); // bravery decides fight (throw) or flight
+      // The hunter (the red one) lives for a fight, and eats only meat; the
+      // others would rather keep out of trouble, and throw only at
+      // something that's actually coming for them.
+      this.fierce = this.variant === 'hunter';
+      if (this.fierce) {
+        this.pers.bravery = Math.max(0.85, this.pers.bravery);
+        this.pers.aggression = Math.max(0.8, this.pers.aggression);
+        this.scruff = Array.from({ length: 7 }, () => U.rand(0.6, 1.4)); // (its tufts, each a bit different)
+      } else this.pers.bravery *= 0.55;
       this.weapon = null; // a rock or spear in the far hand (the throwing hand)
       this.offhand = null; // a second weapon, of the other kind, in the near hand
       this.armed = false; // starting weapons handed out yet?
@@ -191,7 +200,7 @@
     // one of each.
     armUp() {
       this.armed = true;
-      const lo = this.p.loadout || { spear: 0.3, rock: 0.25, both: 0.15 };
+      const lo = this.fierce ? { spear: 0.35, rock: 0.15, both: 0.4 } : this.p.loadout || { spear: 0.3, rock: 0.25, both: 0.15 };
       const r = Math.random();
       const kinds = r < lo.spear ? ['spear'] : r < lo.spear + lo.rock ? ['rock'] : r < lo.spear + lo.rock + lo.both ? ['spear', 'rock'] : [];
       for (const kind of kinds) {
@@ -402,7 +411,7 @@
           const t = this.threatNear(p.vision || 260);
           if (t) {
             this.threat = t;
-            if ((this.weapon || this.offhand) && Math.random() < 0.35 + 0.6 * this.pers.bravery) this.startThrow(t);
+            if ((this.weapon || this.offhand) && this.willThrowAt(t)) this.startThrow(t);
             const g = this.fleeGoal(this.caps, t.x, t.y, 380);
             if (g) this.pather.setGoal(g.x, g.y, true);
             this.setState('flee');
@@ -429,12 +438,16 @@
             const dir = Math.sign(hip.x - t.x) || -this.facing;
             if (this.flipRoom(dir)) this.backflip(dir, dir * 150, -430);
           }
-          // armed and brave enough: throw at it first, then run
+          // armed and brave enough: throw at it first, then run (the
+          // hunter stands its ground instead, unless it's right on top of it)
           const td = U.dist(t.x, t.y, hip.x, hip.y);
-          if (this.weapon && td < 230 && Math.random() < 0.35 + 0.6 * this.pers.bravery) {
+          if (this.weapon && td < (this.fierce ? 300 : 230) && this.willThrowAt(t)) {
             this.startThrow(t);
           }
-          if (this.state !== 'flee' || this.stateT > 1.5) {
+          if (this.fierce && td > 95 && this.canFight(t)) {
+            this.quarry = t;
+            if (this.state !== 'stalk') this.setState('stalk');
+          } else if (this.state !== 'flee' || this.stateT > 1.5) {
             const g = this.fleeGoal(this.caps, t.x, t.y, 380);
             if (g) this.pather.setGoal(g.x, g.y, true);
             this.setState('flee');
@@ -445,6 +458,30 @@
         this.speed = p.runSpeed || 170;
         if (this.stateT < 3.5) return;
         this.setState('wander');
+      }
+
+      // The hunter picks fights: armed, it goes after a lizard in sight,
+      // keeps a throw's distance and lets fly whenever it has the shot.
+      if (this.fierce && perceive && this.state !== 'stalk' && !this.item && !this.holding && this.snackT <= 0 && !this.exitDen) {
+        const liz = this.nearestOf(['lizard_*'], 320, (c) => !c.corpse && !c.dead && !c.leaving && this.canFight(c) && this.canSee(c.x, c.y, 320));
+        if (liz) {
+          this.quarry = liz;
+          this.setState('stalk');
+        }
+      }
+      if (this.state === 'stalk') {
+        const q = this.quarry;
+        if (!q || q.dead || q.corpse || q.leaving || !this.canFight(q) || this.stateT > 14 || U.dist(q.x, q.y, hip.x, hip.y) > 450) {
+          this.quarry = null;
+          this.setState('wander');
+        } else {
+          const side = Math.sign(hip.x - q.x) || this.facing;
+          this.pather.setGoal(q.x + side * 150, q.y);
+          this.speed = p.speed || 105;
+          this.lookAt = q.mainPoint ? q.mainPoint() : q;
+          if (this.throwCd <= 0 && this.throwT <= 0) this.startThrow(q);
+          return;
+        }
       }
 
       // Startle at a fast cursor swipe.
@@ -745,8 +782,10 @@
       if (this.meals < 2) this.hunger = Math.max(this.hunger, 0.6); // still peckish
     }
     // Would we eat this kind of food now? After a fruit we want meat (and
-    // after meat, fruit) as long as the map has some of the other kind.
+    // after meat, fruit) as long as the map has some of the other kind. The
+    // hunter only ever wants meat (two of them).
     wants(kind) {
+      if (this.fierce) return kind === 'meat';
       if (!this.mealKinds[kind]) return true;
       const other = kind === 'fruit' ? 'meat' : 'fruit';
       if (this.mealKinds[other]) return true;
@@ -827,6 +866,18 @@
       // (a rock knocks an infant noodlefly down without it crying out)
       if (t.species === 'batfly' || t.species === 'noodlefly_infant' || (t.species === 'centipede' && (t.size || 1) <= 1)) return 'rock';
       return 'spear';
+    }
+    // Throw at a threat? The hunter nearly always; the others only at
+    // something actually coming for them, and not every time.
+    willThrowAt(t) {
+      if (this.fierce) return Math.random() < 0.9;
+      const after = t.prey === this || t.target === this || t.lungePrey === this || t.windT > 0 || t.lungeT > 0;
+      return after && Math.random() < 0.15 + 0.5 * this.pers.bravery;
+    }
+    // Armed for this one? (A red lizard shrugs rocks off: spears only.)
+    canFight(t) {
+      const want = this.pickWeaponFor(t);
+      return [this.weapon, this.offhand].some((w) => w && w.kind === want);
     }
     startThrow(t) {
       if (!(this.weapon || this.offhand) || this.throwT > 0 || this.throwCd > 0 || !t || this.swimming) return false;
@@ -1728,6 +1779,25 @@
       ctx.lineTo(x + sx - w * 0.5, y - 5.4);
       ctx.closePath();
       ctx.fill();
+      // the hunter's scruff: ragged tufts on the cheeks and between the ears
+      if (this.scruff) {
+        const k = this.scruff;
+        const tuft = (bx, by, dx, dy, n) => {
+          ctx.moveTo(bx - dy * 1.3, by + dx * 1.3);
+          ctx.lineTo(bx + dx * n, by + dy * n);
+          ctx.lineTo(bx + dy * 1.3, by - dx * 1.3);
+        };
+        ctx.beginPath();
+        for (const sgn of [-1, 1]) {
+          const cx = x + sx + sgn * (w + 0.3);
+          tuft(cx, y + 0.6, sgn, -0.25, 2.6 * k[sgn < 0 ? 0 : 1]);
+          tuft(cx - sgn * 0.4, y + 3.2, sgn * 0.9, 0.45, 2.2 * k[sgn < 0 ? 2 : 3]);
+        }
+        tuft(x + sx - 1.6 - eb * 0.3, y - 5.4, -0.35, -1, 2 * k[4]);
+        tuft(x + sx + 0.4 - eb * 0.3, y - 5.6, 0.1, -1, 2.4 * k[5]);
+        tuft(x + sx + 2.2 - eb * 0.3, y - 5.4, 0.45, -1, 1.8 * k[6]);
+        ctx.fill();
+      }
     }
 
     limbTargets(shoulder) {
