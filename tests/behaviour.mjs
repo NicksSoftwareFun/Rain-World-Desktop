@@ -967,7 +967,9 @@ const checks = [
         const dead = e.eco.spawn('lizard_green', mid - 70, top + 4);
         dead.kill();
         const W = e.world;
-        const rock = new RW.Weapon(e.eco, 'rock', mid, top + 4);
+        // (the rock away from the slugcat: it'll pick up one still at the
+        // surface, and then there's no telling whether it sinks)
+        const rock = new RW.Weapon(e.eco, 'rock', Math.min(mid + 90, x1 - 10), top + 4);
         e.eco.items.push(rock);
         const fruit = new RW.Fruit(e.eco, mid + 30, top + 30);
         e.eco.items.push(fruit);
@@ -995,9 +997,10 @@ const checks = [
             seen[k + 'Run'] = c.panicking ? (seen[k + 'Run'] || 0) + 1 : 0;
             seen[k + 'Max'] = Math.max(seen[k + 'Max'] || 0, seen[k + 'Run']);
           }
+          if (rock.heldBy && i < 60 * 4) out.rockPicked = true;
           if (i === 60 * 4) {
             out.corpseSank = Math.round(W.waterDepth(dead.x, dead.y) - d0.corpse);
-            out.rockSank = Math.round(rock.y - d0.rock);
+            out.rockSank = out.rockPicked ? null : Math.round(rock.y - d0.rock);
             out.fruitDepth = Math.round(W.waterDepth(fruit.x, fruit.y));
             fruit.dead = true; // (measured: not something to keep the slugcat about)
           }
@@ -1126,7 +1129,7 @@ const checks = [
       m.rockFetched && 'the slugcat dived for a sunk rock',
       m.slugStillIn && 'the slugcat was still in the water after 30s',
       !(m.corpseSank > 5) && `the corpse didn't sink (${m.corpseSank}px)`,
-      !(m.rockSank > 5) && `the rock didn't sink (${m.rockSank}px)`,
+      m.rockSank !== null && !(m.rockSank > 5) && `the rock didn't sink (${m.rockSank}px)`,
       !(m.fruitDepth < 8) && `the fruit didn't float up (${m.fruitDepth}px deep)`,
       m.drops < 20 && 'too few raindrops to check',
       m.fallKnocks === null && 'no map with a waterfall to check',
