@@ -3062,6 +3062,16 @@
     const { C, cell, cells } = room;
     const Rows = room.R;
     const solid = (x, y) => (x < 0 || x >= C || y < 0 || y >= Rows ? true : cells[y * C + x] === 1);
+    // On dark rock the depths can't get much darker without going flat
+    // black: there they go back into the room's air instead (depth by haze,
+    // the far wall of a hole a little lighter than the shadows in it).
+    const lum = (c) => {
+      const h = U.hex(c);
+      return (0.299 * h[0] + 0.587 * h[1] + 0.114 * h[2]) / 255;
+    };
+    const dim = U.clamp((0.2 - lum(pal.mass)) / 0.12, 0, 1);
+    const air = pal.interior || pal.fog || pal.mass;
+    const deep = (k, haze) => U.mix(U.mix(pal.mass, '#000000', k * (1 - 0.55 * dim)), air, haze * dim);
     // the flood's inlet pipes: a big bore out of the wall, a dark mouth
     for (const q of decor.inlets || []) {
       if (!q.side) {
@@ -3074,7 +3084,7 @@
         l.fillRect(q.x - d / 2, q.y, d, out);
         l.fillStyle = U.rgba(U.mix(pal.mass, pal.light, 0.3));
         l.fillRect(q.x - d / 2 - 3, q.y + out - 3, d + 6, 3);
-        l.fillStyle = U.rgba(U.mix(pal.mass, '#000000', 0.6));
+        l.fillStyle = U.rgba(deep(0.6, 0.2));
         l.beginPath();
         l.ellipse(q.x, q.y + out, d / 2 - 4, 3.5, 0, 0, U.TAU);
         l.fill();
@@ -3086,7 +3096,7 @@
       const out = 12; // how far it stands out of the wall
       const body = U.rgba(U.mix(pal.mass, pal.light, 0.16));
       const rim = U.rgba(U.mix(pal.mass, pal.light, 0.3));
-      const dark = U.rgba(U.mix(pal.mass, '#000000', 0.6));
+      const dark = U.rgba(deep(0.6, 0.2));
       // its run back through the rock
       l.fillStyle = U.rgba(U.mix(pal.mass, pal.light, 0.08));
       l.fillRect(q.side < 0 ? face - 3 * cell : face, cy - d / 2 + 3, 3 * cell, d - 6);
@@ -3116,7 +3126,7 @@
     // flanges every few cells and an elbow back into the rock at each end
     const pipeB = U.rgba(U.mix(pal.mass, pal.light, 0.13));
     const pipeH = U.rgba(U.mix(pal.mass, pal.light, 0.24));
-    const pipeS = U.rgba(U.mix(pal.mass, '#000000', 0.3));
+    const pipeS = U.rgba(deep(0.3, 0.08));
     for (let k = 0, tries = 0; k < area / 130 && tries < 900; tries++) {
       const x = Math.floor(R() * C);
       const y0 = Math.floor(R() * Rows);
@@ -3184,16 +3194,6 @@
     const plate = U.rgba(U.mix(pal.mass, pal.light, 0.06));
     const plate2 = U.rgba(U.mix(pal.mass, pal.light, 0.1));
     const rimL = U.rgba(U.mix(pal.mass, pal.light, 0.17));
-    // On dark rock the depths can't get much darker without going flat
-    // black: there they go back into the room's air instead (depth by haze,
-    // the far wall of a hole a little lighter than the shadows in it).
-    const lum = (c) => {
-      const h = U.hex(c);
-      return (0.299 * h[0] + 0.587 * h[1] + 0.114 * h[2]) / 255;
-    };
-    const dim = U.clamp((0.2 - lum(pal.mass)) / 0.12, 0, 1);
-    const air = pal.interior || pal.fog || pal.mass;
-    const deep = (k, haze) => U.mix(U.mix(pal.mass, '#000000', k * (1 - 0.55 * dim)), air, haze * dim);
     const rimD = U.rgba(deep(0.35, 0.08));
     const holeRaw = deep(0.45, 0.42);
     const hole = U.rgba(holeRaw);
@@ -4282,7 +4282,7 @@
     // along the face, a valve wheel on a stub, a cable looping down, a
     // glyph plate, now and then a machine box.
     const fixed = [];
-    const dk = U.rgba(U.mix(pal.mass, '#000000', 0.42));
+    const dk = U.rgba(deep(0.42, 0.15));
     for (let k = 0, tries = 0; k < area / 180 && tries < 900; tries++) {
       const x = Math.floor(R() * C);
       const y = Math.floor(R() * Rows);

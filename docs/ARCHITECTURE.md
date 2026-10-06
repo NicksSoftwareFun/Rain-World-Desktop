@@ -440,7 +440,7 @@ the complex's back walls, a `crust` colour for rock open to the sky,
 Passing clouds (`js/sky.js`, `RW.Sky`, built after each background paint):
 a tileable fractal value-noise field cut at a share of cover (a quantile,
 so the amount of cloud is what's asked for), lit by the cloud above each
-pixel (bright tops, grey bellies) in eleven flat tones with a smooth
+pixel (bright tops, grey bellies) in sixteen tones with a smooth
 edge (not dithered: two dithered layers sliding over each other crawled
 like changing glyphs). Over a surface map's open sky two layers drift by
 (`drawClouds`, right after the background, masked to where the painted sky

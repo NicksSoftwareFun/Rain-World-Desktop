@@ -1,6 +1,6 @@
 // Smoke test: loads the prototype and the wallpaper build headlessly,
 // simulates a few minutes (including a rain downpour) and fails on page
-// errors, non-finite creature positions or an empty ecosystem.
+// errors, non-finite creature positions, an empty ecosystem or slow frames.
 //
 //   cd tests && npm install && npm test
 //   (CHROMIUM_PATH=/path/to/chrome to use a preinstalled browser)
@@ -159,6 +159,41 @@ try {
       if (errors.length) fail('wallpaper page errors:\n  ' + errors.join('\n  '));
     } finally {
       helper.kill();
+    }
+  }
+
+  // 3. Frame time: an average frame (simulation and drawing) on a busy
+  // map in the downpour stays within budget. (Average, not worst: this
+  // GPU-less headless browser batches canvas work into the odd long
+  // frame. Budgets about three times the measured, so only a real
+  // slowdown trips it, e.g. the corpse filter that cost 50-190 ms.)
+  {
+    const BUDGET = { normal: 35, xl: 100 }; // ms; measured ~11 and ~25-36
+    for (const size of Object.keys(BUDGET)) {
+      const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(pathToFileURL(path.join(root, 'index.html')).href + '?paused=1&seed=7');
+      await page.waitForFunction(() => window.RW_APP);
+      const avg = await page.evaluate((size) => {
+        const e = window.RW_APP.engine;
+        window.RW.applySizePreset(e.cfg, size);
+        e.cfg.world.surface = 'always'; // (the sky, its clouds and light: the heaviest to draw)
+        e.regenerate(false);
+        for (let i = 0; i < 60 * 30; i++) e.tick(1 / 60);
+        e.weather.t = e.cfg.rain.cycleMinutes * 60 * 0.85;
+        for (let i = 0; i < 60; i++) e.tick(1 / 60);
+        const t0 = performance.now();
+        for (let i = 0; i < 300; i++) {
+          e.tick(1 / 60);
+          e.render();
+        }
+        return (performance.now() - t0) / 300;
+      }, size);
+      console.log(`frame time (${size}, downpour): ${avg.toFixed(1)} ms average (budget ${BUDGET[size]})`);
+      if (avg > BUDGET[size]) fail(`frame time: ${size} averaged ${avg.toFixed(1)} ms a frame (budget ${BUDGET[size]})`);
+      if (errors.length) fail(`frame time (${size}) page errors:\n  ` + errors.join('\n  '));
+      await page.close();
     }
   }
 } finally {

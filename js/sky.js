@@ -8,7 +8,7 @@
 // The clouds are a tileable fractal noise field (value noise, five
 // octaves, stretched wide), cut off at a cover level with a soft edge and
 // lit from above by how much cloud lies over each pixel (thin tops bright,
-// thick bellies grey), then snapped to a few flat tones so they sit with
+// thick bellies grey), then snapped to sixteen tones so they sit with
 // the pixel art (no dithering: two dithered layers sliding over each other
 // crawled like changing glyphs). A third layer of small low clouds drifts
 // in front of the far scenery (the skyline, the mountains), behind the
@@ -96,9 +96,10 @@
         const a = d[i];
         if (a > 0) {
           // the light left after the cloud above it: tops bright, bellies
-          // grey, in eleven flat tones; the edge a smooth fade
+          // grey, in sixteen tones (fine enough that no contours show);
+          // the edge a smooth fade
           const b = Math.exp(-depth * 0.03);
-          const lv = Math.round(b * 10) / 10;
+          const lv = Math.round(b * 15) / 15;
           const av = a * a * (3 - 2 * a);
           if (av > 0.02) {
             const k = 4 * i;
