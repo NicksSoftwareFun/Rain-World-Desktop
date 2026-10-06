@@ -519,12 +519,50 @@
 
     // A corpse's colour drains away as it lies there: down to about a
     // quarter of its saturation over 40 s, and a little darker.
+    // (Drawn on a little scratch canvas the corpse's size and greyed pixel
+    // by pixel there: a canvas filter would do it in one line, but costs a
+    // whole-screen pass per corpse per frame, which brought the frame rate
+    // down as the dead piled up.)
     drawFaded(ctx, c) {
       const f = U.smooth(U.clamp(c.corpseT / 40, 0, 1));
-      if (!('filter' in ctx) || f < 0.02) return c.draw(ctx);
+      if (f < 0.02) return c.draw(ctx);
+      const m = ctx.getTransform();
+      const k = m.a;
+      const b = c.bounds();
+      const x0 = Math.floor(b[0] * k + m.e) - 1;
+      const y0 = Math.floor(b[1] * k + m.f) - 1;
+      const w = Math.ceil((b[2] - b[0]) * k) + 3;
+      const h = Math.ceil((b[3] - b[1]) * k) + 3;
+      if (!(w > 0 && h > 0) || w * h > 250000) return c.draw(ctx);
+      let cv = this.fadeCv;
+      if (!cv) {
+        cv = this.fadeCv = document.createElement('canvas');
+        this.fadeCtx = cv.getContext('2d', { willReadFrequently: true });
+      }
+      if (cv.width < w || cv.height < h) {
+        cv.width = Math.max(cv.width, w);
+        cv.height = Math.max(cv.height, h);
+      }
+      const g = this.fadeCtx;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, w, h);
+      g.setTransform(k, 0, 0, k, m.e - x0, m.f - y0);
+      c.draw(g);
+      const img = g.getImageData(0, 0, w, h);
+      const d = img.data;
+      const sat = 1 - 0.75 * f;
+      const br = 1 - 0.15 * f;
+      for (let i = 0; i < d.length; i += 4) {
+        if (!d[i + 3]) continue;
+        const l = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+        d[i] = (l + (d[i] - l) * sat) * br;
+        d[i + 1] = (l + (d[i + 1] - l) * sat) * br;
+        d[i + 2] = (l + (d[i + 2] - l) * sat) * br;
+      }
+      g.putImageData(img, 0, 0);
       ctx.save();
-      ctx.filter = `saturate(${(1 - 0.75 * f).toFixed(3)}) brightness(${(1 - 0.15 * f).toFixed(3)})`;
-      c.draw(ctx);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(cv, 0, 0, w, h, x0, y0, w, h);
       ctx.restore();
     }
 

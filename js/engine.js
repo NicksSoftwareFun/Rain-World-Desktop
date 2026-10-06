@@ -220,7 +220,7 @@
         }
         const col = U.rgba(U.mix(this.pal.near, this.pal.fog, 0.15));
         for (const c of d.chains || []) {
-          rec.plant(c.x, c.y0 || 0, true, { give: 0.9, tip: c, len: c.len });
+          rec.plant(c.x, c.y0 || 0, true, { give: 0.9, tip: c, len: c.len, rigid: true });
           RW.Background.drawChain(rec, c, col, this.ps / this.zoom);
         }
         this.eco.grassInFoliage = true;

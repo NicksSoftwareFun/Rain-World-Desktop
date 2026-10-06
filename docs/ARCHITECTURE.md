@@ -402,7 +402,9 @@ lizard flees one it sees (greens only up close), so a red one often uses
 its spines on fleeing prey. A red centipede shocking something armoured
 runs off round the far side after each shock (`Centipede.startRun`) and
 comes in again from there. Corpses fade toward grey as they lie
-(`Ecosystem.drawFaded`, a canvas filter on `corpseT`).
+(`Ecosystem.drawFaded`, on `corpseT`: drawn on a corpse-sized scratch
+canvas and greyed pixel by pixel; a canvas filter cost a whole-screen
+pass per corpse per frame).
 
 Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
 behind everything that moves): wall cogs, machine housings, wall fans,
@@ -420,11 +422,14 @@ the cables slung between walls (`opts.swag`: they swing about the line
 between their ends and are bumped only right at the cable) and the
 hanging chains (`Background.drawChain`, whole art pixels; their drips
 follow the swinging tip) draw through a recorder clump by clump
-(`rec.plant(x, y, hang, opts)`); each clump becomes a crisp sprite drawn
-every frame in front of the creatures (before the water), sheared about
-its root: a damped spring pushed by the rain's wind (more in the
-downpour; kelp drifts in the current) and by anything moving through it.
-They block nothing. Each casts a flat shadow onto the wall (none under
-water), drawn behind the creatures and moving with it. The Ledges layout
+(`rec.plant(x, y, hang, opts)`). Each clump is redrawn a few times over,
+bent a little further each time (the recorded strokes replayed through
+`Foliage.bender`: stems curve, chains and cables swing straight, leaves
+and links move whole), all onto one crisp sprite sheet; every frame each
+shows the pose nearest its lean, a plain copy in front of the creatures
+(before the water). The lean is a damped spring pushed by the rain's wind
+(more in the downpour; kelp drifts in the current) and by anything moving
+through it. They block nothing. Each casts a flat shadow onto the wall
+(none under water), drawn behind the creatures and moving with it. The Ledges layout
 gets one too (its grass and chains).
 

@@ -10,15 +10,17 @@
 // would onto a canvas, calling rec.plant(x, y, hang) first to say where the
 // clump is rooted (hang: rooted at the top, a vine hanging down; opts.swag:
 // a cable slung between two points, swinging about the line between them).
-// Each clump is then drawn once onto its own little crisp sprite, and every
-// frame it's drawn bent about its root: a shear, which is one drawImage a
-// plant (two with its shadow).
+// Each clump is then drawn a few times over, bent a little further each
+// time (its strokes re-drawn through the bend, so every pose is clean pixel
+// art: no rows of pixels sliding sideways), all onto one sprite sheet. Each
+// frame shows the pose nearest its lean: one plain copy a plant (two with
+// its shadow).
 (function () {
   'use strict';
   const RW = window.RW;
   const U = RW.U;
 
-  const PROPS = ['strokeStyle', 'fillStyle', 'lineWidth', 'lineCap', 'lineJoin', 'globalAlpha'];
+  const PROPS = ['strokeStyle', 'fillStyle', 'lineWidth', 'lineCap', 'lineJoin', 'globalAlpha', 'globalCompositeOperation'];
   const METHODS = ['beginPath', 'moveTo', 'lineTo', 'quadraticCurveTo', 'bezierCurveTo', 'closePath', 'stroke', 'fill', 'fillRect', 'arc', 'ellipse', 'save', 'restore'];
 
   class Foliage {
@@ -64,6 +66,7 @@
         wet: !!o.wet,
         tip: o.tip || null, // (told how far its bottom has swung: a chain's drips follow it)
         len: o.len || 0,
+        rigid: !!o.rigid, // (swings straight, like a chain, rather than curving)
         ops: [], state: { lineWidth: 1 },
         x0: x, y0: y, x1: x, y1: y,
         a: 0, v: 0, phase: Math.random() * 10,
@@ -93,40 +96,114 @@
       if (this.built === k) return;
       this.built = k;
       this.cur = null;
+      // each plant's reach (root to tip, or a cable's sag) and its poses:
+      // from leaning hard one way to the other, the tip moving up to M art
+      // pixels, in 2n + 1 steps
       for (const p of this.plants) {
-        const w = Math.max(1, Math.ceil((p.x1 - p.x0) * k) + 2);
-        const h = Math.max(1, Math.ceil((p.y1 - p.y0) * k) + 2);
-        const c = document.createElement('canvas');
-        c.width = w;
-        c.height = h;
-        const x = c.getContext('2d', { willReadFrequently: true });
-        x.setTransform(k, 0, 0, k, (1 - p.x0 * k), (1 - p.y0 * k));
-        for (const [m, a] of p.ops) {
-          if (typeof x[m] === 'function') x[m](...a);
-          else x[m] = a;
+        p.reach = Math.max(1, p.swag ? p.swag.sag : p.hang ? p.y1 - p.y : p.y - p.y0);
+        p.M = U.clamp(p.reach * k * 0.25, 1, 6);
+        p.n = Math.min(3, Math.ceil(p.M));
+        p.pad = Math.ceil(p.M) + 1;
+        p.w = Math.max(1, Math.ceil((p.x1 - p.x0) * k) + 2 + 2 * p.pad);
+        p.h = Math.max(1, Math.ceil((p.y1 - p.y0) * k) + 2);
+        p.pose = 0;
+      }
+      // shelves on one sheet, a row of poses per plant
+      const gap = 2;
+      const SW = Math.max(1024, ...this.plants.map((p) => (2 * p.n + 1) * (p.w + gap)));
+      let x = 0;
+      let y = 0;
+      let row = 0;
+      for (const p of this.plants) {
+        const need = (2 * p.n + 1) * (p.w + gap);
+        if (x + need > SW) {
+          x = 0;
+          y += row + gap;
+          row = 0;
         }
-        U.crisp(c, 128);
-        // (a plain copy to draw from: the crisped one is kept in memory for
-        // reading back, which makes drawing it every frame slow)
-        const d = document.createElement('canvas');
-        d.width = w;
-        d.height = h;
-        d.getContext('2d').drawImage(c, 0, 0);
-        p.img = d;
-        // its shadow: the same shape, flat (none under water)
-        p.shadow = null;
-        if (shadow && !p.wet) {
-          const sd = document.createElement('canvas');
-          sd.width = w;
-          sd.height = h;
-          const sx = sd.getContext('2d');
-          sx.drawImage(d, 0, 0);
-          sx.globalCompositeOperation = 'source-in';
-          sx.fillStyle = shadow;
-          sx.fillRect(0, 0, w, h);
-          p.shadow = sd;
+        p.sx = x;
+        p.sy = y;
+        x += need;
+        row = Math.max(row, p.h);
+      }
+      const SH = Math.max(1, y + row);
+      const c = document.createElement('canvas');
+      c.width = SW;
+      c.height = SH;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      for (const p of this.plants) {
+        for (let j = -p.n; j <= p.n; j++) {
+          const T = (j / p.n) * (p.M / k); // the tip's shift, world units
+          const bend = this.bender(p, T);
+          const ox = p.sx + (j + p.n) * (p.w + gap);
+          g.save();
+          g.beginPath();
+          g.rect(ox, p.sy, p.w, p.h);
+          g.clip();
+          g.setTransform(k, 0, 0, k, ox + 1 + p.pad - p.x0 * k, p.sy + 1 - p.y0 * k);
+          for (const [m, a] of p.ops) {
+            if (typeof g[m] !== 'function') g[m] = a;
+            else g[m](...bend(m, a));
+          }
+          g.restore();
         }
       }
+      U.crisp(c, 128);
+      // (plain copies to draw from: the crisped one is kept in memory for
+      // reading back, which makes drawing from it slow)
+      const sheet = document.createElement('canvas');
+      sheet.width = SW;
+      sheet.height = SH;
+      sheet.getContext('2d').drawImage(c, 0, 0);
+      this.sheet = sheet;
+      this.shadowSheet = null;
+      if (shadow) {
+        // the shadows: the same shapes, flat (none drawn under water)
+        const sd = document.createElement('canvas');
+        sd.width = SW;
+        sd.height = SH;
+        const sx = sd.getContext('2d');
+        sx.drawImage(sheet, 0, 0);
+        sx.globalCompositeOperation = 'source-in';
+        sx.fillStyle = shadow;
+        sx.fillRect(0, 0, SW, SH);
+        this.shadowSheet = sd;
+      }
+      this.gap = gap;
+    }
+    // The bend for one pose: each point shifted sideways by T times how far
+    // along the plant it is (squared: a stem curves, stiff at the root; a
+    // chain or cable swings straight). Shapes (leaves, bulbs, links) move
+    // whole with their centre.
+    bender(p, T) {
+      const sw = p.swag;
+      const along = (x, y) => {
+        let u;
+        if (sw) {
+          const t = U.clamp((x - sw.x0) / (sw.x1 - sw.x0 || 1), 0, 1);
+          u = (y - U.lerp(sw.y0, sw.y1, t)) / p.reach;
+        } else u = p.hang ? (y - p.y) / p.reach : (p.y - y) / p.reach;
+        u = U.clamp(u, 0, 1.2);
+        return T * (p.rigid || sw ? u : u * u);
+      };
+      return (m, a) => {
+        if (m === 'moveTo' || m === 'lineTo' || m === 'quadraticCurveTo' || m === 'bezierCurveTo') {
+          const b = a.slice();
+          for (let i = 0; i + 1 < b.length; i += 2) b[i] += along(b[i], b[i + 1]);
+          return b;
+        }
+        if (m === 'arc' || m === 'ellipse') {
+          const b = a.slice();
+          b[0] += along(a[0], a[1]);
+          return b;
+        }
+        if (m === 'fillRect') {
+          const b = a.slice();
+          b[0] += along(a[0] + a[2] / 2, a[1] + a[3] / 2);
+          return b;
+        }
+        return a;
+      };
     }
 
     // Sway and bumps: each plant a damped spring about upright, pushed by
@@ -170,44 +247,38 @@
         p.v += ((target - p.a) * 26 - p.v * 5) * dt + U.clamp(push * 0.0009 * g, -0.12, 0.12);
         p.a = U.clamp(p.a + p.v * dt, -0.6, 0.6);
         if (p.tip) p.tip.dx = p.a * p.len;
+        // the pose nearest its lean (the tip's shift, a * reach)
+        if (p.n) p.pose = Math.round(U.clamp((p.a * p.reach * this.built) / p.M, -1, 1) * p.n);
       }
     }
 
-    // Bent about the root: x shifts in proportion to the distance from its
-    // root line (ox, oy: an offset in art pixels, for the shadows).
-    place(ctx, p, k, ox, oy) {
-      const s = p.hang ? -p.a : p.a;
-      const rx = p.x * k;
-      const ry = p.y * k;
-      // x' = x + s * (ry - y) + s * m * (x - rx): leaning away from the root
-      ctx.setTransform(1 + s * p.m, 0, -s, 1, s * (ry - p.m * rx) + ox, oy);
+    // Each in its pose: a plain copy off the sheet (ox, oy: an offset in art
+    // pixels, for the shadows).
+    blit(ctx, img, k, ox, oy, skipWet) {
+      const gap = this.gap;
+      for (const p of this.plants) {
+        if (skipWet && p.wet) continue;
+        ctx.drawImage(img, p.sx + (p.pose + p.n) * (p.w + gap), p.sy, p.w, p.h, Math.round(p.x0 * k) - 1 - p.pad + ox, Math.round(p.y0 * k) - 1 + oy, p.w, p.h);
+      }
     }
     draw(ctx, k) {
-      if (!this.plants.length) return;
+      if (!this.plants.length || !this.sheet) return;
       ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 0.88; // (a creature behind still shows through a little)
-      for (const p of this.plants) {
-        if (!p.img) continue;
-        this.place(ctx, p, k, 0, 0);
-        ctx.drawImage(p.img, Math.round(p.x0 * k) - 1, Math.round(p.y0 * k) - 1);
-      }
+      this.blit(ctx, this.sheet, k, 0, 0, false);
       ctx.restore();
     }
     // The shadows, on the wall: drawn before the creatures (which pass
     // between the plant and its shadow).
     drawShadows(ctx, k) {
-      if (!this.plants.length) return;
+      if (!this.plants.length || !this.shadowSheet) return;
       ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 0.38;
-      const ox = Math.max(1, Math.round(2.5 * k));
-      const oy = Math.max(1, Math.round(4 * k));
-      for (const p of this.plants) {
-        if (!p.shadow) continue;
-        this.place(ctx, p, k, ox, oy);
-        ctx.drawImage(p.shadow, Math.round(p.x0 * k) - 1, Math.round(p.y0 * k) - 1);
-      }
+      this.blit(ctx, this.shadowSheet, k, Math.max(1, Math.round(2.5 * k)), Math.max(1, Math.round(4 * k)), true);
       ctx.restore();
     }
   }

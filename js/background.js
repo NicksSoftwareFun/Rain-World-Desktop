@@ -1509,7 +1509,9 @@
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    fanFrames(canvas);
+    // (once a painting: a room has no cast shadows, so recomposing for the
+    // light changes nothing under the fans)
+    if (!B.fans) fanFrames(canvas);
   }
 
   // The wall fans' turning blades. Painted, a fan is an empty housing; here
@@ -1623,10 +1625,12 @@
       const y = y0 + i * 3 * px;
       if (i % 2) ctx.fillRect(x, y, px, 4 * px);
       else {
-        ctx.fillRect(x - px, y, 3 * px, px);
-        ctx.fillRect(x - px, y + 3 * px, 3 * px, px);
-        ctx.fillRect(x - px, y, px, 4 * px);
-        ctx.fillRect(x + px, y, px, 4 * px);
+        // (a block with its hole cut: two rects about the same centre, so
+        // a link moves whole when the chain swings, see RW.Foliage)
+        ctx.fillRect(x - px, y, 3 * px, 4 * px);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillRect(x, y + px, px, 2 * px);
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
   }
