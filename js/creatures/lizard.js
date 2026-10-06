@@ -2580,7 +2580,7 @@
       let y = -6.2;
       let a = U.lerp(-2.95, -1.95, F) + (far ? 0.18 + 0.12 * F : 0); // (back, or up when flared)
       const segs = 6;
-      ctx.lineWidth = Math.max(u * 1.3, 0.85);
+      ctx.lineWidth = Math.max(u * 1.3, 0.85) + u; // (a pixel thicker than a hairline)
       for (let k = 0; k < segs; k++) {
         // each segment bends a little more than the one before: a floppy
         // whip, sagging toward its tip
@@ -2596,7 +2596,7 @@
         ctx.stroke();
         // the joint: a bead a shade lighter
         ctx.fillStyle = jointCol;
-        const j = Math.max(u * 1.4, 0.9);
+        const j = Math.max(u * 1.4, 0.9) + u;
         ctx.fillRect(nx - j / 2, ny - j / 2, j, j);
         x = nx;
         y = ny;
