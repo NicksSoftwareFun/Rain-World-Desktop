@@ -3121,6 +3121,141 @@
     const lipL = U.rgba(U.mix(pal.mass, pal.light, 0.26)); // a lit lip
     const rimIn = U.rgba(U.mix(pal.mass, pal.light, 0.1)); // a hole's far inside edge
     const holeBack = U.rgba(U.mix(pal.mass, '#000000', 0.32)); // structure at the back of a hole
+    const trussC = U.rgba(U.mix(pal.mass, pal.light, 0.1));
+    const trussL = U.rgba(U.mix(pal.mass, pal.light, 0.2));
+    const earthC = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.3), pal.light, 0.06));
+    const earthD = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.2), '#000000', 0.15));
+    const earthL = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.3), pal.light, 0.2));
+    const rustB = U.rgba(U.mix(pal.rust, pal.mass, 0.35));
+    const rustL = U.rgba(U.mix(pal.rust, pal.light, 0.15));
+    // What's behind a hole broken into the rock.
+    const backWall = (x, y, w, h) => {
+      // a truss across it (or up it): two chords, a zigzag of struts,
+      // each casting its shadow on the dark behind
+      if (R() < 0.65) {
+        const across = w >= h * 0.8 ? R() < 0.8 : R() < 0.25;
+        const span = across ? w : h;
+        const depth = Math.min(across ? h : w, R(12, 20));
+        const at = (across ? y + h * R(0.18, 0.5) : x + w * R(0.2, 0.6));
+        const seg = depth * R(0.9, 1.3);
+        const bar = (x0, y0, x1, y1, wd) => {
+          for (const [col, o] of [[shade1, 3], [trussC, 0]]) {
+            l.strokeStyle = col;
+            l.lineWidth = wd;
+            l.beginPath();
+            l.moveTo(x0 + o, y0 + o + 1);
+            l.lineTo(x1 + o, y1 + o + 1);
+            l.stroke();
+          }
+        };
+        const P = (t, d) => (across ? [x + t, at + d] : [at + d, y + t]);
+        bar(...P(-4, 0), ...P(span + 4, 0), 4);
+        bar(...P(-4, depth), ...P(span + 4, depth), 4);
+        let k = 0;
+        for (let t = R(0, seg); t < span + seg; t += seg, k++) {
+          bar(...P(t, 0), ...P(t + seg, depth), 2.5);
+          bar(...P(t + seg, depth), ...P(t + seg, 0), 2.5);
+        }
+        // the lit edge of the upper chord
+        l.strokeStyle = trussL;
+        l.lineWidth = 1;
+        l.beginPath();
+        l.moveTo(...P(-4, -1.2));
+        l.lineTo(...P(span + 4, -1.2));
+        l.stroke();
+        // a rivet plate where a strut meets the chord, now and then
+        l.fillStyle = trussL;
+        for (let t = R(0, seg * 2); t < span; t += seg * 2) {
+          const [rx, ry] = P(t, 0);
+          l.fillRect(rx - 2, ry - 2, 4, 4);
+        }
+      }
+      // crumbling earth heaped along the bottom: a lumpy mound with darker
+      // strata, clods loose on it, dirt trickling from the top
+      if (R() < 0.75) {
+        const top = h * R(0.28, 0.5);
+        const pts2 = [];
+        let hh = top * R(0.5, 0.9);
+        for (let t = -4; t <= w + 6; t += R(4, 8)) {
+          hh = U.clamp(hh + R(-4, 4), top * 0.3, top);
+          pts2.push([x + t, y + h - hh]);
+        }
+        l.fillStyle = earthC;
+        l.beginPath();
+        l.moveTo(x - 6, y + h + 6);
+        for (const [px2, py2] of pts2) l.lineTo(px2, py2);
+        l.lineTo(x + w + 8, y + h + 6);
+        l.closePath();
+        l.fill();
+        // its lit crest, and layers through it
+        l.strokeStyle = earthL;
+        l.lineWidth = 1.5;
+        l.beginPath();
+        pts2.forEach(([px2, py2], i) => (i ? l.lineTo(px2, py2) : l.moveTo(px2, py2)));
+        l.stroke();
+        l.fillStyle = earthD;
+        for (let k = 0; k < 3; k++) {
+          const sy = y + h - top * R(0.1, 0.55);
+          for (let t = x + R(0, 10); t < x + w; t += R(6, 14)) l.fillRect(t, sy + R(-1, 1), R(4, 10), 1.5);
+        }
+        // clods and stones
+        for (let k = 0; k < Math.round(w / 10); k++) {
+          const cx = x + R(0, w);
+          const cy = y + h - top * R(0, 0.9);
+          const sz = R(2, 5);
+          l.fillStyle = R() < 0.5 ? earthL : earthD;
+          l.fillRect(cx, cy, sz, sz * R(0.6, 1));
+        }
+        // trickling from the top edge
+        l.fillStyle = earthC;
+        for (let k = 0; k < 3; k++) {
+          const tx = x + R(0.1, 0.9) * w;
+          for (let t = 0; t < R(8, 26); t += R(3, 6)) l.fillRect(tx + R(-1, 1), y + t, R(1, 2.5), R(1, 2.5));
+        }
+        // a root through it
+        if (R() < 0.4) {
+          l.strokeStyle = earthD;
+          l.lineWidth = 1.5;
+          l.beginPath();
+          let rx = x + R(0, w);
+          let ry = y;
+          l.moveTo(rx, ry);
+          for (let t = 0; t < h * 0.7; t += 5) {
+            rx += R(-3, 3);
+            ry += 5;
+            l.lineTo(rx, ry);
+          }
+          l.stroke();
+        }
+      }
+      // rusted scrap: flakes, a bent rod, a plate fallen on the heap
+      const nScrap = Math.round(w / 18) + 1;
+      for (let k = 0; k < nScrap; k++) {
+        const sx = x + R(0, w);
+        const sy = y + h - R(4, h * 0.35);
+        const r = R();
+        if (r < 0.4) {
+          l.fillStyle = R() < 0.5 ? rustB : rustL;
+          l.fillRect(sx, sy, R(2, 5), R(1.5, 3));
+        } else if (r < 0.7) {
+          l.strokeStyle = rustB;
+          l.lineWidth = 1.8;
+          l.beginPath();
+          l.moveTo(sx, sy);
+          l.lineTo(sx + R(-10, 10), sy - R(4, 12));
+          l.lineTo(sx + R(-14, 14), sy - R(6, 16));
+          l.stroke();
+        } else {
+          const pw2 = R(7, 14);
+          l.fillStyle = shade1;
+          l.fillRect(sx + 2, sy + 2, pw2, 3.5);
+          l.fillStyle = rustB;
+          l.fillRect(sx, sy, pw2, 3.5);
+          l.fillStyle = rustL;
+          l.fillRect(sx, sy, pw2, 1);
+        }
+      }
+    };
     // A hole broken into the rock: dark inside, then (over whatever's in
     // it) the rock's lip shadowing the top and left inside, the bottom and
     // right inside edges catching the light, a lit rim along the top
@@ -3134,11 +3269,10 @@
       l.beginPath();
       trace(pts, 0, 0);
       l.clip();
-      // the back of it: faint ribs of whatever structure's in there
-      l.fillStyle = holeBack;
+      // the back of it: a truss, crumbling earth heaped at the bottom, rusted
+      // scrap lying on it
       const bb = pts.reduce((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [1e9, 1e9, -1e9, -1e9]);
-      if (R() < 0.5) for (let x = bb[0] + R(4, 10); x < bb[2]; x += R(12, 22)) l.fillRect(x, bb[1], R(2, 4), bb[3] - bb[1]);
-      else for (let y = bb[1] + R(4, 10); y < bb[3]; y += R(12, 22)) l.fillRect(bb[0], y, bb[2] - bb[0], R(2, 4));
+      backWall(bb[0], bb[1], bb[2] - bb[0], bb[3] - bb[1]);
       if (inside) inside();
       // the lip's shadow: everything in the hole outside the hole moved
       // down and right
@@ -3305,9 +3439,9 @@
         const vert = ph > pw * 0.9 ? true : R() < 0.3;
         const pts = ragPts(px + 2, py + 2, pw - 4, ph - 4, 7);
         hole_(pts, () => {
-        const n = 8; // (as many as fill the break)
+        const n = 2 + Math.floor(R() * 3); // (gaps between: the back of the break shows through)
         const span = vert ? pw : ph;
-        let o = R(2, 6);
+        let o = R(4, 12);
         const broke = Math.floor(R() * 4);
         const big = Math.floor(R() * 3); // (one main, the rest thinner)
         // (a rect across the run (along it at t, w long; across at o, d deep)
@@ -3342,7 +3476,7 @@
             else l.fillRect(px + cut - 2, py + o + 1, 3, w - 2);
             weep(vert ? px + o : px + cut - 4, vert ? px + o + w : px + cut, vert ? py + cut : py + o + w);
           }
-          o += w + R(4, 9);
+          o += w + R(9, 18);
         }
         });
       },
