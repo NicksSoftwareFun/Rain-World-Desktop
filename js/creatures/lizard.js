@@ -2581,17 +2581,18 @@
       const col = U.rgba(far ? U.scale(base, 0.55) : base);
       let x = far ? 0.6 : -1.2;
       let y = far ? -5.4 : -5.8;
-      let a = U.lerp(-2.85, -2.35, F) + (far ? 0.2 : 0); // (back, lifting when flared)
-      const segs = 4;
+      let a = U.lerp(-3.0, -2.4, F) + (far ? 0.16 : 0); // (back, lifting when flared)
+      const segs = 5;
       ctx.lineCap = 'round';
       ctx.strokeStyle = col;
       for (let k = 0; k < segs; k++) {
         // (stiff: a little give as the head moves, mostly the curl)
-        a += bend * (0.12 + k * 0.06) + (k > 0 ? U.lerp(0.42, 0.5, F) : 0);
-        const len = 3.3 - k * 0.45;
+        // (long: lying back along the neck, the curl gathering toward the end)
+        a += bend * (0.12 + k * 0.06) + (k > 0 ? U.lerp(0.08 + k * 0.09, 0.22 + k * 0.05, F) : 0);
+        const len = 4.8 - k * 0.45;
         const nx = x + Math.cos(a) * len;
         const ny = y + Math.sin(a) * len;
-        ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * (2.4 - k * 0.75);
+        ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * (2.6 - k * 0.55);
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(nx, ny);
