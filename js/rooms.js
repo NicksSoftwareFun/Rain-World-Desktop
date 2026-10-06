@@ -3098,15 +3098,113 @@
       l.fillStyle = rimL;
       l.fillRect(x - 1, y - 1, 2, 2);
     };
-    // a ragged outline round a rectangle: the edge stepped in and out
-    const ragged = (x, y, w, h, j) => {
-      l.beginPath();
+    // a ragged outline round a rectangle (the edge stepped in and out), as
+    // points, so the same hole can be filled, clipped to and shaded
+    const ragPts = (x, y, w, h, j) => {
+      const pts = [];
       const step = 6;
-      for (let t = 0; t <= w; t += step) l.lineTo(x + t, y + R(-j, j * 0.4));
-      for (let t = 0; t <= h; t += step) l.lineTo(x + w + R(-j * 0.4, j), y + t);
-      for (let t = w; t >= 0; t -= step) l.lineTo(x + t, y + h + R(-j * 0.4, j));
-      for (let t = h; t >= 0; t -= step) l.lineTo(x + R(-j, j * 0.4), y + t);
+      for (let t = 0; t <= w; t += step) pts.push([x + t, y + R(-j, j * 0.4)]);
+      for (let t = 0; t <= h; t += step) pts.push([x + w + R(-j * 0.4, j), y + t]);
+      for (let t = w; t >= 0; t -= step) pts.push([x + t, y + h + R(-j * 0.4, j)]);
+      for (let t = h; t >= 0; t -= step) pts.push([x + R(-j, j * 0.4), y + t]);
+      return pts;
+    };
+    const trace = (pts, dx, dy) => {
+      l.moveTo(pts[0][0] + dx, pts[0][1] + dy);
+      for (let i = 1; i < pts.length; i++) l.lineTo(pts[i][0] + dx, pts[i][1] + dy);
       l.closePath();
+    };
+    // Depth (the light from the upper left). Solid colours only: this
+    // layer is snapped to hard pixels, where see-through would vanish.
+    const shade1 = U.rgba(U.mix(pal.mass, '#000000', 0.62)); // deep shadow in a hole
+    const shade2 = U.rgba(U.mix(pal.mass, '#000000', 0.3)); // a cast shadow on the rock
+    const lipL = U.rgba(U.mix(pal.mass, pal.light, 0.26)); // a lit lip
+    const rimIn = U.rgba(U.mix(pal.mass, pal.light, 0.1)); // a hole's far inside edge
+    const holeBack = U.rgba(U.mix(pal.mass, '#000000', 0.32)); // structure at the back of a hole
+    // A hole broken into the rock: dark inside, then (over whatever's in
+    // it) the rock's lip shadowing the top and left inside, the bottom and
+    // right inside edges catching the light, a lit rim along the top
+    // outside. inside(): draws what's in the hole (clipped to it).
+    const hole_ = (pts, inside) => {
+      l.fillStyle = hole;
+      l.beginPath();
+      trace(pts, 0, 0);
+      l.fill();
+      l.save();
+      l.beginPath();
+      trace(pts, 0, 0);
+      l.clip();
+      // the back of it: faint ribs of whatever structure's in there
+      l.fillStyle = holeBack;
+      const bb = pts.reduce((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [1e9, 1e9, -1e9, -1e9]);
+      if (R() < 0.5) for (let x = bb[0] + R(4, 10); x < bb[2]; x += R(12, 22)) l.fillRect(x, bb[1], R(2, 4), bb[3] - bb[1]);
+      else for (let y = bb[1] + R(4, 10); y < bb[3]; y += R(12, 22)) l.fillRect(bb[0], y, bb[2] - bb[0], R(2, 4));
+      if (inside) inside();
+      // the lip's shadow: everything in the hole outside the hole moved
+      // down and right
+      l.fillStyle = shade1;
+      l.beginPath();
+      l.rect(-1e4, -1e4, 2e4, 2e4);
+      trace(pts, 5, 7);
+      l.fill('evenodd');
+      // the far inside edges, faintly lit
+      l.fillStyle = rimIn;
+      l.beginPath();
+      l.rect(-1e4, -1e4, 2e4, 2e4);
+      trace(pts, -1.5, -1.5);
+      l.fill('evenodd');
+      l.restore();
+      // the rock's broken lip along the top, catching the light
+      l.save();
+      l.beginPath();
+      l.rect(-1e4, -1e4, 2e4, 2e4);
+      trace(pts, 0, 0);
+      l.clip('evenodd');
+      l.strokeStyle = lipL;
+      l.lineWidth = 1.5;
+      l.beginPath();
+      let on = false;
+      for (let i = 0; i < pts.length; i++) {
+        const [x0, y0] = pts[i];
+        const [x1, y1] = pts[(i + 1) % pts.length];
+        // (top and left runs only: the edge facing the light)
+        const up = x1 > x0 + 0.5 || y1 < y0 - 0.5;
+        if (up) {
+          if (!on) l.moveTo(x0 - 0.5, y0 - 1);
+          l.lineTo(x1 - 0.5, y1 - 1);
+          on = true;
+        } else on = false;
+      }
+      l.stroke();
+      l.restore();
+    };
+    // A raised piece: its shadow cast down and right onto the rock first.
+    // shape(dx, dy) builds its outline's path.
+    const castShadow = (shape) => {
+      l.fillStyle = shade2;
+      l.beginPath();
+      shape(4, 5);
+      l.fill();
+    };
+    // ...and after it's drawn, its edges: lit up and left, dark down and right
+    const bevelRect = (x, y, w, h) => {
+      l.fillStyle = rimL;
+      l.fillRect(x, y, w, 1.5);
+      l.fillRect(x, y, 1.5, h);
+      l.fillStyle = rimD;
+      l.fillRect(x, y + h - 2, w, 2);
+      l.fillRect(x + w - 2, y, 2, h);
+    };
+    const bevelArc = (cx, cy, r, w) => {
+      l.lineWidth = w || 1.5;
+      l.strokeStyle = rimL;
+      l.beginPath();
+      l.arc(cx, cy, r - 1, Math.PI * 0.95, Math.PI * 1.75);
+      l.stroke();
+      l.strokeStyle = rimD;
+      l.beginPath();
+      l.arc(cx, cy, r - 1, Math.PI * 1.95, Math.PI * 0.75);
+      l.stroke();
     };
     // the rock taking a bite back out of a corner or two (it's been here
     // longer than whatever was built into it)
@@ -3137,16 +3235,30 @@
       for (let x = x0 + R(2, 8); x < x1 - 2; x += R(6, 16)) if (R() < 0.6) l.fillRect(x, y, R(1.5, 3), R(10, 34));
     };
     const gearAt = (cx, cy, r, teeth) => {
+      const outline = (dx, dy) => {
+        for (let i = 0; i < teeth * 2; i++) {
+          const a = (i / (teeth * 2)) * U.TAU;
+          const rr = i % 2 ? r : r * 0.84;
+          const a2 = ((i + 1) / (teeth * 2)) * U.TAU;
+          l.lineTo(cx + dx + Math.cos(a) * rr, cy + dy + Math.sin(a) * rr);
+          l.lineTo(cx + dx + Math.cos(a2) * rr, cy + dy + Math.sin(a2) * rr);
+        }
+        l.closePath();
+      };
+      // its shadow on the back of the hole
+      l.fillStyle = shade1;
+      l.beginPath();
+      outline(5, 6);
+      l.fill();
       l.fillStyle = plate2;
       l.beginPath();
-      for (let i = 0; i < teeth * 2; i++) {
-        const a = (i / (teeth * 2)) * U.TAU;
-        const rr = i % 2 ? r : r * 0.84;
-        const a2 = ((i + 1) / (teeth * 2)) * U.TAU;
-        l.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
-        l.lineTo(cx + Math.cos(a2) * rr, cy + Math.sin(a2) * rr);
-      }
-      l.closePath();
+      outline(0, 0);
+      l.fill();
+      // the face: lit toward the light, shaded away from it
+      bevelArc(cx, cy, r * 0.84, 2);
+      l.fillStyle = plate;
+      l.beginPath();
+      l.arc(cx + r * 0.08, cy + r * 0.1, r * 0.72, 0, U.TAU);
       l.fill();
       l.strokeStyle = rimL;
       l.lineWidth = 1.5;
@@ -3163,6 +3275,11 @@
         l.closePath();
         l.fill();
       }
+      // the hub, standing out of it
+      l.fillStyle = rimD;
+      l.beginPath();
+      l.arc(cx + 1.5, cy + 2, r * 0.17, 0, U.TAU);
+      l.fill();
       l.fillStyle = rimL;
       l.beginPath();
       l.arc(cx, cy, r * 0.16, 0, U.TAU);
@@ -3174,38 +3291,36 @@
         const r = Math.min(pw, ph) * R(0.55, 0.75);
         const cx = px + pw * R(0.3, 0.7);
         const cy = py + ph * (R() < 0.5 ? R(0.15, 0.35) : R(0.65, 0.85));
-        l.fillStyle = hole;
-        ragged(px + 4, py + 4, pw - 8, ph - 8, 5);
-        l.fill();
-        l.save();
-        ragged(px + 4, py + 4, pw - 8, ph - 8, 5);
-        l.clip();
-        gearAt(cx, cy, r, Math.max(10, Math.round(r / 3)));
-        if (R() < 0.6) gearAt(cx + r * 1.3 * (R() < 0.5 ? -1 : 1), cy + r * 0.5, r * 0.55, 9);
-        l.restore();
+        const pts = ragPts(px + 4, py + 4, pw - 8, ph - 8, 5);
+        const two = R() < 0.6;
+        const side = R() < 0.5 ? -1 : 1;
+        hole_(pts, () => {
+          if (two) gearAt(cx + r * 1.3 * side, cy + r * 0.5, r * 0.55, 9);
+          gearAt(cx, cy, r, Math.max(10, Math.round(r / 3)));
+        });
         crack(px + pw * R(0.2, 0.8), py + ph, R(-0.3, 0.3), 1, R(10, 30));
       },
       // a break in the rock with a run of pipes through it, one snapped
       pipes(px, py, pw, ph) {
         const vert = ph > pw * 0.9 ? true : R() < 0.3;
-        l.fillStyle = hole;
-        ragged(px + 2, py + 2, pw - 4, ph - 4, 7);
-        l.fill();
-        l.save();
-        ragged(px + 2, py + 2, pw - 4, ph - 4, 7);
-        l.clip();
-        const n = 2 + Math.floor(R() * 3);
+        const pts = ragPts(px + 2, py + 2, pw - 4, ph - 4, 7);
+        hole_(pts, () => {
+        const n = 8; // (as many as fill the break)
         const span = vert ? pw : ph;
-        let o = R(4, 10);
-        const broke = Math.floor(R() * n);
-        const big = Math.floor(R() * n); // (one main, the rest thinner)
+        let o = R(2, 6);
+        const broke = Math.floor(R() * 4);
+        const big = Math.floor(R() * 3); // (one main, the rest thinner)
         // (a rect across the run (along it at t, w long; across at o, d deep)
         const R2 = (t, oo, len2, d) => (vert ? l.fillRect(px + oo, py + t, d, len2) : l.fillRect(px + t, py + oo, len2, d));
         for (let i = 0; i < n && o < span - 6; i++) {
           const w = i === big ? R(13, 18) : R(5, 9);
           const len = vert ? ph : pw;
           const cut = i === broke ? R(0.3, 0.7) * len : len;
-          // round: a lit side, the body, a shadowed side
+          // its shadow on the back of the hole, then round: a lit side,
+          // the body, a shadowed side
+          l.fillStyle = shade1;
+          if (vert) l.fillRect(px + o + 4, py, w, cut + 5);
+          else l.fillRect(px, py + o + 5, cut + 4, w);
           l.fillStyle = plate2;
           R2(0, o, cut, w);
           l.fillStyle = rimL;
@@ -3229,7 +3344,7 @@
           }
           o += w + R(4, 9);
         }
-        l.restore();
+        });
       },
       // a round porthole hatch (bolts, a cross of bars or a wheel), or a
       // rounded pressure door with hinges and its wheel
@@ -3238,14 +3353,27 @@
           const r = Math.min(pw, ph) * 0.45;
           const cx = px + pw / 2;
           const cy = py + ph / 2;
+          castShadow((dx, dy) => l.arc(cx + dx, cy + dy, r, 0, U.TAU));
           l.fillStyle = plate2;
           l.beginPath();
           l.arc(cx, cy, r, 0, U.TAU);
           l.fill();
+          bevelArc(cx, cy, r, 2);
           l.fillStyle = hole;
           l.beginPath();
           l.arc(cx, cy, r * 0.72, 0, U.TAU);
           l.fill();
+          // the glass's depth: the rim's shadow inside it, top and left
+          l.fillStyle = shade1;
+          l.beginPath();
+          l.arc(cx, cy, r * 0.72, 0, U.TAU);
+          l.arc(cx + 3, cy + 4, r * 0.66, 0, U.TAU, true);
+          l.fill('evenodd');
+          l.strokeStyle = rimD;
+          l.lineWidth = 1.5;
+          l.beginPath();
+          l.arc(cx, cy, r * 0.72, Math.PI * 1.95, Math.PI * 0.75);
+          l.stroke();
           for (let i = 0; i < 10; i++) bolt(cx + Math.cos((i / 10) * U.TAU) * r * 0.86, cy + Math.sin((i / 10) * U.TAU) * r * 0.86);
           l.strokeStyle = rimL;
           l.lineWidth = 2;
@@ -3264,21 +3392,29 @@
             }
           }
           l.stroke();
-          l.strokeStyle = rimD;
-          l.beginPath();
-          l.arc(cx, cy, r, Math.PI * 0.1, Math.PI * 0.9);
-          l.stroke();
         } else {
           const dw = Math.min(pw * 0.7, ph * 1.2);
           const dx = px + (pw - dw) / 2;
           const rr = Math.min(dw, ph) * 0.3;
+          const door = (ox2, oy2) => (l.roundRect ? l.roundRect(dx + ox2, py + 3 + oy2, dw, ph - 6, rr) : l.rect(dx + ox2, py + 3 + oy2, dw, ph - 6));
+          // set into a frame: the frame's shadow inside, top and left
+          l.fillStyle = shade1;
+          l.beginPath();
+          if (l.roundRect) l.roundRect(dx - 3, py, dw + 6, ph, rr + 3);
+          else l.rect(dx - 3, py, dw + 6, ph);
+          l.fill();
           l.fillStyle = plate2;
           l.beginPath();
-          if (l.roundRect) l.roundRect(dx, py + 3, dw, ph - 6, rr);
-          else l.rect(dx, py + 3, dw, ph - 6);
+          door(2, 3);
           l.fill();
+          l.strokeStyle = rimD;
+          l.lineWidth = 2;
+          l.stroke();
           l.strokeStyle = rimL;
           l.lineWidth = 1.5;
+          l.beginPath();
+          if (l.roundRect) l.roundRect(dx - 3, py, dw + 6, ph, rr + 3);
+          else l.rect(dx - 3, py, dw + 6, ph);
           l.stroke();
           l.fillStyle = rimD;
           l.fillRect(dx - 4, py + ph * 0.25, 6, 7);
@@ -3313,11 +3449,24 @@
           l.fillRect(px - 10, ty + th * 0.4, tx - px + 12, th * 0.2);
           l.fillRect(tx + tw - 2, ty + th * 0.35, px + pw - tx - tw + 12, th * 0.3);
         }
+        const caps = (ox2, oy2) => (l.roundRect ? l.roundRect(tx + ox2, ty + oy2, tw, th, Math.min(tw, th) * 0.45) : l.rect(tx + ox2, ty + oy2, tw, th));
+        castShadow((dx, dy) => caps(dx, dy));
         l.fillStyle = plate2;
         l.beginPath();
-        if (l.roundRect) l.roundRect(tx, ty, tw, th, Math.min(tw, th) * 0.45);
-        else l.rect(tx, ty, tw, th);
+        caps(0, 0);
         l.fill();
+        // round: the far side in shadow, a band of light on the near side
+        l.save();
+        l.beginPath();
+        caps(0, 0);
+        l.clip();
+        l.fillStyle = plate;
+        if (vert) l.fillRect(tx + tw * 0.62, ty, tw * 0.38, th);
+        else l.fillRect(tx, ty + th * 0.62, tw, th * 0.38);
+        l.fillStyle = rimD;
+        if (vert) l.fillRect(tx + tw - 3, ty, 3, th);
+        else l.fillRect(tx, ty + th - 3, tw, 3);
+        l.restore();
         l.fillStyle = rimL;
         if (vert) l.fillRect(tx + 3, ty + th * 0.2, 2, th * 0.6);
         else l.fillRect(tx + tw * 0.2, ty + 3, tw * 0.6, 2);
@@ -3355,20 +3504,22 @@
           const x = px + R(0, pw - w);
           const y = py + R(0, ph - h);
           if (i === torn) {
-            l.fillStyle = hole;
-            ragged(x, y, w, h, 4);
-            l.fill();
-            // ribs showing behind
-            l.fillStyle = plate;
-            for (let t = x + 5; t < x + w - 3; t += 9) l.fillRect(t, y + 2, 2, h - 4);
+            const pts = ragPts(x, y, w, h, 4);
+            hole_(pts, () => {
+              // ribs showing behind, each with its shadow
+              for (let t = x + 5; t < x + w - 3; t += 9) {
+                l.fillStyle = shade1;
+                l.fillRect(t + 2, y + 2, 2, h);
+                l.fillStyle = plate;
+                l.fillRect(t, y, 2.5, h);
+              }
+            });
             continue;
           }
+          castShadow((dx, dy) => l.rect(x + dx, y + dy, w, h));
           l.fillStyle = i % 2 ? plate : plate2;
           l.fillRect(x, y, w, h);
-          l.fillStyle = rimL;
-          l.fillRect(x, y, w, 1.5);
-          l.fillStyle = rimD;
-          l.fillRect(x, y + h - 1.5, w, 1.5);
+          bevelRect(x, y, w, h);
           for (let t = x + 4; t < x + w - 2; t += 7) {
             bolt(t, y + 4);
             bolt(t, y + h - 4);
@@ -3379,9 +3530,8 @@
       },
       // a crevice with a bundle of cables sagging through it
       cables(px, py, pw, ph) {
-        l.fillStyle = hole;
-        ragged(px, py + ph * 0.25, pw, ph * 0.5, 6);
-        l.fill();
+        const pts = ragPts(px, py + ph * 0.25, pw, ph * 0.5, 6);
+        hole_(pts, () => {
         const n = 4 + Math.floor(R() * 3);
         for (let i = 0; i < n; i++) {
           const y0 = py + ph * R(0.3, 0.52);
@@ -3389,29 +3539,50 @@
           const sag = ph * R(0.06, 0.18);
           l.strokeStyle = i % 3 === 0 ? rimL : i % 3 === 1 ? plate2 : U.rgba(U.mix(pal.mass, pal.rust, 0.35));
           l.lineWidth = R(2, 4);
+          const sw = l.lineWidth;
+          // (its shadow on the back of the crevice first)
+          const st = l.strokeStyle;
+          l.strokeStyle = shade1;
+          l.beginPath();
+          l.moveTo(px - 2, y0 + 4);
+          l.quadraticCurveTo(px + pw / 2, Math.max(y0, y1) + sag + 4, px + pw + 2, y1 + 4);
+          l.stroke();
+          l.strokeStyle = st;
+          l.lineWidth = sw;
           l.beginPath();
           l.moveTo(px - 2, y0);
           l.quadraticCurveTo(px + pw / 2, Math.max(y0, y1) + sag, px + pw + 2, y1);
           l.stroke();
         }
         // a clamp across them
+        const cxp = px + pw * R(0.25, 0.7);
+        l.fillStyle = shade1;
+        l.fillRect(cxp + 3, py + ph * 0.28 + 3, 5, ph * 0.44);
         l.fillStyle = plate2;
-        l.fillRect(px + pw * R(0.25, 0.7), py + ph * 0.28, 5, ph * 0.44);
+        l.fillRect(cxp, py + ph * 0.28, 5, ph * 0.44);
+        l.fillStyle = rimL;
+        l.fillRect(cxp, py + ph * 0.28, 1.5, ph * 0.44);
+        });
       },
       // a recessed fan in a square housing, a blade or two missing
       fan(px, py, pw, ph) {
         const s = Math.min(pw, ph) * 0.92;
         const x = px + (pw - s) / 2;
         const y = py + (ph - s) / 2;
+        castShadow((dx, dy) => l.rect(x + dx, y + dy, s, s));
         l.fillStyle = plate2;
         l.fillRect(x, y, s, s);
-        l.fillStyle = rimL;
-        l.fillRect(x, y, s, 1.5);
-        l.fillRect(x, y, 1.5, s);
+        bevelRect(x, y, s, s);
         l.fillStyle = hole;
         l.beginPath();
         l.arc(x + s / 2, y + s / 2, s * 0.42, 0, U.TAU);
         l.fill();
+        // the housing's lip shadowing the well, top and left
+        l.fillStyle = shade1;
+        l.beginPath();
+        l.arc(x + s / 2, y + s / 2, s * 0.42, 0, U.TAU);
+        l.arc(x + s / 2 + 3, y + s / 2 + 4, s * 0.4, 0, U.TAU, true);
+        l.fill('evenodd');
         const nb = 5 + Math.floor(R() * 3);
         const gone = Math.floor(R() * nb);
         l.fillStyle = plate;
@@ -3429,14 +3600,18 @@
       },
       // the old panels, chipped and cracked: a grille or a column of glyphs
       grille(px, py, pw, ph) {
+        // sunk into the rock: the edge's shadow along the top and left
+        // inside, the bottom and right inside edges lit
         l.fillStyle = plate;
         l.fillRect(px, py, pw, ph);
+        l.fillStyle = shade2;
+        l.fillRect(px, py, pw, 4);
+        l.fillRect(px, py, 4, ph);
         l.fillStyle = rimL;
-        l.fillRect(px, py, pw, 2);
-        l.fillRect(px, py, 2, ph);
-        l.fillStyle = rimD;
-        l.fillRect(px, py + ph - 2, pw, 2);
-        l.fillRect(px + pw - 2, py, 2, ph);
+        l.fillRect(px, py + ph - 1.5, pw, 1.5);
+        l.fillRect(px + pw - 1.5, py, 1.5, ph);
+        l.fillStyle = lipL;
+        l.fillRect(px - 1, py - 1.5, pw + 1, 1.5);
         l.fillStyle = hole;
         if (R() < 0.5) {
           for (let y = py + 6; y < py + ph - 6; y += 5) l.fillRect(px + 6, y, pw - 12, 2.5);
