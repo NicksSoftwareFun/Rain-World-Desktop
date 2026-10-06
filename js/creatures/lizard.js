@@ -1534,12 +1534,22 @@
       // (and only that pole: between two poles a cell or two apart, the
       // nearer one would pull it off the one its path climbs)
       let mask = this.maskNoPole;
-      if (pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1)) {
-        mask = this.maskOnePole || (this.maskOnePole = Object.assign({}, this.mask));
-        mask.poleX = W.centerX(pn.cx);
-      }
+      const onePole = (x) => {
+        const m = this.maskOnePole || (this.maskOnePole = Object.assign({}, this.mask));
+        m.poleX = x;
+        return m;
+      };
+      if (pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1)) mask = onePole(W.centerX(pn.cx));
       let g = W.nearestSurface(head.x, head.y, 22 * L, mask);
       if (!g) g = W.nearestSurface(P[3].x, P[3].y, 20 * L, mask);
+      // Nothing to hold but the pole it's on: it keeps hold of that until it
+      // means to leave it (a leap or a drop). At the top, stepping across to
+      // the ledge beside it, reaching for the next pole over, or stopped
+      // there to kill or eat, it doesn't just let go.
+      if (!g && this.lungeT <= 0 && !this.leap && !(pn && (pn.type === Nav.FALL || pn.type === Nav.JUMP))) {
+        const under = this.poleUnder(head) || this.poleUnder(P[2]);
+        if (under) g = W.nearestSurface(head.x, head.y, 22 * L, onePole(under.x)) || W.nearestSurface(P[3].x, P[3].y, 20 * L, onePole(under.x));
+      }
       if (this.dropT > 0) {
         // letting go on purpose to drop down
         this.dropT -= dt;
@@ -1601,7 +1611,8 @@
           // off a pole onto the ledge beside it: scramble up over the lip
           // (smaller lizards make it more often)
           const corner = this.cornerAhead(head);
-          if (corner) this.startScramble(corner, head, 6 * L, 15 * L, U.clamp(0.95 - L * 0.4, 0.35, 0.7));
+          // (each slip back teaches it the grip: the next try does better)
+          if (corner) this.startScramble(corner, head, 6 * L, 15 * L, U.clamp(0.95 - L * 0.4, 0.35, 0.7) + 0.25 * (this.scrambleFails || 0));
         }
         if (this.scramble) {
           const sc = this.scramble;
