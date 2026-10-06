@@ -2059,6 +2059,249 @@
     }
   }
 
+  // ---- experiment: terrain colour (RW.TERRAIN_STYLE) --------------------
+  // Earthy at the ground's surface, rock further in and deeper down. On a
+  // fine grid (SUB px squares): each square's distance to open air (any
+  // way, and straight up to the floor above it), a value noise to break
+  // the bands up, then one of three ways of turning those into tones,
+  // painted as runs of one colour.
+  //   'strata':  layers under each floor, following its shape (wavy)
+  //   'mottle':  blotches by distance from any open face, ragged
+  //   'topsoil': rock throughout, a band of soil on floors, weathered walls
+  const SUB = 4;
+  const SINK = { fillRect() {}, set fillStyle(v) {} };
+  function terrainNoise(seed) {
+    const T = new Float32Array(4096);
+    const r = U.mulberry32(seed >>> 0);
+    for (let i = 0; i < T.length; i++) T[i] = r();
+    const h = (x, y) => T[((x * 73856093) ^ (y * 19349663)) & 4095];
+    const v = (x, y) => {
+      const xi = Math.floor(x);
+      const yi = Math.floor(y);
+      const fx = x - xi;
+      const fy = y - yi;
+      const sx = fx * fx * (3 - 2 * fx);
+      const sy = fy * fy * (3 - 2 * fy);
+      return U.lerp(U.lerp(h(xi, yi), h(xi + 1, yi), sx), U.lerp(h(xi, yi + 1), h(xi + 1, yi + 1), sx), sy);
+    };
+    return (x, y) => 0.55 * v(x, y) + 0.3 * v(x * 2.1 + 17, y * 2.1 + 5) + 0.15 * v(x * 4.3 + 3, y * 4.3 + 29);
+  }
+  function terrainTones(pal) {
+    const lum = (c) => {
+      const h = U.hex(c);
+      return (0.299 * h[0] + 0.587 * h[1] + 0.114 * h[2]) / 255;
+    };
+    // an earth hue drawn from the region's rust, warmed; how far the surface
+    // goes toward it depends how dark the rock is (dark rock: further)
+    const earthHue = U.mix(U.mix('#7b5b3c', pal.rust || '#7a4a2a', 0.3), pal.light, 0.08);
+    const k = 0.24 + 0.16 * U.clamp((0.25 - lum(pal.mass)) / 0.2, 0, 1);
+    const cool = U.mix(pal.mass, '#2b3036', 0.12); // (deep rock a touch cooler)
+    return {
+      earth: [1, 0.72, 0.48, 0.26, 0.1].map((f) => U.rgba(U.mix(pal.mass, earthHue, k * f))),
+      rock: U.rgba(pal.mass),
+      deep: U.rgba(U.mix(cool, '#000000', 0.12)),
+      grey: U.rgba(U.mix(cool, pal.light, 0.05)),
+      earthHue,
+      k,
+    };
+  }
+  function paintTerrain(l, decor, pal, solid, inBlock, style) {
+    const room = decor.room;
+    const { C, cell } = room;
+    const Rows = room.R;
+    const n = cell / SUB;
+    const GW = C * n;
+    const GH = Rows * n;
+    const isRock = (i, j) => {
+      const x = Math.floor(i / n);
+      const y = Math.floor(j / n);
+      return x >= 0 && x < C && y >= 0 && y < Rows ? solid(x, y) && !inBlock[y * C + x] : true;
+    };
+    // distance to open air, any way (two-pass chamfer, in squares) and
+    // straight up (to the floor above)
+    const INF = 1e6;
+    const dAll = new Float32Array(GW * GH);
+    const dUp = new Float32Array(GW * GH);
+    for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) dAll[j * GW + i] = isRock(i, j) ? INF : 0;
+    const at = (i, j) => (i < 0 || j < 0 || i >= GW || j >= GH ? INF : dAll[j * GW + i]);
+    for (let j = 0; j < GH; j++)
+      for (let i = 0; i < GW; i++) {
+        const k = j * GW + i;
+        if (!dAll[k]) continue;
+        dAll[k] = Math.min(dAll[k], at(i - 1, j) + 1, at(i, j - 1) + 1, at(i - 1, j - 1) + 1.41, at(i + 1, j - 1) + 1.41);
+      }
+    for (let j = GH - 1; j >= 0; j--)
+      for (let i = GW - 1; i >= 0; i--) {
+        const k = j * GW + i;
+        if (!dAll[k]) continue;
+        dAll[k] = Math.min(dAll[k], at(i + 1, j) + 1, at(i, j + 1) + 1, at(i + 1, j + 1) + 1.41, at(i - 1, j + 1) + 1.41);
+      }
+    for (let i = 0; i < GW; i++) {
+      let d = INF;
+      for (let j = 0; j < GH; j++) {
+        const k = j * GW + i;
+        d = isRock(i, j) ? d + 1 : 0;
+        dUp[k] = d;
+      }
+    }
+    const T = terrainTones(pal);
+    const noise = terrainNoise((C * 131 + Rows * 977) ^ 0x2f6b);
+    const tone = new Int8Array(GW * GH).fill(-1); // -1: leave as it is
+    // tone indices: 0-4 earth (surface .. nearly rock), 5 rock, 6 deep, 7 grey
+    for (let j = 0; j < GH; j++)
+      for (let i = 0; i < GW; i++) {
+        const k = j * GW + i;
+        const da = dAll[k];
+        if (!da) continue;
+        const N = noise(i / 9, j / 9); // 0..1, blobs ~9 squares across
+        const cellsA = da / n; // in cells
+        const cellsU = dUp[k] / n;
+        let t;
+        if (style === 'strata') {
+          // layers under the floor above (wavy), the sides only weathered a
+          // little; the bands' thickness drifts along
+          const wave = (N - 0.5) * 1.6 + Math.sin(i / 11 + N * 2) * 0.35;
+          const under = cellsU < 60 ? cellsU + wave : 99;
+          const side = cellsA + (N - 0.5) * 1.2;
+          const e = Math.min(under * 0.9, side * 1.6);
+          t = e < 0.45 ? 0 : e < 1.1 ? 1 : e < 1.9 ? 2 : e < 2.9 ? 3 : e < 4 ? 4 : e < 6.5 ? 5 : 6;
+          // a darker seam between bands now and then
+          if (t >= 1 && t <= 4 && Math.abs((e % 1) - 0.5) < 0.04 && N > 0.55) t = 6;
+        } else if (style === 'mottle') {
+          // blotches: distance pushed about by the noise, so earth runs in
+          // tongues into the rock and rock breaks through the earth
+          const e = cellsA * 0.85 + (N - 0.5) * 2.6 + (cellsU < 60 ? -0.4 : 0.4);
+          t = e < 0.35 ? 0 : e < 0.9 ? 1 : e < 1.6 ? 2 : e < 2.4 ? 3 : e < 3.2 ? 4 : e < 5 ? 5 : 6;
+        } else {
+          // topsoil: rock, with a band of soil under each floor (0.5-1.5
+          // cells, varying), weathered grey on the walls, darker deep down
+          const soil = 0.5 + N * 1.1;
+          if (cellsU < soil) t = cellsU < soil * 0.35 ? 0 : cellsU < soil * 0.7 ? 1 : 2;
+          else if (cellsA < 0.35 + (N - 0.5) * 0.4) t = 7;
+          else t = cellsA > 4 + N * 2 ? 6 : 5;
+        }
+        tone[k] = t;
+      }
+    const cols = [...T.earth, T.rock, T.deep, T.grey];
+    for (let t = 0; t < cols.length; t++) {
+      l.fillStyle = cols[t];
+      l.beginPath();
+      for (let j = 0; j < GH; j++) {
+        let i = 0;
+        while (i < GW) {
+          if (tone[j * GW + i] !== t) {
+            i++;
+            continue;
+          }
+          const s0 = i;
+          while (i < GW && tone[j * GW + i] === t) i++;
+          l.rect(s0 * SUB, j * SUB, (i - s0) * SUB, SUB + (j === GH - 1 ? 400 : 0));
+        }
+      }
+      l.fill();
+    }
+    // the earth's own grain: specks a tone lighter or darker (not the
+    // rock's black blotches)
+    const gr = U.mulberry32((GW * 31 + GH) ^ 0x7a3d);
+    for (let j = 0; j < GH; j++)
+      for (let i = 0; i < GW; i++) {
+        const t = tone[j * GW + i];
+        if (t < 0 || t > 4 || gr() > 0.16) continue;
+        const up = gr() < 0.5;
+        l.fillStyle = up ? cols[Math.max(0, t - 1)] : cols[Math.min(5, t + 2)];
+        l.fillRect(i * SUB + gr() * 2, j * SUB + gr() * 2, up ? 2 : 2 + gr() * 2, 2);
+      }
+    // which cells are earth (mostly): the rock's own texture keeps off them
+    const earthCell = new Uint8Array(C * Rows);
+    for (let y = 0; y < Rows; y++)
+      for (let x = 0; x < C; x++) {
+        const t = tone[(y * n + (n >> 1)) * GW + x * n + (n >> 1)];
+        if (t >= 0 && t <= 4) earthCell[y * C + x] = 1;
+      }
+    return { T, dAll, dUp, GW, GH, n, style, noise, earthCell };
+  }
+  // Moss, litter and pebbles on the floors; moss creeping down the lit
+  // faces; a few loose stones in the earth.
+  function paintGroundAccents(l, decor, pal, solid, inBlock, terr) {
+    const room = decor.room;
+    const { C, cell } = room;
+    const Rows = room.R;
+    const R = U.mulberry32((C * 7 + Rows * 13) ^ 0x51ed);
+    const r = (a, b) => a + R() * (b - a);
+    const near = pal.near || pal.light;
+    const moss = [U.rgba(U.mix(U.mix('#55723a', near, 0.15), pal.mass, 0.35)), U.rgba(U.mix(U.mix('#6f8f45', near, 0.15), pal.mass, 0.25)), U.rgba(U.mix('#3c5230', pal.mass, 0.45))];
+    const litter = [
+      U.rgba(U.mix(pal.rust || '#8a4a2a', pal.mass, 0.25)), // a rusted can
+      U.rgba(U.mix('#bdb39c', pal.mass, 0.35)), // paper, rag
+      U.rgba(U.mix('#4f6f86', pal.mass, 0.4)), // plastic
+      U.rgba(U.mix('#5f7d55', pal.mass, 0.45)), // bottle glass
+    ];
+    const pebble = [U.rgba(U.mix(pal.mass, pal.light, 0.14)), U.rgba(U.mix(terr.T.earthHue, pal.mass, 0.55))];
+    for (let y = 1; y < Rows; y++) {
+      for (let x = 0; x < C; x++) {
+        if (!solid(x, y) || solid(x, y - 1) || inBlock[y * C + x] || room.passage.has((y - 1) * C + x)) continue;
+        const gx = x * cell;
+        const gy = y * cell;
+        // moss: a mat along the top, ragged, spilling over an edge
+        if (R() < 0.5) {
+          const m0 = r(0, cell * 0.3);
+          const m1 = Math.min(cell, m0 + r(cell * 0.5, cell * 1.2));
+          for (let px = gx + m0; px < gx + m1; px += 2) {
+            // a cushion: thicker in the middle, a few blades poking up
+            const mid = 1 - Math.abs(((px - gx - m0) / Math.max(1, m1 - m0)) * 2 - 1);
+            l.fillStyle = moss[Math.floor(R() * 2)];
+            const h = 2 + mid * r(2, 4);
+            l.fillRect(px, gy - h + 2, 2, h);
+            if (R() < 0.25) l.fillRect(px + 0.5, gy - h - r(1, 4), 1, r(2, 4));
+            l.fillStyle = moss[2];
+            l.fillRect(px, gy + 2, 2, r(1, 2 + mid * 3));
+          }
+          // over the edge, a straggle down the face
+          for (const s of [-1, 1]) {
+            if (solid(x + s, y) || R() < 0.4) continue;
+            const ex = s < 0 ? gx : gx + cell - 2;
+            l.fillStyle = moss[2];
+            l.fillRect(ex, gy, 2, r(4, cell * 0.9));
+          }
+        }
+        // litter: a few bits lying about
+        if (R() < 0.35) {
+          const nI = 1 + Math.floor(R() * 3);
+          for (let k = 0; k < nI; k++) {
+            const lx = gx + r(1, cell - 5);
+            const kind = Math.floor(R() * litter.length);
+            l.fillStyle = litter[kind];
+            if (kind === 0) {
+              // a can on its side, a rim of light
+              l.fillRect(lx, gy - 3.5, 5, 3.5);
+              l.fillStyle = pebble[0];
+              l.fillRect(lx, gy - 3.5, 1.2, 3.5);
+            } else if (kind === 1) l.fillRect(lx, gy - 2, r(4, 8), 2); // paper, rag
+            else if (kind === 2) {
+              l.fillRect(lx, gy - 3, r(4, 6), 3); // a plastic bag, slumped
+              l.fillRect(lx + 1, gy - 4, 2, 1);
+            } else l.fillRect(lx, gy - 6, 2, 6); // a bottle standing
+
+          }
+        }
+        // pebbles
+        if (R() < 0.5) {
+          l.fillStyle = pebble[Math.floor(R() * 2)];
+          l.fillRect(gx + r(0, cell - 3), gy - 1.5, r(1.5, 3), 1.5);
+        }
+      }
+    }
+    // stones in the earth (not the rock): a scatter of small lighter lumps
+    const { dAll, GW, GH, n, noise } = terr;
+    for (let j = 0; j < GH; j += 2)
+      for (let i = 0; i < GW; i += 2) {
+        const d = dAll[j * GW + i] / n;
+        if (!d || d > 2.5 || R() > 0.035) continue;
+        l.fillStyle = pebble[noise(i / 5, j / 5) > 0.5 ? 0 : 1];
+        l.fillRect(i * SUB, j * SUB, r(2, 4), r(1.5, 3));
+      }
+  }
+
   // A bottomless pit darkens toward the bottom of the screen: depth, a void.
   function paintPits(l, decor, pal, H) {
     for (const q of decor.pits || []) {
@@ -2096,6 +2339,8 @@
         l.fillRect(s * cell, y * cell, (x - s) * cell, cell + (y === Rows - 1 ? 400 : 0));
       }
     }
+    // (experiment: earthy ground grading into rock, see paintTerrain)
+    const terrain = RW.TERRAIN_STYLE ? paintTerrain(l, decor, pal, solid, inBlock, RW.TERRAIN_STYLE) : null;
     // texture: masonry courses every 3 cells, brick dashes, and a few buried
     // conduits running through the thick of it
     const tex = U.rgba(U.mix(pal.mass, pal.light, 0.08));
@@ -2104,19 +2349,22 @@
     for (let y = 0; y < Rows; y++) {
       for (let x = 0; x < C; x++) {
         if (!solid(x, y) || inBlock[y * C + x]) continue;
+        // (earth has its own grain: drawn nowhere there, the dice still
+        // rolled so the rest of the room comes out the same)
+        const g = terrain && terrain.earthCell[y * C + x] ? SINK : l;
         if (y % 3 === 0) {
-          l.fillStyle = course;
-          l.fillRect(x * cell, y * cell + 1, cell, 1);
+          g.fillStyle = course;
+          g.fillRect(x * cell, y * cell + 1, cell, 1);
         }
         // mottling: a few soft-edged patches a shade lighter or darker
         for (let k = 0; k < 2; k++) {
-          l.fillStyle = mottle[Math.floor(R() * 2)];
-          l.fillRect(x * cell + R() * (cell - 6), y * cell + R() * (cell - 6), 3 + R() * 6, 3 + R() * 5);
+          g.fillStyle = mottle[Math.floor(R() * 2)];
+          g.fillRect(x * cell + R() * (cell - 6), y * cell + R() * (cell - 6), 3 + R() * 6, 3 + R() * 5);
         }
-        l.fillStyle = tex;
+        g.fillStyle = tex;
         // brick dashes staggered along the course
-        if (R() < 0.7) l.fillRect(x * cell + ((y % 2) * cell) / 2 + R() * 4, y * cell + (y % 3) * 6 + 4, cell * 0.4 + R() * cell * 0.4, 1.5);
-        if (R() < 0.15) l.fillRect(x * cell + R() * (cell - 2), y * cell + R() * (cell - 2), 1.5, 1.5);
+        if (R() < 0.7) g.fillRect(x * cell + ((y % 2) * cell) / 2 + R() * 4, y * cell + (y % 3) * 6 + 4, cell * 0.4 + R() * cell * 0.4, 1.5);
+        if (R() < 0.15) g.fillRect(x * cell + R() * (cell - 2), y * cell + R() * (cell - 2), 1.5, 1.5);
       }
     }
     const conduit = U.rgba(U.mix(pal.mass, pal.light, 0.06));
@@ -2181,6 +2429,7 @@
         }
       }
     }
+    if (terrain) paintGroundAccents(l, decor, pal, solid, inBlock, terrain);
     // the hanging blocks
     for (const b of room.blocks) {
       const x = b.x0 * cell;
