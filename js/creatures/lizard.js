@@ -2215,7 +2215,7 @@
       // snout like a mole's, from up to a little down, each twitching to
       // its own beat
       if (this.p.feelers) {
-        ctx.strokeStyle = this.p.feelers;
+        ctx.strokeStyle = col; // (the head's own colour)
         ctx.lineWidth = Math.max(u, 0.55);
         ctx.beginPath();
         [[-1.05, 6.5, -4.2], [-0.55, 7.5, -3.2], [-0.05, 7, -2.2], [0.45, 5.5, -1.2]].forEach(([ang, len, oy], k) => {
@@ -2231,7 +2231,7 @@
         });
         ctx.stroke();
         // a bead at the tip of the snout they spring from
-        ctx.fillStyle = this.p.feelers;
+        ctx.fillStyle = col;
         ctx.fillRect(15.8, -4.4, Math.max(u * 1.6, 1.4), 3.4);
       }
 
