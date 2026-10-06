@@ -1943,8 +1943,8 @@
         ctx.stroke();
         }
       }
-      // Ring markings (cyan lizards): bright rings, each with a dark edge so
-      // it stands off the cyan body, down the back and onto the tail.
+      // Ring markings (cyan lizards): bright rings, each with a dark edge,
+      // down the back and onto the tail.
       if (this.p.pattern === 'rings') {
         const rings = [0.13, 0.22, 0.31, 0.4, 0.5, 0.62, 0.74];
         const lw = Math.max(px * 1.5, 1.4 * L);
@@ -2295,20 +2295,26 @@
         const target = U.clamp(-dA * 9 + vy * 0.004, -0.9, 0.9) + Math.sin(this.age * 1.7) * 0.07;
         this.antV = (this.antV || 0) + ((target - (this.antA || 0)) * 60 - (this.antV || 0) * 6) * dt;
         this.antA = U.clamp((this.antA || 0) + this.antV * dt, -1.2, 1.2);
+        // laid back along the neck, flaring up on the hunt (the pack's
+        // signal), easing between the two
+        const flare = this.state === 'hunt' || this.state === 'kill' ? 1 : 0;
+        this.antF = (this.antF || 0) + (flare - (this.antF || 0)) * Math.min(1, dt * 4);
       }
       const bend = this.antA || 0;
+      const F = this.antF || 0;
       const base = this.headColor;
       const segCol = U.rgba(U.scale(base, far ? 0.45 : 0.8));
       const jointCol = U.rgba(far ? U.scale(base, 0.6) : U.mix(base, '#ffffff', 0.25));
       let x = far ? 0.2 : -1.4;
       let y = -6.2;
-      let a = -2.6 + (far ? 0.3 : 0); // (up and back)
+      let a = U.lerp(-2.95, -1.95, F) + (far ? 0.18 + 0.12 * F : 0); // (back, or up when flared)
       const segs = 6;
       ctx.lineWidth = Math.max(u * 1.3, 0.85);
       for (let k = 0; k < segs; k++) {
         // each segment bends a little more than the one before: a floppy
         // whip, sagging toward its tip
-        a += bend * (0.35 + k * 0.18) + (k > 1 ? 0.14 : 0);
+        // (laid back, the tips droop a touch; flared, they curl back over)
+        a += bend * (0.35 + k * 0.18) + (k > 1 ? U.lerp(-0.05, 0.14, F) : 0);
         const len = 3.6 - k * 0.22;
         const nx = x + Math.cos(a) * len;
         const ny = y + Math.sin(a) * len;
