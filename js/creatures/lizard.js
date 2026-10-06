@@ -2027,8 +2027,8 @@
         const fwd = (l.at <= 2 ? 0.6 : -0.5) + (leg.forward - 0.45) * 0.3;
         // (seen from above the legs look longer than they are side on: the
         // feet stay tucked in closer)
-        const ix = h.x + fx * r * fwd * 0.85 + sx * r * 0.6;
-        const iy = h.y + fy * r * fwd * 0.85 + sy * r * 0.6;
+        const ix = h.x + fx * r * fwd * 0.8 + sx * r * 0.54;
+        const iy = h.y + fy * r * fwd * 0.8 + sy * r * 0.54;
         if (leg.stepping) {
           leg.update(dt, this.W, h.x, h.y, fx, fy, this.ux, this.uy, this.mask, false, spd);
           continue;
@@ -2294,7 +2294,7 @@
         // (from above: the elbows and knees stick out sideways, a little
         // back at the front and forward at the back, like a gecko on glass)
         const side = l.near ? 1 : -1;
-        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1 * 0.85, leg.l2 * 0.85, -fy * side * 0.9 + fx * sgn * 0.3, fx * side * 0.9 + fy * sgn * 0.3);
+        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1 * 0.77, leg.l2 * 0.77, -fy * side * 0.9 + fx * sgn * 0.3, fx * side * 0.9 + fy * sgn * 0.3);
         return { kx: k.kx, ky: k.ky, ex: k.ex, ey: k.ey };
       }
       const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1, leg.l2, fx * sgn, fy * sgn);
@@ -2573,51 +2573,31 @@
       }
       const bend = this.antA || 0;
       const F = this.antF || 0;
-      // A thick, tapering fleshy stalk (as in the game, not an insect's
-      // feeler): the head's colour at the root, flushing pink toward the end,
-      // which splits into a little fan of short tips. Laid back it runs along
-      // the neck with the end curling up; flared it stands up off the back of
-      // the head, leaning back toward the tail.
+      // Not feelers: the two rearmost spines of the skull, as in the game.
+      // Each sets off backward from the back of the head and curls round
+      // forward into a hook, thick at the root and tapering to a point, in
+      // the head's colour. On the hunt they lift and hook over further.
       const base = this.headColor;
-      const pink = '#e8968a';
-      const shade = (c) => (far ? U.scale(c, 0.55) : c);
-      let x = far ? 0.2 : -1.4;
-      let y = -6.2;
-      let a = U.lerp(-3.2, -1.85, F) + (far ? 0.12 + 0.1 * F : 0); // (back, or up when flared)
+      const col = U.rgba(far ? U.scale(base, 0.55) : base);
+      let x = far ? 0.6 : -1.2;
+      let y = far ? -5.4 : -5.8;
+      let a = U.lerp(-2.85, -2.35, F) + (far ? 0.2 : 0); // (back, lifting when flared)
       const segs = 4;
       ctx.lineCap = 'round';
+      ctx.strokeStyle = col;
       for (let k = 0; k < segs; k++) {
-        // (laid back, each segment lifts a little more than the last, so the
-        // end curls up; flared, they lean back a touch)
-        a += bend * (0.35 + k * 0.2) + (k > 0 ? U.lerp(k > 1 ? 0.06 + k * 0.08 : 0, -0.07, F) : 0);
-        const len = 5.4 - k * 0.45;
+        // (stiff: a little give as the head moves, mostly the curl)
+        a += bend * (0.12 + k * 0.06) + (k > 0 ? U.lerp(0.42, 0.5, F) : 0);
+        const len = 3.3 - k * 0.45;
         const nx = x + Math.cos(a) * len;
         const ny = y + Math.sin(a) * len;
-        ctx.strokeStyle = U.rgba(shade(U.mix(base, pink, Math.max(0, (k - 1) / (segs - 2)) * (0.3 + 0.55 * F))));
-        ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * (3 - k * 0.55);
+        ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * (2.4 - k * 0.75);
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(nx, ny);
         ctx.stroke();
-        // a dark band where the root meets the flushed part
-        if (k === 1) {
-          ctx.fillStyle = U.rgba(shade(U.scale(base, 0.55)));
-          const j = Math.max(u * 1.4, 0.9) + u;
-          ctx.fillRect(x - j / 2, y - j / 2, j, j);
-        }
         x = nx;
         y = ny;
-      }
-      // the fan of tips
-      ctx.strokeStyle = U.rgba(shade(U.mix(base, pink, 0.55 + 0.35 * F)));
-      ctx.lineWidth = Math.max(u * 1.3, 0.85) + u * 0.5;
-      for (const da of [-0.5, 0, 0.5]) {
-        const ta = a + da * (0.7 + 0.6 * F);
-        const tl = da ? 2.3 : 2.8;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(ta) * tl, y + Math.sin(ta) * tl);
-        ctx.stroke();
       }
       ctx.lineCap = 'butt';
     }
