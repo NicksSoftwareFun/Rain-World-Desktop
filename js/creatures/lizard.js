@@ -1928,16 +1928,38 @@
         U.taperPath(ctx, P.slice(k0), widths.slice(k0).map((w) => w * 0.95));
         ctx.fill();
       }
-      // Ring markings (cyan lizards).
-      if (this.p.pattern === 'rings') {
-        ctx.strokeStyle = headCol;
-        ctx.lineWidth = Math.max(px * 1.5, 1.4 * L);
-        for (const t of [0.14, 0.24, 0.42]) {
+      // Bands across the back (pink lizards).
+      if (this.p.bands) {
+        // (each a dark-edged pink stripe, so it reads among the flecks)
+        for (const [col, lw] of [[U.rgba(U.scale(this.bodyColor, 0.5)), Math.max(px * 3.2, 2.8 * L)], [headCol, Math.max(px * 1.8, 1.6 * L)]]) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        for (let t = 0.18; t < 0.74; t += 0.09) {
           const q = at(t);
-          ctx.beginPath();
-          ctx.arc(q.x + q.nx * q.w * 0.15, q.y + q.ny * q.w * 0.15, q.w * 0.55, 0, U.TAU);
-          ctx.stroke();
+          ctx.moveTo(q.x + q.nx * q.w * 0.95 - q.tx * q.w * 0.25, q.y + q.ny * q.w * 0.95 - q.ty * q.w * 0.25);
+          ctx.lineTo(q.x - q.nx * q.w * 0.2, q.y - q.ny * q.w * 0.2);
         }
+        ctx.stroke();
+        }
+      }
+      // Ring markings (cyan lizards): bright rings, each with a dark edge so
+      // it stands off the cyan body, down the back and onto the tail.
+      if (this.p.pattern === 'rings') {
+        const rings = [0.13, 0.22, 0.31, 0.4, 0.5, 0.62, 0.74];
+        const lw = Math.max(px * 1.5, 1.4 * L);
+        for (const [col, w] of [[U.rgba(U.scale(this.bodyColor, 0.35)), lw * 2.1], [U.rgba(U.mix(this.headColor, '#ffffff', 0.3)), lw]]) {
+          ctx.strokeStyle = col;
+          ctx.lineWidth = w;
+          for (const t of rings) {
+            const q = at(t);
+            const r = q.w * (t < 0.55 ? 0.5 : 0.42);
+            ctx.beginPath();
+            ctx.arc(q.x + q.nx * q.w * 0.15, q.y + q.ny * q.w * 0.15, r, 0, U.TAU);
+            ctx.stroke();
+          }
+        }
+        ctx.strokeStyle = headCol;
         // stripe along the tail
         ctx.lineWidth = Math.max(px, 1 * L);
         ctx.beginPath();
@@ -2113,7 +2135,7 @@
     // a black eye: the Rain World lizard face.
     drawHead(ctx, px) {
       const hd = this.spine.pts[0];
-      const L = this.L * 1.3;
+      const L = this.L * 1.3 * (this.p.headScale || 1);
       const a = this.headAng;
       const col = U.rgba(this.headColor);
       const jawCol = U.rgba(U.scale(this.headColor, 0.55));
@@ -2147,6 +2169,9 @@
         ctx.stroke();
       }
 
+      // a yellow lizard's antennae (the pack's signal): the far one behind
+      // the skull, the near one over it
+      if (this.p.antennae) this.drawAntenna(ctx, u, 1);
       // lower jaw
       ctx.fillStyle = jawCol;
       ctx.beginPath();
@@ -2171,6 +2196,34 @@
       ctx.lineTo(16.6, 0.6);
       ctx.closePath();
       ctx.fill();
+
+      // a blue lizard's frilled crest: a few ragged spikes along the top of
+      // the skull, raised with the rest of its frills
+      if (this.p.crest) {
+        ctx.fillStyle = col;
+        const lift = 1 + (this.raiseS || 0) * 0.5;
+        ctx.beginPath();
+        [[-5.5, 4.4, -1], [-2.6, 6, -0.8], [0.4, 5.2, -0.7], [3.4, 4, -0.6], [6.2, 2.6, -0.5]].forEach(([x, h, lean]) => {
+          ctx.moveTo(x - 1.3, -6.2);
+          ctx.lineTo(x + 1.3, -6.4);
+          ctx.lineTo(x + lean * h * lift, -6.4 - h * lift);
+        });
+        ctx.fill();
+      }
+      if (this.p.antennae) this.drawAntenna(ctx, u, 0);
+      // a white lizard's nose feelers: two fine whiskers off the snout,
+      // twitching
+      if (this.p.feelers) {
+        ctx.strokeStyle = this.p.feelers;
+        ctx.lineWidth = Math.max(u, 0.55);
+        ctx.beginPath();
+        for (const [k, oy] of [[0, -3.6], [1, -2.2]]) {
+          const w = Math.sin(this.age * 5.5 + k * 2.1) * 0.9;
+          ctx.moveTo(16.2, oy);
+          ctx.quadraticCurveTo(20 + k, oy - 2.6 + w, 23.5 + k * 1.5, oy - 5.5 + w * 1.6 - k);
+        }
+        ctx.stroke();
+      }
 
       // tooth marks: small irregular black ticks on the upper jaw along the
       // mouth line (gap at the snout tip); lower ones only show when it gapes
@@ -2223,6 +2276,54 @@
       // nostril
       ctx.fillRect(14.6, -4.4, Math.max(u, 0.9), Math.max(u, 0.9));
       ctx.restore();
+    }
+    // One antenna (head-local units; far: 1 for the one behind the skull):
+    // jointed segments sprung on the head, so they lag and flop as it turns
+    // and bobs, and sway a little at rest.
+    drawAntenna(ctx, u, far) {
+      // (the spring, stepped once a frame: on the near one's turn)
+      if (!far) {
+        const now = this.age;
+        const dt = U.clamp(now - (this.antT === undefined ? now : this.antT), 0, 0.05);
+        this.antT = now;
+        const ha = this.headAng;
+        const dA = this.antHA === undefined ? 0 : Math.atan2(Math.sin(ha - this.antHA), Math.cos(ha - this.antHA));
+        this.antHA = ha;
+        const hp = this.spine.pts[0];
+        const vy = this.antHY === undefined || dt <= 0 ? 0 : (hp.y - this.antHY) / dt;
+        this.antHY = hp.y;
+        const target = U.clamp(-dA * 9 + vy * 0.004, -0.9, 0.9) + Math.sin(this.age * 1.7) * 0.07;
+        this.antV = (this.antV || 0) + ((target - (this.antA || 0)) * 60 - (this.antV || 0) * 6) * dt;
+        this.antA = U.clamp((this.antA || 0) + this.antV * dt, -1.2, 1.2);
+      }
+      const bend = this.antA || 0;
+      const base = this.headColor;
+      const segCol = U.rgba(U.scale(base, far ? 0.45 : 0.8));
+      const jointCol = U.rgba(far ? U.scale(base, 0.6) : U.mix(base, '#ffffff', 0.25));
+      let x = far ? 0.2 : -1.4;
+      let y = -6.2;
+      let a = -2.6 + (far ? 0.3 : 0); // (up and back)
+      const segs = 6;
+      ctx.lineWidth = Math.max(u * 1.3, 0.85);
+      for (let k = 0; k < segs; k++) {
+        // each segment bends a little more than the one before: a floppy
+        // whip, sagging toward its tip
+        a += bend * (0.35 + k * 0.18) + (k > 1 ? 0.14 : 0);
+        const len = 3.6 - k * 0.22;
+        const nx = x + Math.cos(a) * len;
+        const ny = y + Math.sin(a) * len;
+        ctx.strokeStyle = segCol;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+        // the joint: a bead a shade lighter
+        ctx.fillStyle = jointCol;
+        const j = Math.max(u * 1.4, 0.9);
+        ctx.fillRect(nx - j / 2, ny - j / 2, j, j);
+        x = nx;
+        y = ny;
+      }
     }
   }
 

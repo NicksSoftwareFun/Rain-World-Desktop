@@ -113,6 +113,7 @@
           toughness: 1, // wiki toughness
           spines: 0,
           pattern: 'dapple',
+          bands: true, // pink bands across the back
           tailTip: true,
         },
       },
@@ -141,6 +142,7 @@
           toughness: 2.5, // wiki toughness
           spines: 9,
           pattern: 'dots',
+          headScale: 1.15, // a bigger, heavier head
         },
       },
       lizard_blue: {
@@ -167,6 +169,7 @@
           toughness: 0.5, // wiki toughness
           spines: 0,
           pattern: 'fins',
+          crest: true, // a frilled crest on the head
           tailTip: true,
         },
       },
@@ -195,6 +198,7 @@
           spines: 0,
           pattern: 'spots',
           camouflage: true,
+          feelers: '#b9a3e6', // pale purple nose feelers
         },
       },
       lizard_red: {
@@ -253,6 +257,7 @@
           toughness: 0.8, // wiki toughness
           spines: 0,
           pattern: 'dapple',
+          antennae: true, // the pack's jointed antennae
           tailTip: true,
         },
       },
@@ -264,7 +269,7 @@
         popCost: 1.2,
         params: {
           headColor: '#18d8e8',
-          bodyColor: '#0a0d10',
+          bodyColor: '#0d5662', // (a cyan body, its rings bright on it)
           length: 0.95,
           speed: 58, // wiki baseSpeed 4.85 x 12
           huntSpeed: 99,
@@ -533,7 +538,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
-  RW.DEFAULT_CONFIG.rev = 5; // (see loadConfig)
+  RW.DEFAULT_CONFIG.rev = 6; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -565,6 +570,8 @@
         }
         // rev 5: the pair species' caps even
         if (!(raw.rev >= 5)) for (const k of PAIRS) if (cfg.species[k] && cfg.species[k].max % 2) cfg.species[k].max += 1;
+        // rev 6: the cyan lizard's body went cyan
+        if (!(raw.rev >= 6) && cfg.species.lizard_cyan) cfg.species.lizard_cyan.params.bodyColor = RW.BASE_CONFIG.species.lizard_cyan.params.bodyColor;
         cfg.rev = RW.DEFAULT_CONFIG.rev;
       }
     } catch (e) {
