@@ -2584,8 +2584,9 @@
       for (let k = 0; k < segs; k++) {
         // each segment bends a little more than the one before: a floppy
         // whip, sagging toward its tip
-        // (laid back, the tips droop a touch; flared, they curl back over)
-        a += bend * (0.35 + k * 0.18) + (k > 1 ? U.lerp(-0.05, 0.14, F) : 0);
+        // (laid back, the tips lift a touch; flared, they sweep back toward
+        // the tail, not forward over the snout like an insect's)
+        a += bend * (0.35 + k * 0.18) + (k > 1 ? U.lerp(0.05, -0.14, F) : 0);
         const len = 3.6 - k * 0.22;
         const nx = x + Math.cos(a) * len;
         const ny = y + Math.sin(a) * len;
