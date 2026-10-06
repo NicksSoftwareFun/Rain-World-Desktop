@@ -1330,7 +1330,16 @@
 
     // --------------------------------------------------------- physics ----
     update(dt) {
-      if (!this.tick(dt)) return;
+      if (!this.tick(dt)) {
+        // crawling a passage: the head looks the way it goes, along the
+        // neck, not off sideways at whatever it was facing going in
+        if (this.tunnel) {
+          const P = this.spine.pts;
+          this.headAng = U.lerpAngle(this.headAng, Math.atan2(P[0].y - P[1].y, P[0].x - P[1].x), U.approach(18, dt));
+          this.jaw *= 0.9;
+        }
+        return;
+      }
       const W = this.W;
       const P = this.spine.pts;
       const head = P[0];
