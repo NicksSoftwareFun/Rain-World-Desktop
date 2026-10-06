@@ -3119,7 +3119,8 @@
     const shade1 = U.rgba(U.mix(pal.mass, '#000000', 0.62)); // deep shadow in a hole
     const shade2 = U.rgba(U.mix(pal.mass, '#000000', 0.3)); // a cast shadow on the rock
     const lipL = U.rgba(U.mix(pal.mass, pal.light, 0.26)); // a lit lip
-    const rimIn = U.rgba(U.mix(pal.mass, pal.light, 0.1)); // a hole's far inside edge
+    const rimIn = U.rgba(U.mix(pal.mass, pal.light, 0.045)); // a hole's far inside edge (barely there)
+    const lipH = U.rgba(U.mix(pal.mass, pal.light, 0.11)); // a hole's broken top lip (faint)
     const holeBack = U.rgba(U.mix(pal.mass, '#000000', 0.32)); // structure at the back of a hole
     const trussC = U.rgba(U.mix(pal.mass, pal.light, 0.1));
     const trussL = U.rgba(U.mix(pal.mass, pal.light, 0.2));
@@ -3294,15 +3295,15 @@
       l.rect(-1e4, -1e4, 2e4, 2e4);
       trace(pts, 0, 0);
       l.clip('evenodd');
-      l.strokeStyle = lipL;
-      l.lineWidth = 1.5;
+      l.strokeStyle = lipH;
+      l.lineWidth = 1;
       l.beginPath();
       let on = false;
       for (let i = 0; i < pts.length; i++) {
         const [x0, y0] = pts[i];
         const [x1, y1] = pts[(i + 1) % pts.length];
-        // (top and left runs only: the edge facing the light)
-        const up = x1 > x0 + 0.5 || y1 < y0 - 0.5;
+        // (the top run only: the edge facing the light)
+        const up = x1 > x0 + 0.5 && Math.abs(y1 - y0) < 6;
         if (up) {
           if (!on) l.moveTo(x0 - 0.5, y0 - 1);
           l.lineTo(x1 - 0.5, y1 - 1);
@@ -3425,7 +3426,7 @@
         const r = Math.min(pw, ph) * R(0.55, 0.75);
         const cx = px + pw * R(0.3, 0.7);
         const cy = py + ph * (R() < 0.5 ? R(0.15, 0.35) : R(0.65, 0.85));
-        const pts = ragPts(px + 4, py + 4, pw - 8, ph - 8, 5);
+        const pts = ragPts(px + 4, py + 4, pw - 8, ph - 8, 3.2);
         const two = R() < 0.6;
         const side = R() < 0.5 ? -1 : 1;
         hole_(pts, () => {
@@ -3437,7 +3438,7 @@
       // a break in the rock with a run of pipes through it, one snapped
       pipes(px, py, pw, ph) {
         const vert = ph > pw * 0.9 ? true : R() < 0.3;
-        const pts = ragPts(px + 2, py + 2, pw - 4, ph - 4, 7);
+        const pts = ragPts(px + 2, py + 2, pw - 4, ph - 4, 4.5);
         hole_(pts, () => {
         const n = 2 + Math.floor(R() * 3); // (gaps between: the back of the break shows through)
         const span = vert ? pw : ph;
@@ -3638,7 +3639,7 @@
           const x = px + R(0, pw - w);
           const y = py + R(0, ph - h);
           if (i === torn) {
-            const pts = ragPts(x, y, w, h, 4);
+            const pts = ragPts(x, y, w, h, 3);
             hole_(pts, () => {
               // ribs showing behind, each with its shadow
               for (let t = x + 5; t < x + w - 3; t += 9) {
@@ -3664,7 +3665,7 @@
       },
       // a crevice with a bundle of cables sagging through it
       cables(px, py, pw, ph) {
-        const pts = ragPts(px, py + ph * 0.25, pw, ph * 0.5, 6);
+        const pts = ragPts(px, py + ph * 0.25, pw, ph * 0.5, 4);
         hole_(pts, () => {
         const n = 4 + Math.floor(R() * 3);
         for (let i = 0; i < n; i++) {
