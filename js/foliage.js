@@ -206,6 +206,27 @@
       };
     }
 
+    // The wall fans' draughts (props with .blow, the way each blows, and
+    // .reach, how far): each plant's lean in them, signed, strongest right
+    // in front of a fast fan and falling off downwind and to the sides.
+    setFans(fans) {
+      for (const p of this.plants) {
+        const px = (p.x0 + p.x1) / 2;
+        const py = p.swag || p.hang ? (p.y + p.y1) / 2 : (p.y0 + p.y) / 2;
+        let w = 0;
+        for (const q of fans) {
+          const d = (px - q.x) * q.blow; // (downwind)
+          const far = q.reach + q.r;
+          if (d < -q.r * 0.3 || d > far) continue;
+          const spread = q.r * 1.3 + Math.max(0, d) * 0.35;
+          const dy = Math.abs(py - q.y);
+          if (dy > spread) continue;
+          w += q.blow * (1 - Math.max(0, d) / far) * (1 - (dy / spread) ** 2) * (0.3 + Math.abs(q.spin || 0.3)) * 0.22;
+        }
+        p.fan = U.clamp(w, -0.2, 0.2);
+      }
+    }
+
     // Sway and bumps: each plant a damped spring about upright, pushed by
     // the rain's wind and by whatever moves through it.
     update(dt, creatures, intensity, t) {
@@ -229,7 +250,9 @@
       for (const p of this.plants) {
         const g = p.give;
         // (underwater: a slow drift in the current, whatever the rain)
-        const sway = p.wet ? 0.05 * Math.sin(t * 0.8 + p.phase) : wind * Math.sin(t * (1.7 + 0.3 * Math.sin(p.phase)) + p.phase) + wind * 0.5;
+        let sway = p.wet ? 0.05 * Math.sin(t * 0.8 + p.phase) : wind * Math.sin(t * (1.7 + 0.3 * Math.sin(p.phase)) + p.phase) + wind * 0.5;
+        // (a fan's draught: a steady lean, fluttering)
+        if (p.fan && !p.wet) sway += p.fan * (0.75 + 0.2 * Math.sin(t * 6.3 + p.phase) + 0.12 * Math.sin(t * 11.7 + p.phase * 3));
         let push = 0;
         for (let i = 0; i < pts.length; i += 3) {
           const x = pts[i];

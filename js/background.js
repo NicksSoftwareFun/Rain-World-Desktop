@@ -1540,10 +1540,12 @@
       if (x0 < 0 || y0 < 0 || x0 + w > canvas.width || y0 + h > canvas.height) continue;
       const base = ctx.getImageData(x0, y0, w, h);
       const play = pctx.getImageData(x0, y0, w, h).data;
-      // the blades a shade lighter than the hole behind them
-      const bl = U.hex(q.blade);
+      // the blades a shade lighter than the hole behind them, their
+      // leading halves lighter still (bent plate, catching the light)
       const ho = U.hex(q.hole);
-      const ratio = [0, 1, 2].map((i) => (bl[i] + 6) / (ho[i] + 6));
+      const ratioOf = (c) => U.hex(c).map((v, i) => (v + 6) / (ho[i] + 6));
+      const ratio = ratioOf(q.blade);
+      const ratioLit = ratioOf(q.bladeLit || q.blade);
       const mask = document.createElement('canvas');
       mask.width = w;
       mask.height = h;
@@ -1553,28 +1555,36 @@
         m.setTransform(1, 0, 0, 1, 0, 0);
         m.clearRect(0, 0, w, h);
         m.setTransform(k, 0, 0, k, -x0, -y0);
-        m.fillStyle = '#fff';
         const step = U.TAU / q.nb;
         for (let i = 0; i < q.nb; i++) {
           const a = q.a0 + (f / FAN_FRAMES) * step + i * step;
-          m.beginPath();
-          m.moveTo(q.x, q.y);
-          m.arc(q.x, q.y, q.r * 0.9, a, a + step * 0.42);
-          m.closePath();
-          m.fill();
+          for (const [from, to, col] of [[0, 0.21, '#fff'], [0.21, 0.42, '#808080']]) {
+            m.fillStyle = col;
+            m.beginPath();
+            m.moveTo(q.x, q.y);
+            m.arc(q.x, q.y, q.r * 0.9, a + step * from, a + step * to + 0.02);
+            m.closePath();
+            m.fill();
+          }
         }
-        // (the hub stays the hole's colour)
+        // (the hub cap and the guard stay as painted)
         m.globalCompositeOperation = 'destination-out';
         m.beginPath();
-        m.arc(q.x, q.y, q.r * 0.18, 0, U.TAU);
+        m.arc(q.x, q.y, q.r * 0.18 + 1, 0, U.TAU);
         m.fill();
+        if (q.guard) {
+          m.lineWidth = 1.4;
+          RW.Rooms.fanGuard(m, q);
+          m.stroke();
+        }
         m.globalCompositeOperation = 'source-over';
         const md = m.getImageData(0, 0, w, h).data;
         const out = new ImageData(w, h);
         const o = out.data;
         for (let i = 0; i < o.length; i += 4) {
           if (md[i + 3] < 128) continue;
-          for (let c = 0; c < 3; c++) o[i + c] = Math.min(255, base.data[i + c] * ratio[c]);
+          const rt = md[i] > 192 ? ratioLit : ratio;
+          for (let c = 0; c < 3; c++) o[i + c] = Math.min(255, base.data[i + c] * rt[c]);
           o[i + 3] = 255;
         }
         const fc = document.createElement('canvas');
@@ -1602,7 +1612,7 @@
         cc.height = h;
         cc.getContext('2d').putImageData(cover, 0, 0);
       }
-      B.fans.push({ x0, y0, frames, cover: cc, nb: q.nb, spin: q.spin });
+      B.fans.push({ x0, y0, frames, cover: cc, nb: q.nb, spin: q.spin, x: q.x, y: q.y, r: q.r, blow: q.blow || 0, reach: q.reach || 0, seed: q.seed });
     }
   }
   // Each frame, straight after the background: t in seconds.
@@ -1615,6 +1625,23 @@
       ctx.drawImage(f.frames[i], f.x0, f.y0);
       if (f.cover) ctx.drawImage(f.cover, f.x0, f.y0);
     }
+    // dust caught in each fan's draught, blown out across the room as far
+    // as the next rock (and the plants in it lean, see RW.Foliage)
+    const k = 1 / B.ps;
+    ctx.save();
+    ctx.fillStyle = B.dust || (B.dust = U.rgba(U.mix(B.pal.fog || B.pal.light, '#ffffff', 0.35)));
+    for (const f of B.fans) {
+      if (!f.blow || f.reach < f.r * 1.5) continue;
+      const sp = 0.25 + Math.abs(f.spin) * 0.6;
+      for (let j = 0; j < 8; j++) {
+        const u = (t * sp * (1 + (j % 3) * 0.18) + j / 8 + f.seed) % 1;
+        const x = f.x + f.blow * (f.r * 0.6 + u * (f.reach - f.r * 0.6));
+        const y = f.y + Math.sin(j * 2.4 + f.seed) * f.r * (0.25 + u * 0.8) + Math.sin(t * 1.7 + j * 1.3) * 3;
+        ctx.globalAlpha = 0.45 * Math.sin(u * Math.PI);
+        ctx.fillRect(Math.round(x * k), Math.round(y * k), 1, 1);
+      }
+    }
+    ctx.restore();
   }
 
   // A hanging chain, in whole art pixels (px: world units to one): rings

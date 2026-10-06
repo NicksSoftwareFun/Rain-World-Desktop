@@ -229,6 +229,7 @@
         }
         this.eco.grassInFoliage = true;
         this.foliage.build(this.zoom / this.ps, U.rgba(this.pal.mass || this.pal.dark));
+        this.foliage.setFans((d.props || []).filter((q) => q.kind === 'fan' && q.blow));
       } else this.eco.grassInFoliage = false;
       // passing clouds and their shadows (a room open to the sky)
       if (RW.Sky) {

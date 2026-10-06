@@ -449,8 +449,14 @@ socket, a ragged break showing a run of pipes (one main, the rest
 thinner, flanged, one snapped and weeping rust), a porthole hatch or a
 pressure door with its wheel, a piston or tank with pipes off into the
 rock, patched hull plating with a plate torn away, a crevice of sagging
-cables, a recessed fan with a blade gone, and the old grille and glyph
-panels chipped and cracked. Small fixtures on rock faces, spaced out:
+cables, a recessed fan (bevelled housing, shaded blades, sometimes one
+snapped, a wire guard or louvres, grime and rust), and the old grille and
+glyph panels chipped and cracked. On dark rock the depths of a hole go
+back into the room's air instead of black (`dim`, `deep()`), the far wall
+lighter away from the lip and laid in blockwork. The passages are painted
+here too: a ragged gap with a back wall per straight run (truss, earth,
+scrap), or the inside of a big ribbed pipe, the three-mark sign at each
+door; junk keeps a cell clear of them. Small fixtures on rock faces, spaced out:
 grates, vent rings, caged lamps (a few still faintly lit), junction boxes
 with conduits, valve wheels, looping cables, glyph plates, machine boxes.
 
@@ -463,7 +469,11 @@ rim of light (brighter near the openings), and a little haze so it reads
 as further back. The wall fans turn: painted as an empty housing, each
 gets a loop of blade frames coloured from the finished background under
 it, and a cover of the play layer in front (poles), drawn every frame
-straight after the background (`Background.drawFans`, built in `compose`).
+straight after the background (`Background.drawFans`, built in `compose`):
+two-tone blades turning under the painted hub and wire guard
+(`Rooms.fanGuard`). Each fan blows toward its more open side as far as the
+next rock (`q.blow`, `q.reach`): dust drifts out on the draught and the
+foreground plants and cables in it lean and flutter (`Foliage.setFans`).
 The foreground (`js/foliage.js`, `RW.Foliage`): the plant painters
 (`paintWaterPlants`, `paintAccents`, `paintBiolum`, and the batfly grass),
 the cables slung between walls (`opts.swag`: they swing about the line

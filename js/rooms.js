@@ -2026,8 +2026,10 @@
     }
   }
 
-  // Passages: a darker tube through the rock with a faint lighter rim, and
-  // at each door the three-mark sign the game puts on shortcut mouths.
+  // Passages: a darker tube through the rock with a faint lighter rim,
+  // under what paintJunk paints over it (a ragged gap through debris or
+  // the inside of a pipe, and at each door the three-mark sign the game
+  // puts on shortcut mouths).
   function paintPassages(l, decor, pal) {
     const room = decor.room;
     const { cell } = room;
@@ -2043,17 +2045,6 @@
         if (!set.has(x + ',' + (y + 1))) l.fillRect(x * cell, (y + 1) * cell - 1, cell, 1);
         if (!set.has(x - 1 + ',' + y)) l.fillRect(x * cell, y * cell, 1, cell);
         if (!set.has(x + 1 + ',' + y)) l.fillRect((x + 1) * cell - 1, y * cell, 1, cell);
-      }
-      // the marks, on the first cell in from each door
-      l.fillStyle = U.rgba('#ffffff', 0.55);
-      for (const [door, end] of [[q.a, q.cells[0]], [q.b, q.cells[q.cells.length - 1]]]) {
-        const cx = (end[0] + 0.5) * cell;
-        const cy = (end[1] + 0.5) * cell;
-        const horiz = end[1] === door[1];
-        for (let k = -1; k <= 1; k++) {
-          if (horiz) l.fillRect(cx - 1, cy + k * 4 - 1, 2, 2);
-          else l.fillRect(cx + k * 4 - 1, cy - 1, 2, 2);
-        }
       }
     }
   }
@@ -2352,6 +2343,21 @@
   // nearer the room's openings it is.
   //   ctx: the backdrop (the shadows go straight onto it, soft); layer: draws
   //   crisp shapes onto it (see Background.paint).
+  // A wall fan's wire guard (a path: the painting strokes it, and the
+  // turning blades are masked by it, see Background.drawFans).
+  function fanGuard(l, q) {
+    l.beginPath();
+    for (const k of [0.5, 0.86]) {
+      l.moveTo(q.x + q.r * k, q.y);
+      l.arc(q.x, q.y, q.r * k, 0, U.TAU);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = (i + 0.5) * (Math.PI / 2);
+      l.moveTo(q.x + Math.cos(a) * q.r * 0.18, q.y + Math.sin(a) * q.r * 0.18);
+      l.lineTo(q.x + Math.cos(a) * q.r, q.y + Math.sin(a) * q.r);
+    }
+  }
+
   function paintProps(ctx, layer, decor, pal, R0) {
     const R = either(R0);
     const room = decor.room;
@@ -2398,7 +2404,15 @@
         // a wall-mounted fan in its housing
         const r = R(1, 1.8) * cell;
         if (taken(cx * cell, cy * cell, r)) continue;
-        props.push({ kind: 'fan', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, seed: R(0, 1000) });
+        // it blows out into the room, toward its more open side, as far
+        // as the next rock (RW.Foliage leans the plants in its draught)
+        const open = (dir) => {
+          let n = 0;
+          while (n < 14 && !solid(cx + dir * (n + 1), cy)) n++;
+          return n;
+        };
+        const blow = open(1) >= open(-1) ? 1 : -1;
+        props.push({ kind: 'fan', x: (cx + 0.5) * cell, y: (cy + 0.5) * cell, r, seed: R(0, 1000), blow, reach: (open(blow) + 0.5) * cell });
       } else if (roll < 0.62 && room4(cx, cy, 1, 1)) {
         const r = R(0.7, 3) * cell;
         if (r > 1.6 * cell && !room4(cx, cy, 3, 3)) continue;
@@ -2551,23 +2565,93 @@
         l.lineTo(gx + Math.cos(na) * gr * 0.9, gy + Math.sin(na) * gr * 0.9);
         l.stroke();
       } else if (q.kind === 'fan') {
-        // a square housing, a ring, blades
+        // a square housing, bevelled, a bolt in each corner; a raised
+        // shroud round the well, its lip shading the top of it; a hub cap,
+        // and sometimes a wire guard; rust run down from the bottom edge
         const R_ = q.r;
+        const h = R_ * 1.15;
         l.fillStyle = C_(base);
-        l.fillRect(q.x - R_ * 1.15, q.y - R_ * 1.15, R_ * 2.3, R_ * 2.3);
+        l.fillRect(q.x - h, q.y - h, h * 2, h * 2);
         if (shadow) return;
+        const dark = haze(U.mix(pal.interior, pal.mass, 0.85));
         l.fillStyle = rim;
-        l.fillRect(q.x - R_ * 1.15, q.y - R_ * 1.15, R_ * 2.3, 1.2);
+        l.fillRect(q.x - h, q.y - h, h * 2, 1.2);
+        l.fillRect(q.x - h, q.y - h, 1.2, h * 2);
+        l.fillStyle = C_(deep);
+        l.fillRect(q.x - h, q.y + h - 1.5, h * 2, 1.5);
+        l.fillRect(q.x + h - 1.5, q.y - h, 1.5, h * 2);
+        // the inner face, a step down: its top and left edges in shade
+        const f = h - 3;
+        l.fillStyle = C_(U.mix(base, mid, 0.45));
+        l.fillRect(q.x - f, q.y - f, f * 2, f * 2);
+        l.fillStyle = C_(deep);
+        l.fillRect(q.x - f, q.y - f, f * 2, 1);
+        l.fillRect(q.x - f, q.y - f, 1, f * 2);
+        for (const [bx, by] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          const x = q.x + bx * (h - 1.8);
+          const y = q.y + by * (h - 1.8);
+          l.fillStyle = C_(deep);
+          l.fillRect(x - 0.5, y, 1.6, 1.6);
+          l.fillStyle = rim;
+          l.fillRect(x - 1, y - 1, 1.4, 1.4);
+        }
+        // the shroud
+        l.fillStyle = C_(dark);
+        l.beginPath();
+        l.arc(q.x + 1, q.y + 1.5, R_ + 2, 0, U.TAU);
+        l.fill();
+        l.fillStyle = C_(base);
+        l.beginPath();
+        l.arc(q.x, q.y, R_ + 2, 0, U.TAU);
+        l.fill();
+        l.strokeStyle = rim;
+        l.lineWidth = 1.2;
+        l.beginPath();
+        l.arc(q.x, q.y, R_ + 1.4, Math.PI * 1.05, Math.PI * 1.75);
+        l.stroke();
+        // the well, the lip's shadow across its top and left
         l.fillStyle = C_(deep);
         l.beginPath();
         l.arc(q.x, q.y, R_, 0, U.TAU);
         l.fill();
-        // (the blades turn: drawn every frame over the empty housing, see
-        // Background.drawFans)
+        l.fillStyle = C_(dark);
+        l.beginPath();
+        l.arc(q.x, q.y, R_, 0, U.TAU);
+        l.arc(q.x + 1.5, q.y + 2, R_ * 0.94, 0, U.TAU, true);
+        l.fill('evenodd');
+        // the hub cap (the blades turn round it, see Background.drawFans)
+        l.fillStyle = C_(dark);
+        l.beginPath();
+        l.arc(q.x + 0.8, q.y + 1, R_ * 0.18, 0, U.TAU);
+        l.fill();
+        l.fillStyle = C_(base);
+        l.beginPath();
+        l.arc(q.x, q.y, R_ * 0.18, 0, U.TAU);
+        l.fill();
+        l.fillStyle = rim;
+        l.fillRect(q.x - R_ * 0.09, q.y - R_ * 0.1, 1.4, 1.4);
+        // a wire guard over the blades: two rings and four spokes (put back
+        // over the turning blades each frame)
+        q.guard = r(0, 1) < 0.6;
+        if (q.guard) {
+          l.strokeStyle = C_(mid);
+          l.lineWidth = 1.2;
+          fanGuard(l, q);
+          l.stroke();
+        }
+        // rust run down the wall from the bottom edge
+        l.fillStyle = C_(rust);
+        for (let i = 0, n = 1 + Math.floor(r(0, 3)); i < n; i++) {
+          const x = q.x + r(-h, h - 1.5);
+          const len = r(3, 12);
+          l.fillRect(x, q.y + h, 1.5, len);
+          l.fillRect(x, q.y + h + len, 1, len * 0.5);
+        }
         q.nb = 5 + Math.floor(r(0, 3));
         q.a0 = r(0, U.TAU);
         q.spin = r(0.15, 0.6) * (RR() < 0.5 ? -1 : 1); // turns a second
         q.blade = mid;
+        q.bladeLit = U.mix(mid, pal.light, 0.22);
         q.hole = deep;
       } else if (q.kind === 'hose') {
         // hanging from the ceiling in a slack loop, a clamp at the top
@@ -3090,8 +3174,24 @@
     const plate = U.rgba(U.mix(pal.mass, pal.light, 0.06));
     const plate2 = U.rgba(U.mix(pal.mass, pal.light, 0.1));
     const rimL = U.rgba(U.mix(pal.mass, pal.light, 0.17));
-    const rimD = U.rgba(U.mix(pal.mass, '#000000', 0.35));
-    const hole = U.rgba(U.mix(pal.mass, '#000000', 0.45));
+    // On dark rock the depths can't get much darker without going flat
+    // black: there they go back into the room's air instead (depth by haze,
+    // the far wall of a hole a little lighter than the shadows in it).
+    const lum = (c) => {
+      const h = U.hex(c);
+      return (0.299 * h[0] + 0.587 * h[1] + 0.114 * h[2]) / 255;
+    };
+    const dim = U.clamp((0.2 - lum(pal.mass)) / 0.12, 0, 1);
+    const air = pal.interior || pal.fog || pal.mass;
+    const deep = (k, haze) => U.mix(U.mix(pal.mass, '#000000', k * (1 - 0.55 * dim)), air, haze * dim);
+    const rimD = U.rgba(deep(0.35, 0.08));
+    const holeRaw = deep(0.45, 0.42);
+    const hole = U.rgba(holeRaw);
+    // the far wall's light, stepping up away from the lip's shadow, and
+    // the joints of the old blockwork behind
+    const holeLit1 = U.rgba(U.mix(holeRaw, air, 0.08 + 0.14 * dim));
+    const holeLit2 = U.rgba(U.mix(holeRaw, air, 0.15 + 0.24 * dim));
+    const holeSeam = U.rgba(U.mix(holeRaw, '#000000', 0.3));
     const massC = U.rgba(pal.mass);
     const rustC = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.45), '#000000', 0.1));
     const bolt = (x, y) => {
@@ -3116,14 +3216,15 @@
     };
     // Depth (the light from the upper left). Solid colours only: this
     // layer is snapped to hard pixels, where see-through would vanish.
-    const shade1 = U.rgba(U.mix(pal.mass, '#000000', 0.62)); // deep shadow in a hole
-    const shade2 = U.rgba(U.mix(pal.mass, '#000000', 0.3)); // a cast shadow on the rock
+    const shade1 = U.rgba(deep(0.62, 0.08)); // deep shadow in a hole
+    const shade2 = U.rgba(deep(0.3, 0.04)); // a cast shadow on the rock
     const lipL = U.rgba(U.mix(pal.mass, pal.light, 0.26)); // a lit lip
     const rimIn = U.rgba(U.mix(pal.mass, pal.light, 0.045)); // a hole's far inside edge (barely there)
     const lipH = U.rgba(U.mix(pal.mass, pal.light, 0.11)); // a hole's broken top lip (faint)
-    const holeBack = U.rgba(U.mix(pal.mass, '#000000', 0.32)); // structure at the back of a hole
-    const trussC = U.rgba(U.mix(pal.mass, pal.light, 0.1));
-    const trussL = U.rgba(U.mix(pal.mass, pal.light, 0.2));
+    const holeBack = U.rgba(deep(0.32, 0.25)); // structure at the back of a hole
+    // (lighter than the far wall it stands against, whatever the rock)
+    const trussC = U.rgba(U.mix(holeRaw, pal.light, 0.1 + 0.06 * dim));
+    const trussL = U.rgba(U.mix(holeRaw, pal.light, 0.2 + 0.08 * dim));
     const earthC = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.3), pal.light, 0.06));
     const earthD = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.2), '#000000', 0.15));
     const earthL = U.rgba(U.mix(U.mix(pal.mass, pal.rust, 0.3), pal.light, 0.2));
@@ -3136,8 +3237,9 @@
       if (R() < 0.65) {
         const across = w >= h * 0.8 ? R() < 0.8 : R() < 0.25;
         const span = across ? w : h;
-        const depth = Math.min(across ? h : w, R(12, 20));
-        const at = (across ? y + h * R(0.18, 0.5) : x + w * R(0.2, 0.6));
+        const depth = Math.min((across ? h : w) * 0.6, R(12, 20));
+        // (clear of the earth heaped along the bottom)
+        const at = across ? y + Math.max(2, Math.min(h * R(0.18, 0.5), h * 0.7 - depth)) : x + w * R(0.2, 0.6);
         const seg = depth * R(0.9, 1.3);
         const bar = (x0, y0, x1, y1, wd) => {
           for (const [col, o] of [[shade1, 3], [trussC, 0]]) {
@@ -3211,7 +3313,7 @@
         l.fillStyle = earthC;
         for (let k = 0; k < 3; k++) {
           const tx = x + R(0.1, 0.9) * w;
-          for (let t = 0; t < R(8, 26); t += R(3, 6)) l.fillRect(tx + R(-1, 1), y + t, R(1, 2.5), R(1, 2.5));
+          for (let t = 0, n = Math.min(R(8, 26), h * 0.3); t < n; t += R(3, 6)) l.fillRect(tx + R(-1, 1), y + t, R(1, 2.5), R(1, 2.5));
         }
         // a root through it
         if (R() < 0.4) {
@@ -3261,7 +3363,7 @@
     // it) the rock's lip shadowing the top and left inside, the bottom and
     // right inside edges catching the light, a lit rim along the top
     // outside. inside(): draws what's in the hole (clipped to it).
-    const hole_ = (pts, inside) => {
+    const hole_ = (pts, inside, back) => {
       l.fillStyle = hole;
       l.beginPath();
       trace(pts, 0, 0);
@@ -3270,10 +3372,27 @@
       l.beginPath();
       trace(pts, 0, 0);
       l.clip();
+      const bb = pts.reduce((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [1e9, 1e9, -1e9, -1e9]);
+      // the far wall: lighter away from the top-left lip, and blockwork
+      // (courses, their joints staggered) so it isn't a flat dark
+      const sz = Math.min(bb[2] - bb[0], bb[3] - bb[1]);
+      for (const [col, f] of [[holeLit1, 0.16], [holeLit2, 0.34]]) {
+        l.fillStyle = col;
+        l.beginPath();
+        trace(pts, sz * f, sz * f * 1.2);
+        l.fill();
+      }
+      l.fillStyle = holeSeam;
+      const course = R(9, 13);
+      const block = course * R(1.8, 2.6);
+      for (let y = bb[1] + R(2, course), row = 0; y < bb[3]; y += course, row++) {
+        l.fillRect(bb[0], y, bb[2] - bb[0], 1);
+        for (let x = bb[0] + (row % 2 ? block / 2 : 0) + R(-2, 2); x < bb[2]; x += block) l.fillRect(x, y - course + 1, 1, course - 1);
+      }
       // the back of it: a truss, crumbling earth heaped at the bottom, rusted
       // scrap lying on it
-      const bb = pts.reduce((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [1e9, 1e9, -1e9, -1e9]);
-      backWall(bb[0], bb[1], bb[2] - bb[0], bb[3] - bb[1]);
+      if (back) back();
+      else backWall(bb[0], bb[1], bb[2] - bb[0], bb[3] - bb[1]);
       if (inside) inside();
       // the lip's shadow: everything in the hole outside the hole moved
       // down and right
@@ -3902,6 +4021,168 @@
       }
       return mix[0][0];
     };
+    // The passages: gaps squeezed through debris and machinery, a ragged
+    // hole with the back of it showing (a truss, heaped earth, scrap), or
+    // now and then the inside of a big pipe the rock has closed round,
+    // ribbed at its joints, sludge along the bottom. (Junk keeps a cell
+    // clear of them.)
+    for (const q of decor.passages || []) {
+      for (const [x, y] of q.cells) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const i = (y + dy) * C + x + dx;
+        if (x + dx >= 0 && x + dx < C && y + dy >= 0 && y + dy < Rows) used[i] = 2;
+      }
+      // its straight runs, as cell rectangles
+      const runs = [];
+      let s0 = 0;
+      for (let i = 1; i <= q.cells.length; i++) {
+        const d = (j) => [q.cells[j][0] - q.cells[j - 1][0], q.cells[j][1] - q.cells[j - 1][1]];
+        if (i < q.cells.length && (i - s0 < 2 || String(d(i)) === String(d(i - 1)))) continue;
+        const part = q.cells.slice(s0, i);
+        const xs = part.map((c) => c[0]);
+        const ys = part.map((c) => c[1]);
+        const x0 = Math.min(...xs);
+        const y0 = Math.min(...ys);
+        const x1 = Math.max(...xs) + 1;
+        const y1 = Math.max(...ys) + 1;
+        runs.push({ x: x0 * cell, y: y0 * cell, w: (x1 - x0) * cell, h: (y1 - y0) * cell, vert: y1 - y0 > x1 - x0 });
+        s0 = i - 1;
+      }
+      if (R() < 0.4) {
+        // a pipe: its wall first (all of it, so no run's wall crosses
+        // another's bore), then the bore
+        const t = 4;
+        for (const r of runs) {
+          const [ax, ay, aw, ah] = r.vert ? [r.x - t, r.y, r.w + 2 * t, r.h] : [r.x, r.y - t, r.w, r.h + 2 * t];
+          l.fillStyle = shade2;
+          l.fillRect(ax + 3, ay + 4, aw, ah);
+          l.fillStyle = plate2;
+          l.fillRect(ax, ay, aw, ah);
+          l.fillStyle = rimL;
+          l.fillRect(ax, ay, r.vert ? 1.5 : aw, r.vert ? ah : 1.5);
+          // collars at the joints
+          for (let u = cell * R(0.6, 1.2); u < (r.vert ? r.h : r.w) - 4; u += cell * R(1.6, 2.2)) {
+            l.fillStyle = plate;
+            if (r.vert) l.fillRect(ax - 2, r.y + u, aw + 4, 5);
+            else l.fillRect(r.x + u, ay - 2, 5, ah + 4);
+            l.fillStyle = rimL;
+            if (r.vert) l.fillRect(ax - 2, r.y + u, aw + 4, 1);
+            else l.fillRect(r.x + u, ay - 2, 1, ah + 4);
+            l.fillStyle = rimD;
+            if (r.vert) l.fillRect(ax - 2, r.y + u + 4, aw + 4, 1.5);
+            else l.fillRect(r.x + u + 4, ay - 2, 1.5, ah + 4);
+          }
+        }
+        for (const r of runs) {
+          // across the bore (v, from its top or left): the far curve in
+          // shadow, the lower curve catching the light, sludge in the
+          // bottom of a level one
+          const A = r.vert ? r.w : r.h;
+          const band = (v0, v1, col) => {
+            l.fillStyle = col;
+            if (r.vert) l.fillRect(r.x + v0 * A, r.y, (v1 - v0) * A, r.h);
+            else l.fillRect(r.x, r.y + v0 * A, r.w, (v1 - v0) * A);
+          };
+          band(0, 1, hole);
+          band(0, 0.28, shade1);
+          band(0.55, 0.86, holeLit2);
+          band(0.62, 0.74, holeLit1);
+          if (!r.vert) {
+            band(0.84, 1, earthD);
+            l.fillStyle = earthC;
+            for (let u = R(0, 6); u < r.w; u += R(4, 9)) l.fillRect(r.x + u, r.y + A * 0.84 - 1, R(3, 7), 1.5);
+          }
+          // the ribs inside, and rust run from the joints
+          for (let u = cell * R(0.4, 0.9); u < (r.vert ? r.h : r.w); u += cell * R(1, 1.4)) {
+            l.fillStyle = rimD;
+            if (r.vert) l.fillRect(r.x, r.y + u, r.w, 1.5);
+            else l.fillRect(r.x + u, r.y, 1.5, r.h);
+            if (!r.vert && R() < 0.5) {
+              l.fillStyle = rustB;
+              l.fillRect(r.x + u + 1.5, r.y + A * 0.28, 1.5, A * R(0.2, 0.5));
+            }
+          }
+        }
+      } else {
+        // a ragged gap: the outline of its cells, the edge pushed out a
+        // little here and there (never into the way through)
+        const set = new Set(q.cells.map(([x, y]) => y * C + x));
+        const has = (x, y) => set.has(y * C + x);
+        const edges = new Map();
+        for (const [x, y] of q.cells) {
+          if (!has(x, y - 1)) edges.set(x + ',' + y, [x + 1, y]);
+          if (!has(x + 1, y)) edges.set(x + 1 + ',' + y, [x + 1, y + 1]);
+          if (!has(x, y + 1)) edges.set(x + 1 + ',' + (y + 1), [x, y + 1]);
+          if (!has(x - 1, y)) edges.set(x + ',' + (y + 1), [x, y]);
+        }
+        const [sx, sy] = q.cells[0];
+        let at = [sx, sy];
+        const loop = [];
+        for (let n = 0; n < 4 * q.cells.length + 4; n++) {
+          const nx = edges.get(at[0] + ',' + at[1]);
+          if (!nx) break;
+          edges.delete(at[0] + ',' + at[1]);
+          loop.push([at, nx]);
+          at = nx;
+          if (at[0] === sx && at[1] === sy) break;
+        }
+        const pts = [];
+        for (const [[ax, ay], [bx, by]] of loop) {
+          const dx = bx - ax;
+          const dy = by - ay;
+          const n = Math.max(1, Math.round(cell / 5));
+          for (let i = 0; i < n; i++) {
+            const out = i === 0 ? 1 : R(0, 3.5);
+            pts.push([(ax + (dx * i) / n) * cell + dy * out, (ay + (dy * i) / n) * cell - dx * out]);
+          }
+        }
+        if (pts.length > 3) {
+          // jammed scrap framing it: a bent beam or a plate edge along a
+          // run, its shadow under it
+          for (const r of runs) {
+            if (R() < 0.45) continue;
+            const along = r.vert ? r.h : r.w;
+            const len = Math.min(along, cell * R(1, 2.2));
+            const u = R(0, along - len);
+            const side = R() < 0.6 ? -1 : 1;
+            const th = R(3, 5);
+            const [bx, by, bw, bh] = r.vert
+              ? [side < 0 ? r.x - th - 2 : r.x + r.w + 2, r.y + u, th, len]
+              : [r.x + u, side < 0 ? r.y - th - 2 : r.y + r.h + 2, len, th];
+            l.fillStyle = shade2;
+            l.fillRect(bx + 2, by + 3, bw, bh);
+            l.fillStyle = R() < 0.5 ? rustB : plate2;
+            l.fillRect(bx, by, bw, bh);
+            l.fillStyle = rimL;
+            l.fillRect(bx, by, r.vert ? 1 : bw, r.vert ? bh : 1);
+          }
+          hole_(pts, () => {
+            // stones fallen along the floor of a level run
+            for (const r of runs) {
+              if (r.vert) continue;
+              for (let u = R(0, 8); u < r.w; u += R(6, 14)) {
+                const sz = R(2, 4);
+                l.fillStyle = R() < 0.5 ? earthL : earthD;
+                l.fillRect(r.x + u, r.y + r.h - sz, sz * R(1, 1.6), sz);
+              }
+            }
+          }, () => {
+            // (each straight run its own back, sized to it)
+            for (const r of runs) backWall(r.x, r.y, r.w, r.h);
+          });
+        }
+      }
+      // the marks, on the first cell in from each door
+      l.fillStyle = U.rgba('#ffffff', 0.55);
+      for (const [door, end] of [[q.a, q.cells[0]], [q.b, q.cells[q.cells.length - 1]]]) {
+        const cx = (end[0] + 0.5) * cell;
+        const cy = (end[1] + 0.5) * cell;
+        const horiz = end[1] === door[1];
+        for (let k = -1; k <= 1; k++) {
+          if (horiz) l.fillRect(cx - 1, cy + k * 4 - 1, 2, 2);
+          else l.fillRect(cx + k * 4 - 1, cy - 1, 2, 2);
+        }
+      }
+    }
     let rockN = 0;
     for (let i = 0; i < cells.length; i++) if (cells[i] === 1) rockN++;
     for (let k = 0, tries = 0; k < rockN / 200 && tries < 1500; tries++) {
@@ -4194,5 +4475,5 @@
     }
   }
 
-  RW.Rooms = { REGIONS, VARIANTS, TONES, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
+  RW.Rooms = { REGIONS, VARIANTS, TONES, generate, paintBackdrop, paintShade, paintPits, paintPassages, paintMass, paintAccents, paintWaterPlants, paintJunk, paintBiolum, paintProps, fanGuard, palette: (region) => (REGIONS[region] || REGIONS.outskirts).pal };
 })();
