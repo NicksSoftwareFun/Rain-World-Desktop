@@ -1583,6 +1583,7 @@
       }
       decor.tries = tries + 1;
       decor.ok = res.ok;
+      decor.terrain = cfg.world.terrain || 'strata'; // (the ground's colour, see paintTerrain)
       if (res.ok) return decor;
       // (the nearest miss so far, with the dens that didn't connect)
       // (no list at all: fewer than two dens, the worst miss)
@@ -1593,6 +1594,7 @@
     // (nothing comes out of, or heads for, a pipe in a cut-off pocket)
     const d = best.decor;
     d.dens = d.dens.filter((q) => !best.bad.includes(q));
+    d.terrain = cfg.world.terrain || 'strata';
     return d;
   }
 
@@ -2059,15 +2061,15 @@
     }
   }
 
-  // ---- experiment: terrain colour (RW.TERRAIN_STYLE) --------------------
-  // Earthy at the ground's surface, rock further in and deeper down. On a
-  // fine grid (SUB px squares): each square's distance to open air (any
-  // way, and straight up to the floor above it), a value noise to break
-  // the bands up, then one of three ways of turning those into tones,
-  // painted as runs of one colour.
-  //   'strata':  layers under each floor, following its shape (wavy)
-  //   'mottle':  blotches by distance from any open face, ragged
-  //   'topsoil': rock throughout, a band of soil on floors, weathered walls
+  // ---- terrain colour --------------------------------------------------
+  // Earthy under the ground's surface, rock further down: strata laid
+  // under each floor (an upper surface only: walls, undersides and the
+  // hanging blocks stay rock), following the floor's shape, wavy, the bands
+  // thinning into the rock about four cells down. On a fine grid (SUB px
+  // squares): each square's distance down from the open air above it, a
+  // value noise to break the bands up, painted as runs of one colour.
+  // decor.terrain: 'strata' (the default) or 'flat' (rock throughout);
+  // RW.TERRAIN_STYLE overrides it (for comparing).
   const SUB = 4;
   const SINK = { fillRect() {}, set fillStyle(v) {} };
   function terrainNoise(seed) {
@@ -2100,7 +2102,6 @@
       earth: [1, 0.72, 0.48, 0.26, 0.1].map((f) => U.rgba(U.mix(pal.mass, earthHue, k * f))),
       rock: U.rgba(pal.mass),
       deep: U.rgba(U.mix(cool, '#000000', 0.12)),
-      grey: U.rgba(U.mix(cool, pal.light, 0.05)),
       earthHue,
       k,
     };
@@ -2144,45 +2145,50 @@
         dUp[k] = d;
       }
     }
+    // (and from the floors either side, a little deeper the further off,
+    // so the layers bend round a step in the floor instead of stopping in
+    // a straight seam; rock only, air doesn't count)
+    {
+      const K = n * 2;
+      const row = new Float32Array(GW);
+      for (let j = 0; j < GH; j++) {
+        for (let i = 0; i < GW; i++) row[i] = dUp[j * GW + i];
+        for (let i = 0; i < GW; i++) {
+          if (!dAll[j * GW + i]) continue;
+          let m = row[i];
+          for (let dx = -K; dx <= K; dx++) {
+            const ii = i + dx;
+            if (ii < 0 || ii >= GW || !dAll[j * GW + ii]) continue;
+            const v = row[ii] + Math.abs(dx) * 0.6;
+            if (v < m) m = v;
+          }
+          dUp[j * GW + i] = m;
+        }
+      }
+    }
     const T = terrainTones(pal);
     const noise = terrainNoise((C * 131 + Rows * 977) ^ 0x2f6b);
     const tone = new Int8Array(GW * GH).fill(-1); // -1: leave as it is
-    // tone indices: 0-4 earth (surface .. nearly rock), 5 rock, 6 deep, 7 grey
+    // tone indices: 0-4 earth (surface .. nearly rock), 5 rock, 6 a dark seam
     for (let j = 0; j < GH; j++)
       for (let i = 0; i < GW; i++) {
         const k = j * GW + i;
         const da = dAll[k];
         if (!da) continue;
         const N = noise(i / 9, j / 9); // 0..1, blobs ~9 squares across
-        const cellsA = da / n; // in cells
-        const cellsU = dUp[k] / n;
-        let t;
-        if (style === 'strata') {
-          // layers under the floor above (wavy), the sides only weathered a
-          // little; the bands' thickness drifts along
-          const wave = (N - 0.5) * 1.6 + Math.sin(i / 11 + N * 2) * 0.35;
-          const under = cellsU < 60 ? cellsU + wave : 99;
-          const side = cellsA + (N - 0.5) * 1.2;
-          const e = Math.min(under * 0.9, side * 1.6);
-          t = e < 0.45 ? 0 : e < 1.1 ? 1 : e < 1.9 ? 2 : e < 2.9 ? 3 : e < 4 ? 4 : e < 6.5 ? 5 : 6;
-          // a darker seam between bands now and then
-          if (t >= 1 && t <= 4 && Math.abs((e % 1) - 0.5) < 0.04 && N > 0.55) t = 6;
-        } else if (style === 'mottle') {
-          // blotches: distance pushed about by the noise, so earth runs in
-          // tongues into the rock and rock breaks through the earth
-          const e = cellsA * 0.85 + (N - 0.5) * 2.6 + (cellsU < 60 ? -0.4 : 0.4);
-          t = e < 0.35 ? 0 : e < 0.9 ? 1 : e < 1.6 ? 2 : e < 2.4 ? 3 : e < 3.2 ? 4 : e < 5 ? 5 : 6;
-        } else {
-          // topsoil: rock, with a band of soil under each floor (0.5-1.5
-          // cells, varying), weathered grey on the walls, darker deep down
-          const soil = 0.5 + N * 1.1;
-          if (cellsU < soil) t = cellsU < soil * 0.35 ? 0 : cellsU < soil * 0.7 ? 1 : 2;
-          else if (cellsA < 0.35 + (N - 0.5) * 0.4) t = 7;
-          else t = cellsA > 4 + N * 2 ? 6 : 5;
-        }
+        const cellsU = dUp[k] / n; // in cells
+        // the layers under the floor above (wavy, their thickness drifting
+        // along); nothing round the sides or under a ceiling
+        if (cellsU >= 60) continue;
+        const wave = (N - 0.5) * 1.6 + Math.sin(i / 11 + N * 2) * 0.35;
+        const e = (cellsU + wave) * 0.9;
+        let t = e < 0.45 ? 0 : e < 1.1 ? 1 : e < 1.9 ? 2 : e < 2.9 ? 3 : e < 4 ? 4 : -1;
+        // a darker seam between bands now and then
+        if (t >= 1 && Math.abs((e % 1) - 0.5) < 0.04 && N > 0.55) t = 6;
+        if (t < 0) continue;
         tone[k] = t;
       }
-    const cols = [...T.earth, T.rock, T.deep, T.grey];
+    const cols = [...T.earth, T.rock, T.deep];
     for (let t = 0; t < cols.length; t++) {
       l.fillStyle = cols[t];
       l.beginPath();
@@ -2339,8 +2345,9 @@
         l.fillRect(s * cell, y * cell, (x - s) * cell, cell + (y === Rows - 1 ? 400 : 0));
       }
     }
-    // (experiment: earthy ground grading into rock, see paintTerrain)
-    const terrain = RW.TERRAIN_STYLE ? paintTerrain(l, decor, pal, solid, inBlock, RW.TERRAIN_STYLE) : null;
+    // (earthy ground grading into rock under the floors, see paintTerrain)
+    const tStyle = RW.TERRAIN_STYLE !== undefined ? RW.TERRAIN_STYLE : decor.terrain || 'strata';
+    const terrain = tStyle && tStyle !== 'flat' ? paintTerrain(l, decor, pal, solid, inBlock, tStyle) : null;
     // texture: masonry courses every 3 cells, brick dashes, and a few buried
     // conduits running through the thick of it
     const tex = U.rgba(U.mix(pal.mass, pal.light, 0.08));

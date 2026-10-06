@@ -466,6 +466,13 @@ sometimes climb one to rest a while when wandering (looking about, never
 asleep), and count tips out of reach as places to flee to. A species'
 `shelterEarly` (green lizards: 35 s) sends it to a den that much sooner.
 
+The ground's colour (`paintTerrain`, `world.terrain`: 'strata', the
+default, or 'flat'): earthy strata under the floors only (walls, undersides
+and hanging blocks stay rock), measured down from the open air above on a
+4 px grid and bent round steps in the floor, wavy, thinning into the rock
+about four cells down, with its own grain (the rock's texture keeps off
+it); the floors get moss mats, litter and pebbles (`paintGroundAccents`).
+
 Machinery in the rock (`paintJunk`): big pieces set into the masses
 (`KINDS`, mixed per region by `MIX`): a cog half swallowed in a broken
 socket, a ragged break showing a run of pipes (one main, the rest

@@ -23,6 +23,7 @@
       seed: 0, // 0 = new background every load
       layout: 'experimental', // 'experimental' (rooms): carved like real Rain World rooms (js/rooms.js); 'ledges': ledges over open space, each map either in rows ('tiers': at shared heights, bridged by horizontal poles) or 'scatter'ed anywhere (both still accepted on their own)
       region: 'auto', // experimental layout: 'auto' (a different one each map) or outskirts / shoreline / industrial / shaded
+      terrain: 'strata', // experimental layout: the ground's colour: 'strata' (earthy layers under the floors, rock deeper) or 'flat' (rock throughout)
       surface: 'auto', // experimental layout: open ground on top, a complex of rooms below: 'auto' (about two maps in five), 'always' or 'never'
       under: 'auto', // the complex's region under a surface map ('auto': Industrial under Shoreline, either under Outskirts)
       variant: 'auto', // the region's colour variant (Rooms.VARIANTS index), or 'auto' for a random one each map

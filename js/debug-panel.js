@@ -462,6 +462,11 @@
             eng.restartWildlife();
           }),
           // open ground on top, a complex of rooms below
+          // the ground's colour: earthy strata under the floors, or plain rock
+          this.select('ground', Wc, 'terrain', ['strata', 'flat'], () => {
+            if (Wc.layout !== 'experimental') return;
+            eng.paintBackground();
+          }),
           this.select('surface maps', Wc, 'surface', ['auto', 'always', 'never'], () => {
             if (Wc.layout !== 'experimental') return;
             eng.regenerate(true);
