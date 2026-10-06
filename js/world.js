@@ -109,6 +109,17 @@
       });
       this.dirty = true;
     }
+    // Where a room has a back wall behind the open air (all of it but a
+    // surface map's sky): a blue lizard can crawl across it.
+    setBackWall(a) {
+      this.backWallAt = a || null;
+      this.dirty = true;
+    }
+    backWall(cx, cy) {
+      if (!this.backWallAt || !this.inBounds(cx, cy) || this.solid(cx, cy)) return false;
+      if (this.passageAt && this.passageAt[cy * this.cols + cx] >= 0) return false;
+      return this.backWallAt[cy * this.cols + cx] === 1;
+    }
     passage(cx, cy) {
       if (!this.passageAt || !this.inBounds(cx, cy)) return -1;
       return this.passageAt[cy * this.cols + cx];

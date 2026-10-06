@@ -40,14 +40,17 @@
         fall: true,
         // short leaps to and from poles, shorter for bigger lizards (slugcats
         // jump much further)
-        jumpX: p.poles ? Math.max(2, Math.round(3.2 / L)) : 0,
-        jumpUp: p.poles ? (L <= 1 ? 2 : 1) : 0,
+        // (not one that crawls the back wall: it goes across instead)
+        jumpX: p.poles && !p.backWalls ? Math.max(2, Math.round(3.2 / L)) : 0,
+        jumpUp: p.poles && !p.backWalls ? (L <= 1 ? 2 : 1) : 0,
         leapPoles: true,
         wallCost: 1.3,
         ceilCost: 1.8,
         poleCost: 1.4,
         fallCost: p.climbWalls ? 4 : 1, // climbers climb down rather than drop
         swim: 4, // (they swim, clumsily, and would rather not)
+        back: !!p.backWalls,
+        backCost: 1.6,
       };
       this.grav = GRAV;
       this.mask = { floor: true, walls: !!p.climbWalls, ceil: !!p.climbCeilings, poles: !!p.poles };
@@ -451,7 +454,7 @@
           const canStrike = this.lungeCd <= 0 && this.grip && this.W.lineClear(head.x, head.y, prey.x, prey.y);
           if (canStrike && d < (this.p.biteRange || 60) * this.L) {
             this.lunge(prey.x, prey.y, prey, false);
-          } else if (canStrike && perceive && d < 170 * this.L && Math.random() < (this.p.chargeRate || 0.05)) {
+          } else if (canStrike && perceive && !this.p.backWalls && d < 170 * this.L && Math.random() < (this.p.chargeRate || 0.05)) {
             // a long pounce from afar: green lizards always, most others rarely
             this.lunge(prey.x, prey.y, prey, true);
           }
@@ -667,7 +670,16 @@
       for (let i = 2; i < this.bodyN + 3; i++) out.push({ x: P[i].x, y: P[i].y, r: 5.5 * L, part: 'body' });
       return out;
     }
+    // On the back wall, a hit knocks it off: it falls, and can't take hold
+    // of the wall again for a moment.
+    knockOff() {
+      if (!this.onBack) return;
+      this.knockT = 1.6;
+      this.onBack = false;
+      this.vy = Math.max(this.vy, 40);
+    }
     stun(t, flip) {
+      this.knockOff();
       if (!super.stun(t, flip)) return false;
       this.turn = null;
       this.lungeT = 0;
@@ -881,6 +893,7 @@
         this.noticeT = 0.3;
         return;
       }
+      this.knockOff();
       this.stun(part === 'head' ? 1.3 : 0.8, part === 'head');
       this.vx += w.vx * 0.15;
       this.vy -= 120;
@@ -888,6 +901,7 @@
     }
     // Spears: glance off the armoured head; stick in and wound the body.
     onSpearHit(w, part) {
+      this.knockOff();
       if (part === 'head') {
         this.thrashT = 0.3;
         this.angerAt(w.thrower);
@@ -1542,6 +1556,12 @@
       if (pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1)) mask = onePole(W.centerX(pn.cx));
       let g = W.nearestSurface(head.x, head.y, 22 * L, mask);
       if (!g) g = W.nearestSurface(P[3].x, P[3].y, 20 * L, mask);
+      // A blue lizard out in the open clings to the back wall behind it
+      // (seen from above, legs splayed either side); knocked off by a hit,
+      // it can't for a moment.
+      if (!g && this.caps.back && !(this.knockT > 0) && this.lungeT <= 0 && !this.leap && !(this.dropT > 0) && !(pn && pn.type === Nav.FALL) && W.backWall(W.cellX(head.x), W.cellY(head.y))) {
+        g = { x: head.x, y: head.y, nx: 0, ny: 0, d: 15 * L, id: 'back', type: 'back' };
+      }
       // Nothing to hold but the pole it's on: it keeps hold of that until it
       // means to leave it (a leap or a drop). At the top, stepping across to
       // the ledge beside it, reaching for the next pole over, or stopped
@@ -1550,6 +1570,8 @@
         const under = this.poleUnder(head) || this.poleUnder(P[2]);
         if (under) g = W.nearestSurface(head.x, head.y, 22 * L, onePole(under.x)) || W.nearestSurface(P[3].x, P[3].y, 20 * L, onePole(under.x));
       }
+      this.onBack = !!(g && g.type === 'back');
+      if (this.knockT > 0) this.knockT -= dt;
       if (this.dropT > 0) {
         // letting go on purpose to drop down
         this.dropT -= dt;
@@ -1769,7 +1791,7 @@
       }
       if (this.turn) this.followTrail();
       else {
-        this.spine.verlet(this.bodyN, 0.88, 0, g ? 150 : 700, dt);
+        this.spine.verlet(this.bodyN, 0.88, 0, this.onBack ? 0 : g ? 150 : 700, dt);
         this.spine.follow(1);
         // no hairpins: the body and tail bend round, never double back flat
         this.spine.limitBend(0.8, 2, this.bodyN + 2, 0.5);
@@ -1961,6 +1983,7 @@
       const stepping = [false, false];
       for (const l of this.legs) if (l.leg.stepping) stepping[l.leg.group] = true;
       const spd = Math.hypot(this.vx, this.vy) / (this.p.speed || 90);
+      if (this.onBack) return this.backLegs(dt, active, stepping, spd);
       for (const l of this.legs) {
         const a = P[l.at - 1];
         const b = P[l.at + 1];
@@ -1977,6 +2000,54 @@
           canStep = false;
         }
         l.leg.update(dt, this.W, h.x, h.y, fx, fy, this.ux, this.uy, this.mask, canStep, spd);
+      }
+    }
+
+    // On the back wall, seen from above: each foot planted out to its own
+    // side of the body (the near legs one side, the far legs the other),
+    // held there while the body moves on, then swung ahead, in diagonal
+    // pairs as on the ground.
+    backLegs(dt, active, stepping, spd) {
+      const P = this.spine.pts;
+      for (const l of this.legs) {
+        const leg = l.leg;
+        const a = P[l.at - 1];
+        const b = P[l.at + 1];
+        let fx = a.x - b.x;
+        let fy = a.y - b.y;
+        const fl = Math.hypot(fx, fy) || 1;
+        fx /= fl;
+        fy /= fl;
+        const h = P[l.at];
+        const side = l.near ? 1 : -1;
+        const sx = -fy * side;
+        const sy = fx * side;
+        const r = leg.reach;
+        const fwd = (l.at <= 2 ? 0.3 : -0.1) + (leg.forward - 0.45) * 0.4;
+        const ix = h.x + fx * r * fwd + sx * r * 0.72;
+        const iy = h.y + fy * r * fwd + sy * r * 0.72;
+        if (leg.stepping) {
+          leg.update(dt, this.W, h.x, h.y, fx, fy, this.ux, this.uy, this.mask, false, spd);
+          continue;
+        }
+        const d = U.dist(leg.foot.x, leg.foot.y, ix, iy);
+        if (!leg.planted || d > r * 0.9) {
+          leg.foot.x = ix;
+          leg.foot.y = iy;
+          leg.planted = true;
+        } else if (d > r * 0.42 && active && !stepping[1 - leg.group]) {
+          // swing it ahead of where it should be, so it lands in front
+          leg.from.x = leg.foot.x;
+          leg.from.y = leg.foot.y;
+          leg.to.x = ix + fx * r * 0.3;
+          leg.to.y = iy + fy * r * 0.3;
+          leg.n.x = sx * 0.5;
+          leg.n.y = sy * 0.5;
+          leg.t = 0;
+          leg.stepping = true;
+          leg.planted = false;
+          stepping[leg.group] = true;
+        }
       }
     }
 
@@ -2030,7 +2101,8 @@
         ctx.clip('evenodd');
       }
 
-      for (const l of this.legs) if (!l.near) this.drawLeg(ctx, l, px);
+      // (on the back wall, seen from above: all four legs show, under the body)
+      for (const l of this.legs) if (!l.near || this.onBack) this.drawLeg(ctx, l, px);
 
       // Flat silhouette; the pixel pass gives it hard edges.
       const breath = 1 + 0.05 * Math.sin(this.age * 2.3 + this.breathe) * (this.state === 'display' ? 2.5 : 1);
@@ -2044,6 +2116,15 @@
         }
       }
       const N = this.backNormals(P);
+      if (this.onBack) {
+        // on the back wall: its shadow on the wall just under it
+        ctx.save();
+        ctx.translate(2.5 * L, 3.5 * L);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        U.taperPath(ctx, P, widths);
+        ctx.fill();
+        ctx.restore();
+      }
       ctx.fillStyle = body;
       U.taperPath(ctx, P, widths);
       ctx.fill();
@@ -2160,7 +2241,7 @@
         }
       }
 
-      for (const l of this.legs) if (l.near) this.drawLeg(ctx, l, px);
+      for (const l of this.legs) if (l.near && !this.onBack) this.drawLeg(ctx, l, px);
       ctx.restore(); // end of the mouth clip
       this.drawHead(ctx, px);
       ctx.restore();
@@ -2206,6 +2287,13 @@
       fx /= fl;
       fy /= fl;
       const sgn = l.at <= 2 ? -1 : 1;
+      if (this.onBack) {
+        // (from above: the elbows and knees stick out sideways, front ones
+        // back, hind ones forward, like a gecko on glass)
+        const side = l.near ? 1 : -1;
+        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1, leg.l2, -fy * side * 0.6 + fx * sgn * 0.8, fx * side * 0.6 + fy * sgn * 0.8);
+        return { kx: k.kx, ky: k.ky, ex: k.ex, ey: k.ey };
+      }
       const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1, leg.l2, fx * sgn, fy * sgn);
       // limit how far the joint sticks out from the hip-foot line
       const mx = (h.x + k.ex) / 2;

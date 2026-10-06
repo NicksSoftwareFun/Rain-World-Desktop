@@ -159,6 +159,7 @@
           huntSpeed: 65,
           climbWalls: true,
           climbCeilings: true,
+          backWalls: true, // crawls across the room's back wall (and the props on it)
           poles: true,
           vision: 314,
           mass: 1.4, // wiki bodyMass

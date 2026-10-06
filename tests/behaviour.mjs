@@ -1373,6 +1373,59 @@ const checks = [
     warn: (m) => !m.drops && 'no white lizard dropped on anything this run',
   },
   {
+    name: 'backwalls',
+    about: 'blue lizards crawl across the back wall (never the sky), never leap, and a rock knocks one off',
+    run: (page) =>
+      page.evaluate((mins) => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.world.layout = 'experimental';
+        const S = e.cfg.species;
+        const was = {};
+        for (const k in S) {
+          was[k] = [S[k].enabled, S[k].max];
+          S[k].enabled = ['lizard_blue', 'slugcat', 'batfly'].includes(k);
+        }
+        S.lizard_blue.max = 2;
+        const out = { blueT: 0, backT: 0, offWall: 0, leaps: 0, knocked: 0, tried: 0 };
+        for (const seed of [3, 11]) {
+          e.seed = seed;
+          e.regenerate(true);
+          e.restartWildlife();
+          const W = e.world;
+          for (let i = 0; i < (mins / 2) * 3600; i++) {
+            e.tick(1 / 60);
+            for (const c of e.eco.creatures) {
+              if (c.species !== 'lizard_blue' || c.dead || c.corpse) continue;
+              if (c.leap) out.leaps++;
+              if (i % 15) continue;
+              out.blueT++;
+              if (!c.onBack) continue;
+              out.backT++;
+              const h = c.spine.pts[0];
+              if (!W.backWall(W.cellX(h.x), W.cellY(h.y))) out.offWall++;
+              // (now and then a rock: it falls)
+              if (out.tried < 3 && i % 600 === 0) {
+                out.tried++;
+                c.onRockHit({ vx: 200, thrower: null }, 'body');
+                if (!c.onBack && c.knockT > 0) out.knocked++;
+              }
+            }
+          }
+        }
+        for (const k in was) [S[k].enabled, S[k].max] = was[k];
+        e.cfg.world.layout = 'tiers';
+        return out;
+      }, T(2)),
+    judge: (m) => [
+      // measured: on the back wall about a third of the time
+      m.backT < m.blueT * 0.05 && `blue lizards hardly used the back wall (${m.backT} of ${m.blueT} samples)`,
+      m.offWall > 0 && `a blue lizard clung to the back wall where there isn't one (${m.offWall} samples)`,
+      m.leaps > 0 && 'a blue lizard leapt',
+      m.knocked < m.tried && `a rock didn't knock a blue lizard off the wall (${m.knocked} of ${m.tried})`,
+    ],
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>
@@ -1437,7 +1490,7 @@ const checks = [
 const COVERS = [
   [/js\/water\.js/, ['water']],
   [/js\/rooms\.js/, ['experimental', 'water']],
-  [/js\/creatures\/lizard\.js/, ['bodies', 'scramble', 'jumps', 'reds', 'corpses', 'packs', 'ambush']],
+  [/js\/creatures\/lizard\.js/, ['bodies', 'scramble', 'jumps', 'reds', 'corpses', 'packs', 'ambush', 'backwalls']],
   [/js\/creatures\/centipede\.js/, ['bodies', 'centipedes', 'reds']],
   [/js\/creatures\/slugcat\.js/, ['scramble', 'jumps', 'throws', 'fruit', 'transients']],
   [/js\/creatures\/dropwig\.js/, ['dropwigs']],
@@ -1447,7 +1500,7 @@ const COVERS = [
   [/js\/(background|drips)\.js/, ['rain']],
   [/js\/config\.js/, ['presets']],
   [/js\/(world|nav|engine|ecosystem)\.js|js\/creatures\/base\.js/, ['soak', 'bodies', 'centipedes', 'scramble', 'shelter', 'cover']],
-  [/js\/(world|engine)\.js/, ['skyedges']],
+  [/js\/(world|engine)\.js/, ['skyedges', 'backwalls']],
   [/js\/creatures\/base\.js/, ['passages']],
 ];
 if (args.includes('--changed')) {

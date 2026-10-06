@@ -160,6 +160,7 @@
       this.world.setOpenings(...this.openings());
       this.world.setWater(this.decor.water);
       this.world.setPassages(this.decor.passages);
+      this.world.setBackWall(this.backWall());
       this.world.setDynamic(g.rects);
       this.world.rebuild();
       this.world.waterSim = RW.Water && this.decor.room ? new RW.Water(this.world, this.decor) : null;
@@ -172,6 +173,19 @@
       this.applyPalette();
     }
 
+    // The back wall behind a room's open air: everywhere but a surface
+    // map's sky (see World.setBackWall).
+    backWall() {
+      const room = this.decor && this.decor.room;
+      const W = this.world;
+      if (!room || room.C !== W.cols || room.R > W.rows) return null;
+      const a = new Uint8Array(W.cols * W.rows); // (the world can run a row past the room)
+      for (let y = 0; y < room.R; y++) {
+        if (room.surf && y < room.underTop) continue;
+        for (let x = 0; x < room.C; x++) if (room.cells[y * room.C + x] !== 1) a[y * room.C + x] = 1;
+      }
+      return a;
+    }
     // A room's openings in its outer wall (see World.setOpenings).
     openings() {
       const room = this.decor && this.decor.room;
