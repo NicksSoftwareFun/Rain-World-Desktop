@@ -2916,6 +2916,14 @@
         q.nb = 5 + Math.floor(r(0, 3));
         q.a0 = r(0, U.TAU);
         q.spin = r(0.15, 0.6) * (RR() < 0.5 ? -1 : 1); // turns a second
+        // not every one works: some run (and blow), some have stopped dead,
+        // and some hang loose, the blades rocking to and fro in the air
+        // currents (see Background.drawFans)
+        const m = r(0, 1);
+        q.mode = m < 0.45 ? 'run' : m < 0.7 ? 'still' : 'loose';
+        q.swing = r(0.15, 0.4); // (loose: how far it rocks, in blades)
+        q.swingW = r(0.35, 0.8);
+        q.swingPh = r(0, U.TAU);
         q.blade = mid;
         q.bladeLit = U.mix(mid, pal.light, 0.22);
         q.hole = deep;

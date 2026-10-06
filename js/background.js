@@ -1612,7 +1612,8 @@
         cc.height = h;
         cc.getContext('2d').putImageData(cover, 0, 0);
       }
-      B.fans.push({ x0, y0, frames, cover: cc, nb: q.nb, spin: q.spin, x: q.x, y: q.y, r: q.r, blow: q.blow || 0, reach: q.reach || 0, seed: q.seed });
+      const run = !q.mode || q.mode === 'run';
+      B.fans.push({ x0, y0, frames, cover: cc, nb: q.nb, spin: q.spin, x: q.x, y: q.y, r: q.r, blow: run ? q.blow || 0 : 0, reach: q.reach || 0, seed: q.seed, mode: q.mode || 'run', swing: q.swing, swingW: q.swingW, swingPh: q.swingPh });
     }
   }
   // Each frame, straight after the background: t in seconds.
@@ -1620,7 +1621,9 @@
     const B = canvas._bg;
     if (!B || !B.fans || !B.fans.length) return;
     for (const f of B.fans) {
-      const u = t * f.spin * f.nb;
+      // (u: how far round, in blades: running, steadily; stopped, never;
+      // loose, rocking to and fro, unevenly, in the air currents)
+      const u = f.mode === 'still' ? 0 : f.mode === 'loose' ? f.swing * (Math.sin(t * f.swingW + f.swingPh) + 0.45 * Math.sin(t * f.swingW * 2.3 + f.swingPh * 1.7)) : t * f.spin * f.nb;
       const i = Math.floor((u - Math.floor(u)) * FAN_FRAMES) % FAN_FRAMES;
       ctx.drawImage(f.frames[i], f.x0, f.y0);
       if (f.cover) ctx.drawImage(f.cover, f.x0, f.y0);

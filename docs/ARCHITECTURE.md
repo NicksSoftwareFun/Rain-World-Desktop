@@ -501,7 +501,10 @@ gets a loop of blade frames coloured from the finished background under
 it, and a cover of the play layer in front (poles), drawn every frame
 straight after the background (`Background.drawFans`, built in `compose`):
 two-tone blades turning under the painted hub and wire guard
-(`Rooms.fanGuard`). Each fan blows toward its more open side as far as the
+(`Rooms.fanGuard`). Not every fan works (`q.mode`): about half run, a quarter have stopped
+dead, and the rest hang loose, the blades rocking to and fro unevenly in
+the air currents; only a running one blows. Each running fan blows toward
+its more open side as far as the
 next rock (`q.blow`, `q.reach`): dust drifts out on the draught and the
 foreground plants and cables in it lean and flutter (`Foliage.setFans`).
 The foreground (`js/foliage.js`, `RW.Foliage`): the plant painters
