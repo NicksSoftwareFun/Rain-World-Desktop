@@ -387,7 +387,8 @@
         const prey = this.prey;
         const persist = 0.6 + pe.aggression;
         const feud = this.p.red && prey.p && prey.p.red;
-        const hopeless = !feud && (this.stateT > 25 * persist || (this.stateT > 8 * persist && !this.pather.complete));
+        // (a red foe: given up on only once out of reach or out of range)
+        const hopeless = feud ? this.feudStuck(prey, dt) : this.stateT > 25 * persist || (this.stateT > 8 * persist && !this.pather.complete);
         if (hopeless) {
           this.gaveUpOn = prey;
           this.giveUpT = 20;

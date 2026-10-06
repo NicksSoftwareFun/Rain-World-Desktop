@@ -5,6 +5,8 @@
   const RW = window.RW;
   const U = RW.U;
   const Nav = RW.Nav;
+  // How far a red creature will go looking for another red one (world px).
+  const FEUD_RANGE = 420;
 
   let NEXT_ID = 1;
 
@@ -926,14 +928,17 @@
     }
     // ---- the red feud ----
     // Red creatures (red lizards, large centipedes) can't abide one another:
-    // the nearest other one, anywhere on the map.
+    // the nearest other one within FEUD_RANGE (not across the whole map:
+    // on a big room map that meant long detours and standoffs through
+    // rock), and not one it has just failed to find a way to.
     redFoe() {
       if (!this.p.red) return null;
       const m = this.mainPoint();
       let best = null;
-      let bd = Infinity;
+      let bd = this.feudRange();
+      const skip = this.feudSkip && this.eco.t < this.feudSkip.until ? this.feudSkip.c : null;
       for (const c of this.eco.creatures) {
-        if (c === this || !c.p || !c.p.red || c.dead || c.corpse || c.leaving || c.piping || c.unpiping || c.alpha < 0.5) continue;
+        if (c === this || c === skip || !c.p || !c.p.red || c.dead || c.corpse || c.leaving || c.piping || c.unpiping || c.alpha < 0.5) continue;
         const d = Math.hypot(c.x - m.x, c.y - m.y);
         if (d < bd) {
           bd = d;
@@ -941,6 +946,21 @@
         }
       }
       return best;
+    }
+    feudRange() {
+      return this.p.feudRange || FEUD_RANGE;
+    }
+    // While going for a red foe: one that's gone well out of range, or
+    // there's no way through to for a few
+    // seconds is let be for a while. True when it gives up.
+    feudStuck(foe, dt) {
+      this.feudT = this.pather && !this.pather.complete ? (this.feudT || 0) + dt : 0;
+      const m = this.mainPoint();
+      const far = Math.hypot(foe.x - m.x, foe.y - m.y) > this.feudRange() * 1.4;
+      if (this.feudT < 6 && !far) return false;
+      this.feudT = 0;
+      this.feudSkip = { c: foe, until: this.eco.t + 25 };
+      return true;
     }
     // A blow that wears an armoured creature down instead of taking it:
     // health off (by its toughness), a jolt, dead at zero. True if it died.

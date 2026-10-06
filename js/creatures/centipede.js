@@ -222,7 +222,8 @@
       if (this.state === 'hunt') {
         const prey = this.prey;
         // (a corpse that's sunk is given up on: nobody dives for it)
-        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18) || (prey.corpse && this.W.waterDepth(prey.x, prey.y) > 6)) {
+        const feud = prey && this.p.red && prey.p && prey.p.red && !prey.corpse;
+        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18) || (prey.corpse && this.W.waterDepth(prey.x, prey.y) > 6) || (feud && this.feudStuck(prey, dt))) {
           this.prey = null;
           this.setState('wander');
         } else {

@@ -252,16 +252,20 @@
     count(species) {
       let n = 0;
       for (const c of this.creatures) if (c.species === species && !c.dead && !c.corpse) n++;
+      for (const c of this.shelterStash || []) if (c.species === species) n++; // (coming back out)
       return n;
     }
 
     population() {
       let p = 0;
-      for (const c of this.creatures) {
-        if (c.dead || c.corpse) continue;
+      const cost = (c) => {
         const s = this.cfg.species[c.species];
-        p += s && s.popCost !== undefined ? +s.popCost : 1; // 0 is a real cost (batflies)
-      }
+        return s && s.popCost !== undefined ? +s.popCost : 1; // 0 is a real cost (batflies)
+      };
+      for (const c of this.creatures) if (!c.dead && !c.corpse) p += cost(c);
+      // (and those sheltering in the dens, coming back out after the rain:
+      // the spawner mustn't fill their places meanwhile)
+      for (const c of this.shelterStash || []) p += cost(c);
       return p;
     }
 

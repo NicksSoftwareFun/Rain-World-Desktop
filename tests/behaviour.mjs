@@ -602,7 +602,7 @@ const checks = [
   },
   {
     name: 'reds',
-    about: 'red lizards and large centipedes fight on sight and wear each other down; red lizards spit spine volleys that stun',
+    about: 'red lizards and large centipedes fight when they come within range of each other (not from across the map) and wear each other down; red lizards spit spine volleys that stun',
     run: (page) =>
       page.evaluate(() => {
         const e = RW_APP.engine;
@@ -636,10 +636,22 @@ const checks = [
           return sp.apply(this, arguments);
         };
         // measured when written: 3 of 4 duels decided within 2 min, ~20 hits each
+        // (each pair within range of each other: a feud only reaches so far)
+        const near = (a, r0, r1) => {
+          let best = null;
+          for (let t = 0; t < 60; t++) {
+            const q = e.eco.pickSpawnPoint('centipede_large', true);
+            const d = Math.hypot(q.x - a.x, q.y - a.y);
+            if (d > r0 && d < r1) return q;
+            if (!best || Math.abs(d - (r0 + r1) / 2) < Math.abs(Math.hypot(best.x - a.x, best.y - a.y) - (r0 + r1) / 2)) best = q;
+          }
+          return best;
+        };
         for (let k = 0; k < 3; k++) {
           e.eco.creatures.length = 0;
           const a = e.eco.spawn('lizard_red');
-          const b = e.eco.spawn('centipede_large');
+          const q = near(a, 60, 300);
+          const b = e.eco.spawn('centipede_large', q.x, q.y);
           out.duels++;
           for (let i = 0; i < 60 * 120; i++) {
             e.tick(1 / 60);
@@ -648,6 +660,23 @@ const checks = [
               break;
             }
             if (a.dead || b.dead) break; // one left
+          }
+        }
+        // well out of range of each other: they let each other be
+        out.farChases = 0;
+        out.farPairs = 0;
+        for (let k = 0; k < 2; k++) {
+          e.eco.creatures.length = 0;
+          const a = e.eco.spawn('lizard_red');
+          const q = near(a, a.feudRange() * 1.6, 1e9);
+          if (Math.hypot(q.x - a.x, q.y - a.y) < a.feudRange() * 1.6) continue;
+          const b = e.eco.spawn('centipede_large', q.x, q.y);
+          out.farPairs++;
+          for (let i = 0; i < 60 * 20; i++) {
+            e.tick(1 / 60);
+            if (i % 30) continue;
+            if (Math.hypot(a.x - b.x, a.y - b.y) < a.feudRange() * 0.8) break; // (they wandered into range: fair game)
+            if ((a.state === 'hunt' && a.prey === b) || (b.state === 'hunt' && b.prey === a)) out.farChases++;
           }
         }
         // spines: ~1 volley per 20 s of hunting, about half the spines land
@@ -671,6 +700,7 @@ const checks = [
     judge: (m) => [
       m.hits < 5 && `red rivals barely touched each other (${m.hits} hits in ${m.duels} duels)`,
       m.liveArmouredGrabs > 0 && `${m.liveArmouredGrabs} armoured creatures were grabbed alive`,
+      m.farChases > 6 && `red creatures went after each other from across the map (${m.farChases} samples)`,
     ],
     warn: (m) => (!m.decided && 'no feud was fought to the death this run') || (!m.spines && 'no red lizard got anything in range for a volley this run'),
   },

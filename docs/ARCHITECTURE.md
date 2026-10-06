@@ -102,8 +102,10 @@ Fliers have `isFlier`; ground predators only target one that `nearGround()`
 (within reach of a surface).
 
 **The red feud.** Species with `red: true` (red lizards, large centipedes)
-hunt the nearest other red creature anywhere on the map (`redFoe()`), with
-no give-up timer. `armored: true` means nothing can `grab()` one alive:
+hunt the nearest other red creature within `FEUD_RANGE` (420 px,
+`feudRange()`; `redFoe()`), and give one up for 25 s once it's well out of
+range or there's been no way through to it for 6 s (`feudStuck`): no more
+detours across a big map or standoffs through rock. `armored: true` means nothing can `grab()` one alive:
 bites, shocks, needles and spines go through `takeHit(power, from)`, which
 takes `power / toughness` off `hp`, knocks it back and kills it at zero
 (toughness 6 for both, so a duel runs 20-60 s and either can win). Once
@@ -147,8 +149,9 @@ away from the other until the last 90px.
 Creatures, items (`items.js`: fruit and fruit plants; `weapons.js`: rocks and
 spears), dens, the batfly nest(s). Spawning keeps the population near
 `maxPopulation` (each species has a `popCost`: slugcats, small centipedes,
-infant noodleflies and batflies are free, yellow lizards and squidcadas a half
-each and checked as the pair they come out as; with nothing that counts about,
+infant noodleflies and batflies are free, so their own caps are low, yellow
+lizards and squidcadas a half each and checked as the pair they come out as;
+those sheltering in the dens still count; with nothing that counts about,
 anything fits) from weighted species below their caps; forces a slugcat after 15 s without one; the nest
 tops batflies up. Drawing order and the late translucent pass live here too.
 

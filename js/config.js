@@ -74,7 +74,7 @@
         label: 'Slugcat',
         enabled: true,
         weight: 4,
-        max: 4,
+        max: 2, // (free, so their own cap is what keeps their numbers down)
         popCost: 0, // free: they don't count toward max population (their own max still applies)
         params: {
           speed: 105,
@@ -323,7 +323,7 @@
         label: 'Small Centipede',
         enabled: true,
         weight: 5, // common: something for everyone to hunt
-        max: 6,
+        max: 2, // (free, so their own cap is what keeps their numbers down)
         popCost: 0, // free (the small ones)
         params: {
           segments: [6, 9],
@@ -529,7 +529,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
-  RW.DEFAULT_CONFIG.rev = 3; // (see loadConfig)
+  RW.DEFAULT_CONFIG.rev = 4; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -552,6 +552,12 @@
           if (P) cfg.ecosystem.maxPopulation = P.maxPopulation;
           else cfg.ecosystem.maxPopulation = Math.max(1, Math.round(cfg.ecosystem.maxPopulation * 0.4));
           for (const k of Object.keys(cfg.species)) if (RW.BASE_CONFIG.species[k]) cfg.species[k].popCost = RW.BASE_CONFIG.species[k].popCost;
+        }
+        // rev 4: slugcats and small centipedes (free) capped lower
+        if (!(raw.rev >= 4)) {
+          const P = RW.SIZE_PRESETS[cfg.presets && cfg.presets.size];
+          const f = P ? Math.pow(P.caps, 0.6) : 1;
+          for (const k of ['slugcat', 'centipede']) if (cfg.species[k]) cfg.species[k].max = Math.max(1, Math.round(RW.BASE_CONFIG.species[k].max * f));
         }
         cfg.rev = RW.DEFAULT_CONFIG.rev;
       }
