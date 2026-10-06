@@ -160,7 +160,10 @@ sight or beyond the usual range) and challenged a little more keenly in
 rooms; patrols (`homeGoal`) cover the whole zone.
 
 **Yellow packs.** Yellow lizards come out in pairs (`Ecosystem.spawn` links
-`packMate`; `max` 4), share one hangout (the elder's: `pickHome`,
+`packMate`; `max` 4), never alone: when one of a pair dies or leaves the
+map (sheltering doesn't count), the next yellow to come out joins the
+survivor as its new mate (`widowedYellow`; `chooseSpecies` lets a single
+one out only then, a pair otherwise), share one hangout (the elder's: `pickHome`,
 `updateHome`), regroup when more than 260px apart, never square up to
 another yellow (`findFoe`), and hunt together: one's quarry is the other's
 (within 1.6x vision), and with both on it each comes at it from the side

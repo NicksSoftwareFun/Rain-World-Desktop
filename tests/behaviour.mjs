@@ -1173,6 +1173,7 @@ const checks = [
         const ys = e.eco.creatures.filter((c) => c.species === 'lizard_yellow' && !c.corpse && !c.dead);
         out.yellows = ys.length;
         out.unpaired = ys.filter((c) => !c.packMate).length;
+        out.alone = ys.filter((c) => !c.mate()).length;
         out.splitHomes = ys.filter((c) => c.mate() && c.home && c.mate().home && c.home.sid !== c.mate().home.sid).length;
         out.jointHunts = jh.size;
         const z = e.eco.creatures.find((c) => c.zone && c.zone());

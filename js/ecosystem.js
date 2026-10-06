@@ -351,8 +351,13 @@
       this.stats.born++;
       emerge(c);
       // Yellow lizards hunt in packs: they come out in pairs, sharing a
-      // territory (see Lizard.mate).
-      if (species === 'lizard_yellow' && this.count(species) < (this.cfg.species[species].max || 0)) {
+      // territory (see Lizard.mate). One whose mate died or left gets the
+      // newcomer as its new mate instead (it finds its way over to it).
+      const widow = species === 'lizard_yellow' ? this.widowedYellow(c) : null;
+      if (widow) {
+        c.packMate = widow;
+        widow.packMate = c;
+      } else if (species === 'lizard_yellow' && this.count(species) < (this.cfg.species[species].max || 0)) {
         const m = new Cls(this, species, x + U.rand(-14, 14), y);
         m.homeState = m.state;
         c.packMate = m;
@@ -362,6 +367,13 @@
         emerge(m, 1.5); // (the mate following it out)
       }
       return c;
+    }
+
+    // A yellow lizard out on its own (its mate dead, or gone off the screen).
+    widowedYellow(not) {
+      // (not one just on its way out with it, or sitting out the rain in the pipes)
+      const gone = (m) => !m || m.dead || m.corpse || (!this.creatures.includes(m) && !this.shelterStash.includes(m));
+      return this.creatures.find((c) => c !== not && c.species === 'lizard_yellow' && !c.dead && !c.corpse && !c.leaving && gone(c.packMate)) || null;
     }
 
     // From a den normally; anywhere sensible when first populating.
@@ -408,8 +420,10 @@
         if (!s.enabled || !(s.weight > 0)) continue;
         if (this.count(k) >= (s.max || 0)) continue;
         waiting.push(k);
-        // (a pair, for the species that come out two at a time)
-        const n = k === 'squidcada' || k === 'lizard_yellow' ? Math.min(2, (s.max || 0) - this.count(k)) : 1;
+        // (a pair, for the species that come out two at a time; a yellow
+        // lizard only alone to join one whose mate is gone, never on its own)
+        const n = k === 'squidcada' ? Math.min(2, (s.max || 0) - this.count(k)) : k === 'lizard_yellow' ? (this.widowedYellow() ? 1 : 2) : 1;
+        if (k === 'lizard_yellow' && this.count(k) + n > (s.max || 0)) continue;
         // (with nothing that counts about, anything fits: a Daddy Long Legs
         // can still turn up on a small map)
         if (pop > 0.01 && pop + n * (s.popCost !== undefined ? +s.popCost : 1) > this.maxPopulation() + 0.01) continue;
