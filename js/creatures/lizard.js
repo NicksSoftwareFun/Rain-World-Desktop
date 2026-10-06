@@ -2024,23 +2024,25 @@
         const sy = fx * side;
         const r = leg.reach;
         const fwd = (l.at <= 2 ? 0.3 : -0.1) + (leg.forward - 0.45) * 0.4;
-        const ix = h.x + fx * r * fwd + sx * r * 0.72;
-        const iy = h.y + fy * r * fwd + sy * r * 0.72;
+        // (seen from above the legs look longer than they are side on: the
+        // feet stay tucked in closer)
+        const ix = h.x + fx * r * fwd * 0.85 + sx * r * 0.6;
+        const iy = h.y + fy * r * fwd * 0.85 + sy * r * 0.6;
         if (leg.stepping) {
           leg.update(dt, this.W, h.x, h.y, fx, fy, this.ux, this.uy, this.mask, false, spd);
           continue;
         }
         const d = U.dist(leg.foot.x, leg.foot.y, ix, iy);
-        if (!leg.planted || d > r * 0.9) {
+        if (!leg.planted || d > r * 0.8) {
           leg.foot.x = ix;
           leg.foot.y = iy;
           leg.planted = true;
-        } else if (d > r * 0.42 && active && !stepping[1 - leg.group]) {
+        } else if (d > r * 0.36 && active && !stepping[1 - leg.group]) {
           // swing it ahead of where it should be, so it lands in front
           leg.from.x = leg.foot.x;
           leg.from.y = leg.foot.y;
-          leg.to.x = ix + fx * r * 0.3;
-          leg.to.y = iy + fy * r * 0.3;
+          leg.to.x = ix + fx * r * 0.26;
+          leg.to.y = iy + fy * r * 0.26;
           leg.n.x = sx * 0.5;
           leg.n.y = sy * 0.5;
           leg.t = 0;
@@ -2291,7 +2293,7 @@
         // (from above: the elbows and knees stick out sideways, front ones
         // back, hind ones forward, like a gecko on glass)
         const side = l.near ? 1 : -1;
-        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1, leg.l2, -fy * side * 0.6 + fx * sgn * 0.8, fx * side * 0.6 + fy * sgn * 0.8);
+        const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1 * 0.85, leg.l2 * 0.85, -fy * side * 0.6 + fx * sgn * 0.8, fx * side * 0.6 + fy * sgn * 0.8);
         return { kx: k.kx, ky: k.ky, ex: k.ex, ey: k.ey };
       }
       const k = U.ikToward(h.x, h.y, leg.foot.x, leg.foot.y, leg.l1, leg.l2, fx * sgn, fy * sgn);
