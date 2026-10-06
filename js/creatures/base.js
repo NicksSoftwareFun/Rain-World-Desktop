@@ -7,6 +7,8 @@
   const Nav = RW.Nav;
   // How far a red creature will go looking for another red one (world px).
   const FEUD_RANGE = 420;
+  // Seconds held up in a passage before a creature squeezes past.
+  const JAM_SLIP = 2.5;
 
   let NEXT_ID = 1;
 
@@ -294,6 +296,7 @@
       if (this.state !== s) {
         this.state = s;
         this.stateT = 0;
+        this.headway = null; // (a fresh chase, measured afresh)
       }
     }
     // Common lifecycle; returns false if the creature should skip its own logic.
@@ -904,7 +907,7 @@
       let best = null;
       let bd = range * range;
       for (const c of this.eco.creatures) {
-        if (!c.corpse || c.dead || c.grabbedBy || c.alpha < 0.5 || c === this) continue;
+        if (!c.corpse || c.dead || c.grabbedBy || c.alpha < 0.5 || c === this || this.ignores(c)) continue;
         if (!species.some((s) => (s.endsWith('*') ? c.species.startsWith(s.slice(0, -1)) : s === c.species))) continue;
         if (this.W.waterDepth(c.x, c.y) > 6) continue; // (sunk: not worth a dive)
         const d = U.dist2(m.x, m.y, c.x, c.y);
@@ -926,6 +929,40 @@
       prey.onGrabbed(this);
       return true;
     }
+    // ---- getting nowhere ----
+    // Going after something (prey, a corpse, fruit, a weapon) without
+    // getting any closer for `secs`: give it up, and leave it be for a while
+    // (the searches for food and weapons skip it; it still counts as a
+    // threat). True when it gives up: the caller drops the chase.
+    noHeadway(target, dt, secs) {
+      const m = this.mainPoint();
+      const d = Math.hypot(target.x - m.x, target.y - m.y);
+      const g = this.headway;
+      if (!g || g.t !== target) {
+        this.headway = { t: target, best: d, T: 0 };
+        return false;
+      }
+      if (d < g.best - this.W.cell * 0.5) {
+        g.best = d;
+        g.T = 0;
+        return false;
+      }
+      g.T += dt;
+      if (g.T < (secs || 8)) return false;
+      this.headway = null;
+      this.ignore(target, 20);
+      return true;
+    }
+    ignore(t, secs) {
+      if (!this.ignoring) this.ignoring = new Map();
+      if (this.ignoring.size > 20) for (const [k, u] of this.ignoring) if (u < this.eco.t) this.ignoring.delete(k);
+      this.ignoring.set(t, this.eco.t + secs);
+    }
+    ignores(t) {
+      const u = this.ignoring && this.ignoring.get(t);
+      return u !== undefined && this.eco.t < u;
+    }
+
     // ---- the red feud ----
     // Red creatures (red lizards, large centipedes) can't abide one another:
     // the nearest other one within FEUD_RANGE (not across the whole map:
@@ -1371,7 +1408,18 @@
       if (here >= 0) {
         const p = W.passages[here];
         const k = p.cells.findIndex(([cx, cy]) => cx === W.cellX(lead.x) && cy === W.cellY(lead.y));
-        const toB = k >= p.cells.length / 2;
+        // on the way it's facing (turning back on itself would fold the
+        // body in half); facing neither way, by the nearer end
+        let toB = k >= p.cells.length / 2;
+        const sp = this.spine || this.chain;
+        if (sp instanceof RW.Chain && sp.pts.length > 1) {
+          const fx = lead.x - sp.pts[1].x;
+          const fy = lead.y - sp.pts[1].y;
+          const nb = p.cells[Math.min(p.cells.length - 1, k + 1)];
+          const na = p.cells[Math.max(0, k - 1)];
+          const dB = (W.centerX(nb[0]) - W.centerX(na[0])) * fx + (W.centerY(nb[1]) - W.centerY(na[1])) * fy;
+          if (Math.abs(dB) > 0.5) toB = dB > 0;
+        }
         this.startTunnel(p, toB, toB ? k : p.cells.length - 1 - k);
         return true;
       }
@@ -1410,7 +1458,6 @@
         doorOut,
         trail: sp instanceof RW.Chain ? sp.pts.slice().reverse().map((q) => ({ x: q.x, y: q.y })) : null,
         turnT: 0,
-        waitT: 0,
       };
       if ('vx' in this) this.vx = this.vy = 0;
       if (this.turn) this.turn = null;
@@ -1444,9 +1491,21 @@
         return false;
       }
       const lead = this.pipeLead();
-      // something in the way, coming at us down the same passage?
-      for (const c of this.eco.creatures) {
-        if (c === this || !c.tunnel || c.tunnel.p !== T.p || c.dead) continue;
+      // something in the way, coming at us down the same passage? (Jammed
+      // for a few moments, whatever the reason, a pile-up or one stuck
+      // ahead: it squeezes past, slipping by whatever's there for a bit.)
+      // (held up: no real headway for a while, however the hold-up flickers)
+      if (!T.mark || Math.hypot(lead.x - T.mark.x, lead.y - T.mark.y) > 6) {
+        T.mark = { x: lead.x, y: lead.y };
+        T.stallT = 0;
+      } else T.stallT += dt;
+      if (T.stallT > JAM_SLIP && !(T.slipT > 0)) {
+        T.slipT = 1.5;
+        T.stallT = 0;
+      }
+      if (T.slipT > 0) T.slipT -= dt;
+      else for (const c of this.eco.creatures) {
+        if (c === this || !c.tunnel || c.tunnel.p !== T.p || c.dead || c.corpse) continue;
         const o = c.pipeLead();
         const tgt = T.route[Math.min(T.i, T.route.length - 1)];
         const ahead = (o.x - lead.x) * (tgt.x - lead.x) + (o.y - lead.y) * (tgt.y - lead.y) > 0;
@@ -1456,11 +1515,14 @@
         // the smaller (or the one that's prey to the other) backs off
         const preyToIt = c.diet && c.diet.some((s2) => (s2.endsWith('*') ? this.species.startsWith(s2.slice(0, -1)) : s2 === this.species));
         const backOff = preyToIt || this.tunnelBodyLen() < c.tunnelBodyLen() || (this.tunnelBodyLen() === c.tunnelBodyLen() && this.id > c.id);
-        T.waitT += dt;
-        if (backOff || T.waitT > 4) T.turnT = 0.5 + this.tunnelBodyLen() / 110; // the longer, the slower round
+        // (turned round twice already, in a crowd: no more backing off and
+        // forth; it holds its ground, and squeezes past when it's had enough)
+        if (backOff && !(T.turns >= 2)) {
+          T.turnT = 0.5 + this.tunnelBodyLen() / 110; // the longer, the slower round
+          T.turns = (T.turns || 0) + 1;
+        }
         return false;
       }
-      T.waitT = 0;
       const tgt = T.route[T.i];
       const dx = tgt.x - lead.x;
       const dy = tgt.y - lead.y;
@@ -1583,24 +1645,36 @@
       }
       // back out from where the leading end now is (the old tail): the
       // route points it has already passed, nearest first, then the door
+      // (only points ahead of the new lead, the way it now faces: one back
+      // over its own body would fold it in half)
       const lead = this.pipeLead();
-      let k = 0;
+      const nb = sp instanceof RW.Chain ? sp.pts[1] : null;
+      const fx = nb ? lead.x - nb.x : 0;
+      const fy = nb ? lead.y - nb.y : 0;
+      let k = -1;
       let bd = Infinity;
       for (let j = 0; j < Math.max(1, T.i); j++) {
-        const d = Math.hypot(T.route[j].x - lead.x, T.route[j].y - lead.y);
+        const q = T.route[j];
+        if (nb && (q.x - lead.x) * fx + (q.y - lead.y) * fy < -2) continue;
+        const d = Math.hypot(q.x - lead.x, q.y - lead.y);
         if (d < bd) {
           bd = d;
           k = j;
         }
       }
-      const back = T.route.slice(0, k + 1).reverse();
+      // (nothing ahead and the new lead not in the passage: it had barely
+      // gone in, and it's out already)
+      if (k < 0 && W.passage(W.cellX(lead.x), W.cellY(lead.y)) < 0) {
+        this.endTunnel();
+        return;
+      }
+      const back = k >= 0 ? T.route.slice(0, k + 1).reverse() : [];
       back.push({ x: W.centerX(T.doorIn[0]), y: W.centerY(T.doorIn[1]) });
       const din = T.doorIn;
       T.doorIn = T.doorOut;
       T.doorOut = din;
       T.route = back;
       T.i = 0;
-      T.waitT = 0;
     }
     endTunnel() {
       this.tunnel = null;
@@ -1709,7 +1783,9 @@
     unburrowStep(dt) {
       const ub = this.unburrow;
       if (!ub) {
-        if (this.grabbedBy || this.alpha < 0.5 || this.coil) {
+        // (in a passage the body brushes the rock round its corners: that's
+        // not being trapped, and digging it out fought the crawl)
+        if (this.grabbedBy || this.alpha < 0.5 || this.coil || this.tunnel) {
           this.trappedT = 0;
           return false;
         }

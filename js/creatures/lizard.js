@@ -325,7 +325,7 @@
         const c = this.prey;
         // (it sank, or the water came up over it: a lizard won't dive for
         // it, so it gives up rather than paddling over it for good)
-        if (!c || c.dead || !c.corpse || c.grabbedBy || this.stateT > 20 || this.W.waterDepth(c.x, c.y) > 6) {
+        if (!c || c.dead || !c.corpse || c.grabbedBy || this.stateT > 20 || this.W.waterDepth(c.x, c.y) > 6 || this.noHeadway(c, dt)) {
           this.prey = null;
           this.setState('wander');
         } else {
@@ -354,7 +354,7 @@
         const vision = this.p.vision || 300;
         if (this.giveUpT > 0) this.giveUpT -= 0.25;
         // (not something down under the water: a lizard won't dive for it)
-        const prey = this.nearestOf(this.diet, vision, (c) => !c.grabbedBy && !(this.giveUpT > 0 && c === this.gaveUpOn) && c.nearGround(45 * this.L) && this.canSee(c.x, c.y, vision) && this.W.waterDepth(c.x, c.y) < 14);
+        const prey = this.nearestOf(this.diet, vision, (c) => !c.grabbedBy && !(this.giveUpT > 0 && c === this.gaveUpOn) && !this.ignores(c) && c.nearGround(45 * this.L) && this.canSee(c.x, c.y, vision) && this.W.waterDepth(c.x, c.y) < 14);
         if (prey) {
           if (this.state !== 'hunt') this.noticeT = 0.45 * (1.4 - pe.aggression); // freeze and stare before the charge
           this.prey = prey;
@@ -388,7 +388,7 @@
         const persist = 0.6 + pe.aggression;
         const feud = this.p.red && prey.p && prey.p.red;
         // (a red foe: given up on only once out of reach or out of range)
-        const hopeless = feud ? this.feudStuck(prey, dt) : this.stateT > 25 * persist || (this.stateT > 8 * persist && !this.pather.complete);
+        const hopeless = feud ? this.feudStuck(prey, dt) : this.stateT > 25 * persist || (this.stateT > 8 * persist && !this.pather.complete) || this.noHeadway(prey, dt, 10);
         if (hopeless) {
           this.gaveUpOn = prey;
           this.giveUpT = 20;

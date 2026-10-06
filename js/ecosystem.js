@@ -489,7 +489,8 @@
     separateLizards() {
       const lz = [];
       for (const c of this.creatures) {
-        if (c.spine && c.bodyN && c.species.startsWith('lizard_') && !c.dead && !c.corpse && !c.grabbedBy && !c.piping && !c.unpiping && !c.burrow) lz.push(c);
+        // (not in a passage: there they queue, or squeeze past one another)
+        if (c.spine && c.bodyN && c.species.startsWith('lizard_') && !c.dead && !c.corpse && !c.grabbedBy && !c.piping && !c.unpiping && !c.burrow && !c.tunnel) lz.push(c);
       }
       for (let i = 0; i < lz.length; i++) {
         for (let j = i + 1; j < lz.length; j++) {

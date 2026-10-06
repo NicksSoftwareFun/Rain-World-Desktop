@@ -478,6 +478,7 @@
 
   // Set the values a preset governs (from the base settings, so presets never
   // compound). 'custom' (or an unknown name) leaves things as they are.
+  const PAIRS = ['lizard_yellow', 'squidcada'];
   RW.applySizePreset = function (cfg, name) {
     const P = RW.SIZE_PRESETS[name];
     cfg.presets = cfg.presets || {};
@@ -496,7 +497,9 @@
       // the free ones (batflies, slugcats...) cost nothing toward the
       // population, so their own caps grow more slowly with the map
       const f = (base && base.popCost === 0 ? Math.pow(P.caps, 0.6) : P.caps) * ((wild.caps && wild.caps[k]) || 1);
-      if (base) cfg.species[k].max = Math.max(1, Math.round(base.max * f));
+      // (the ones that come out in pairs: an even number, so none is left
+      // to come out alone)
+      if (base) cfg.species[k].max = PAIRS.includes(k) ? Math.max(2, 2 * Math.round((base.max * f) / 2)) : Math.max(1, Math.round(base.max * f));
     }
   };
   // Picking a size starts the world and the rain from their defaults (then
@@ -529,7 +532,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
-  RW.DEFAULT_CONFIG.rev = 4; // (see loadConfig)
+  RW.DEFAULT_CONFIG.rev = 5; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -559,6 +562,8 @@
           const f = P ? Math.pow(P.caps, 0.6) : 1;
           for (const k of ['slugcat', 'centipede']) if (cfg.species[k]) cfg.species[k].max = Math.max(1, Math.round(RW.BASE_CONFIG.species[k].max * f));
         }
+        // rev 5: the pair species' caps even
+        if (!(raw.rev >= 5)) for (const k of PAIRS) if (cfg.species[k] && cfg.species[k].max % 2) cfg.species[k].max += 1;
         cfg.rev = RW.DEFAULT_CONFIG.rev;
       }
     } catch (e) {

@@ -211,7 +211,7 @@
       this.shockCd = (this.shockCd || 0) - dt;
       if (perceive && this.diet.length && this.fullT <= 0 && this.state !== 'hunt' && this.state !== 'flee') {
         const v = this.p.vision || 200 * this.size;
-        const prey = this.nearestOf(this.diet, v, (c) => c.canBeGrabbed() && c.nearGround(32 * this.size) && this.canSee(c.x, c.y, v)) || this.nearestCorpse(this.diet, v * 0.7);
+        const prey = this.nearestOf(this.diet, v, (c) => c.canBeGrabbed() && !this.ignores(c) && c.nearGround(32 * this.size) && this.canSee(c.x, c.y, v)) || this.nearestCorpse(this.diet, v * 0.7);
         if (prey) {
           this.prey = prey;
           this.setState('hunt');
@@ -223,7 +223,7 @@
         const prey = this.prey;
         // (a corpse that's sunk is given up on: nobody dives for it)
         const feud = prey && this.p.red && prey.p && prey.p.red && !prey.corpse;
-        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18) || (prey.corpse && this.W.waterDepth(prey.x, prey.y) > 6) || (feud && this.feudStuck(prey, dt))) {
+        if (!prey || prey.dead || prey.leaving || prey.grabbedBy || this.stateT > (this.p.aggressive ? 35 : 18) || (prey.corpse && this.W.waterDepth(prey.x, prey.y) > 6) || (feud && this.feudStuck(prey, dt)) || (!feud && !(this.runT > 0) && this.noHeadway(prey, dt, 10))) {
           this.prey = null;
           this.setState('wander');
         } else {

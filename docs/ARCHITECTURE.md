@@ -101,6 +101,12 @@ to an open den after 60 s) (`startUnpiping`,
 Fliers have `isFlier`; ground predators only target one that `nearGround()`
 (within reach of a surface).
 
+**Getting nowhere.** A chase (prey, a corpse, fruit, a weapon) that
+hasn't got half a cell closer in 8-10 s is dropped (`noHeadway`), and the
+target ignored for 20 s (`ignore`/`ignores`: the food, prey and weapon
+searches skip it; it still counts as a threat). Lizard hunts and
+scavenging, centipede hunts, slugcat foraging and fetching.
+
 **The red feud.** Species with `red: true` (red lizards, large centipedes)
 hunt the nearest other red creature within `FEUD_RANGE` (420 px,
 `feudRange()`; `redFoe()`), and give one up for 25 s once it's well out of
@@ -307,8 +313,13 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   down the body and the legs pawing at the walls (`tunnelWiggle`; a
   slugcat claws hand over hand, `limbTargets`). Meeting a bigger or
   hungrier creature head on, it wriggles, squeezes round (`tunnelReverse`:
-  ends swapped, back out from the new lead) and backs out; one going the
-  same way just follows.
+  ends swapped, back out from the new lead along the points ahead of it,
+  never back over its own body) and backs out, twice at most in one
+  passage; one going the same way just follows. Held up without headway
+  for `JAM_SLIP` (2.5 s), whatever the reason, it slips past whatever's in
+  the way for 1.5 s. Picking a passage up partway along, it carries on the
+  way it faces. In a passage the trapped-in-rock rescue (`unburrowStep`)
+  and the lizards' body push (`separateLizards`) leave it alone.
 - **Dens** sit on floors, away from water and off blocks; **sky dens** (`sky: true`, not
   drawn) are the openings along the top edge: only fliers use them, to
   spawn (mostly) and to leave (`openDens(flier)`, `denMouth` points up).

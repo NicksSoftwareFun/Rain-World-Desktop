@@ -514,7 +514,7 @@
       }
       if (this.state === 'forage' && this.food instanceof RW.Creature) {
         const f = this.food;
-        if (f.dead || f.leaving || f.grabbedBy || !(f.stunT > 0 || f.corpse) || (f.corpse && f.killedBy !== this) || this.stateT > 12) {
+        if (f.dead || f.leaving || f.grabbedBy || !(f.stunT > 0 || f.corpse) || (f.corpse && f.killedBy !== this) || this.stateT > 12 || this.noHeadway(f, dt)) {
           this.food = null;
           this.setState('wander');
         } else {
@@ -546,7 +546,7 @@
           this.ignoreFood = f;
           this.ignoreFoodT = 30;
         }
-        if (!f || f.dead || f.heldBy || (f.claimedBy && f.claimedBy !== this) || this.stateT > 20 || unreachable) {
+        if (!f || f.dead || f.heldBy || (f.claimedBy && f.claimedBy !== this) || this.stateT > 20 || unreachable || this.noHeadway(f, dt)) {
           this.food = null;
           this.setState('wander');
         } else {
@@ -681,7 +681,7 @@
       if (this.state === 'fetch') {
         const w = this.fetch;
         const unreachable = this.pather.nodes && !this.pather.complete && this.pather.remaining() === 0 && this.stateT > 1.5;
-        if (!w || !this.canTake(w) || this.stateT > 12 || unreachable || (w.claimedBy && w.claimedBy !== this)) {
+        if (!w || !this.canTake(w) || this.stateT > 12 || unreachable || (w.claimedBy && w.claimedBy !== this) || this.noHeadway(w, dt)) {
           if (w && unreachable) {
             this.ignoreWeapon = w;
             this.ignoreWeaponT = 30;
@@ -798,7 +798,7 @@
     }
     // Hunting for meat: the nearest small prey to head towards.
     meatTarget(range) {
-      return this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], range, (c) => !c.grabbedBy && (c.size || 1) <= 1);
+      return this.nearestOf(['batfly', 'centipede', 'noodlefly_infant'], range, (c) => !c.grabbedBy && (c.size || 1) <= 1 && !this.ignores(c));
     }
     findWeapon(range) {
       const hip = this.hip;
@@ -806,7 +806,7 @@
       let bs = range;
       const wet = this.eco.heavyRain(); // (not one lying out in heavy rain)
       for (const it of this.eco.items) {
-        if (!(it instanceof RW.Weapon) || !this.canTake(it)) continue;
+        if (!(it instanceof RW.Weapon) || !this.canTake(it) || this.ignores(it)) continue;
         if (wet && this.eco.rainOn(it.x, it.y - 8)) continue;
         if (it.claimedBy && it.claimedBy !== this) continue;
         if (this.W.waterDepth(it.x, it.y) >= 0) continue; // (one on land, not one sunk in the water)
@@ -1030,7 +1030,7 @@
       for (const it of this.eco.items) {
         if (!(it instanceof RW.Fruit)) continue;
         if (it.dead || it.heldBy || (it.claimedBy && it.claimedBy !== this)) continue;
-        if (it === this.ignoreFood && this.ignoreFoodT > 0) continue;
+        if ((it === this.ignoreFood && this.ignoreFoodT > 0) || this.ignores(it)) continue;
         if (this.W.waterDepth(it.x, it.y) > 6) continue; // (on land, or floating; never down under)
         const d = U.dist2(it.x, it.y, this.hip.x, this.hip.y);
         if (d < bd) {

@@ -1245,6 +1245,79 @@ const checks = [
     ],
   },
   {
+    name: 'passages',
+    about: 'creatures crowding into a passage from both ends get through: one jammed for a few moments squeezes past (no pile-up stuck for good)',
+    run: (page) =>
+      page.evaluate(() => {
+        const e = RW_APP.engine;
+        e.cfg.rain.enabled = false;
+        e.cfg.world.layout = 'experimental';
+        e.cfg.world.surface = 'never';
+        e.cfg.ecosystem.spawnPerMinute = 0;
+        const out = { runs: 0, crawlers: 0, stuckMax: 0, stillIn: 0, exited: new Set() };
+        for (const seed of [5, 9, 14, 21]) {
+          e.seed = seed;
+          e.regenerate(true);
+          const W = e.world;
+          const p = (W.passages || []).slice().sort((a, b) => b.cells.length - a.cells.length)[0];
+          if (!p || p.cells.length < 4) continue;
+          out.runs++;
+          e.eco.creatures.length = 0;
+          const cs = [];
+          const put = (sp, fromA) => {
+            const end = fromA ? p.cells[0] : p.cells[p.cells.length - 1];
+            const c = e.eco.spawn(sp, W.centerX(end[0]), W.centerY(end[1]));
+            if (!c || !c.startTunnel) return;
+            c.alpha = 1;
+            if (c.unpiping) c.unpiping = null;
+            c.startTunnel(p, fromA, 0);
+            cs.push(c);
+          };
+          // a crowd from each end (some of them the same size, so neither backs off)
+          put('lizard_pink', true);
+          put('centipede', true);
+          put('slugcat', true);
+          put('lizard_pink', false);
+          put('centipede_medium', false);
+          put('lizard_green', false);
+          out.crawlers += cs.length;
+          const last = new Map();
+          const run = new Map();
+          for (let i = 0; i < 60 * 40; i++) {
+            e.tick(1 / 60);
+            if (i % 6) continue;
+            for (const c of cs) {
+              if (!c.tunnel) out.exited.add(c);
+              if (!c.tunnel || c.dead || c.corpse || out.exited.has(c)) continue;
+              const m = c.pipeLead();
+              const q = last.get(c);
+              const moved = !q || Math.hypot(m.x - q.x, m.y - q.y) > 1 || c.tunnel.turnT > 0;
+              last.set(c, { x: m.x, y: m.y });
+              run.set(c, moved ? 0 : (run.get(c) || 0) + 0.1);
+              out.stuckMax = Math.max(out.stuckMax, +run.get(c).toFixed(1));
+            }
+          }
+          // (still on its first way through: it can go in again later, on
+          // its way somewhere)
+          const stuck = cs.filter((c) => c.tunnel && !c.dead && !c.corpse && !out.exited.has(c));
+          out.stillIn += stuck.length;
+          out.who = (out.who || []).concat(stuck.map((c) => c.species + ' ' + c.tunnel.i + '/' + c.tunnel.route.length));
+        }
+        e.cfg.world.surface = 'auto';
+        e.cfg.world.layout = 'tiers';
+        out.exited = out.exited.size;
+        return out;
+      }),
+    judge: (m) => [
+      m.runs < 1 && 'no map with a passage came up',
+      // measured: up to ~3 s (a slip at 2.5 s); stuck for good before.
+      // Through: all of them in 13 runs of 14, one straggler in the other
+      // (before: 1-11 a run, ping-ponging or dug back out of the corners)
+      m.stuckMax > 6 && `a creature sat jammed in a passage for ${m.stuckMax} s`,
+      m.stillIn > 1 && `${m.stillIn} creatures never got through their first passage in 40 s (${m.who})`,
+    ],
+  },
+  {
     name: 'presets',
     about: 'size presets scale the map (more ledge rows, nests, finer pixels); wildlife presets restart with only their creatures',
     run: (page) =>
@@ -1320,6 +1393,7 @@ const COVERS = [
   [/js\/config\.js/, ['presets']],
   [/js\/(world|nav|engine|ecosystem)\.js|js\/creatures\/base\.js/, ['soak', 'bodies', 'centipedes', 'scramble', 'shelter', 'cover']],
   [/js\/(world|engine)\.js/, ['skyedges']],
+  [/js\/creatures\/base\.js/, ['passages']],
 ];
 if (args.includes('--changed')) {
   const { execSync } = await import('node:child_process');
