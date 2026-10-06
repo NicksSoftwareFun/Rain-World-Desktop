@@ -226,6 +226,11 @@
         this.eco.grassInFoliage = true;
         this.foliage.build(this.zoom / this.ps, U.rgba(this.pal.mass || this.pal.dark));
       } else this.eco.grassInFoliage = false;
+      // passing clouds and their shadows (a room open to the sky)
+      if (RW.Sky) {
+        this.sky = this.sky || new RW.Sky();
+        this.sky.build(this.bgCanvas, d, this.pal, this.W);
+      }
     }
     // The light for now: the rain cycle's clock (or the preview hour); null
     // when the day-night light is off.
@@ -445,6 +450,7 @@
       }
       this.weather.update(dt, this.cfg, this.W, this.H, this.world);
       if (this.foliage) this.foliage.update(dt, this.eco.creatures, this.cfg.rain.enabled ? this.weather.intensity : 0, this.eco.t);
+      if (this.sky) this.sky.update(dt, this.weather.phase, this.cfg.rain.enabled ? this.weather.intensity : 0);
       if (this.world.waterSim) this.world.waterSim.update(dt, this.weather, this.cfg.rain);
       this.eco.update(dt);
     }
@@ -456,6 +462,7 @@
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(this.bgCanvas, 0, 0);
       RW.Background.drawFans(ctx, this.bgCanvas, this.eco.t);
+      if (this.sky) this.sky.drawClouds(ctx);
       const k = this.zoom / this.ps;
       ctx.setTransform(k, 0, 0, k, 0, 0);
       this.weather.drawFog(ctx, this.pal);
@@ -475,6 +482,8 @@
       // plants in front of the creatures (before the water, which tints
       // whatever's in it)
       if (this.foliage) this.foliage.draw(ctx, k);
+      // cloud shadows passing over all of it (in a room open to the sky)
+      if (this.sky) this.sky.drawShade(ctx);
       ctx.setTransform(k, 0, 0, k, 0, 0);
       this.drawWater(ctx);
       this.eco.drawLabels(ctx);

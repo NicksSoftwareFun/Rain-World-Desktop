@@ -1716,28 +1716,13 @@
       ctx.fillStyle = sun;
       ctx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
       ctx.restore();
-      // clouds: puffs on a darker flat base, crisp
-      const clouds = (n, alpha, y0, y1, big) =>
-        layer((l) => {
-          clipSky(l);
-          for (let i = 0; i < n; i++) {
-            const cx = R(-0.1, 1.1) * W;
-            const cy = R(y0, y1) * foot;
-            const w = R(70, 230) * (big || 1);
-            const h = w * R(0.14, 0.24);
-            l.fillStyle = U.rgba(U.mix(pal.sky, pal.mass, 0.1));
-            l.beginPath();
-            l.ellipse(cx, cy + h * 0.3, w * 0.62, h * 0.45, 0, 0, U.TAU);
-            l.fill();
-            l.fillStyle = U.rgba(U.mix(pal.sky, pal.light, 0.5));
-            for (let k = 0; k < 6; k++) {
-              l.beginPath();
-              l.ellipse(cx + R(-w * 0.45, w * 0.45), cy + R(-h * 0.35, h * 0.1), w * R(0.18, 0.36), h * R(0.55, 0.95), 0, 0, U.TAU);
-              l.fill();
-            }
-          }
-        }, alpha);
-      clouds(kind === 'clouds' ? 9 : 5, 0.32, 0.05, 0.45);
+      // (the clouds themselves drift by over this: RW.Sky; what's painted
+      // from here on stands in front of them, so note the sky as it is)
+      decor.cloudCover = kind === 'clouds' ? 0.45 : 0.3;
+      const aw = ctx.canvas.width;
+      const kk = aw / W;
+      const sh = Math.max(1, Math.min(ctx.canvas.height, Math.ceil(foot * kk)));
+      const before = ctx.getImageData(0, 0, aw, sh).data;
       if (kind === 'city') {
         // a ruined city in three depths: far spires in the haze, then
         // stepped towers with dark windows, then a few great blocks and
@@ -1813,9 +1798,27 @@
         ridge(foot * R(0.45, 0.6), foot * R(0.25, 0.4), 0.08, 0.6, 0);
         ridge(foot * R(0.65, 0.75), foot * R(0.2, 0.32), 0.22, 0.65, 1);
         ridge(foot * R(0.82, 0.92), foot * R(0.12, 0.22), 0.38, 0.6, 2);
-      } else {
-        // nothing but cloud: great banks low over the horizon
-        clouds(5, 0.45, 0.55, 0.9, 2.2);
+      }
+      // the sky mask: open sky still showing (unchanged since the far
+      // scenery went up), above each column's ground
+      {
+        const after = ctx.getImageData(0, 0, aw, sh).data;
+        const m = document.createElement('canvas');
+        m.width = aw;
+        m.height = ctx.canvas.height;
+        const mg = m.getContext('2d');
+        const mi = mg.createImageData(aw, sh);
+        for (let y = 0; y < sh; y++) {
+          for (let x = 0; x < aw; x++) {
+            const cx = Math.min(C - 1, Math.floor(x / kk / cell));
+            if (y >= surf[cx] * cell * kk) continue;
+            const i = (y * aw + x) * 4;
+            if (Math.abs(after[i] - before[i]) + Math.abs(after[i + 1] - before[i + 1]) + Math.abs(after[i + 2] - before[i + 2]) > 6) continue;
+            mi.data[i + 3] = 255;
+          }
+        }
+        mg.putImageData(mi, 0, 0);
+        decor.skyMask = m;
       }
       silhouettes(under, (l) => {
         l.beginPath();
@@ -1852,7 +1855,7 @@
 
     // Shafts of daylight down through the open top: slanting, stopped by
     // the rock, strongest in a few distinct beams.
-    const slant = (R() < 0.5 ? -1 : 1) * R(0.15, 0.4);
+    const slant = (decor.beamSlant = (R() < 0.5 ? -1 : 1) * R(0.15, 0.4));
     const ph = R(0, 10);
     const beam = U.mix(pal.light, '#ffffff', 0.35);
     ctx.save();

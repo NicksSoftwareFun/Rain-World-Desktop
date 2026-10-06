@@ -412,6 +412,20 @@ palette is `decor.pal` (`makePalette`: a region variant from `VARIANTS`,
 the complex's back walls, a `crust` colour for rock open to the sky,
 `room.skyOpen`). See docs/EXPERIMENTAL_LAYOUT.md.
 
+Passing clouds (`js/sky.js`, `RW.Sky`, built after each background paint):
+a tileable fractal value-noise field cut at a share of cover (a quantile,
+so the amount of cloud is what's asked for), lit by the cloud above each
+pixel (bright tops, grey bellies) and dithered to a few tones. Over a
+surface map's open sky two layers drift by (`drawClouds`, right after the
+background, masked to where the painted sky still shows: `decor.skyMask`,
+less the play layer). Every room open to the sky gets their shadows: the
+field summed down each column, slanted along the beams (`decor.beamSlant`),
+kept to where the sun reaches (the light map), drawn over everything as a
+darkening and, in the gaps, a `screen` glint (`drawShade`, after the
+foreground). Rebuilt only when the drift moves a pixel. Strongest in the
+morning; as the cycle runs on and the rain comes the sky goes overcast,
+the clouds greyer, and the shadows fade out.
+
 Decor in two kinds. Background props (`Rooms.paintProps`, on the backdrop
 behind everything that moves): wall cogs, machine housings, wall fans,
 pipe runs (rock to rock, a third of the props at most, thicker and lighter

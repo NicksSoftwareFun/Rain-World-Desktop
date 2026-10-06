@@ -158,3 +158,9 @@ plus a few alternatives (Shoreline: pale fog with mauve rock, rust-brown,
 blue-grey; Industrial: brown rust, steel blue; Outskirts: sepia, slate).
 Rock that meets the open sky is weathered to a `crust` colour, ragged and
 fading a few cells in.
+
+Skies and clouds: a surface map's sky gets a gradient and a sun glow and,
+far off, a ruined city or mountain ridges (or just open cloud); clouds
+are procedural (js/sky.js) and drift by, and their shadows sweep the
+light beams and the sunlit rock and creatures, strongest in the morning
+and fading as the rain clouds close in.
