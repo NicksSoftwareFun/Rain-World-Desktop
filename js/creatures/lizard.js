@@ -2214,7 +2214,7 @@
       // a white lizard's nose feelers: four fine feelers fanned off the
       // snout like a mole's, from up to a little down, each twitching to
       // its own beat
-      if (this.p.feelers) {
+      if (this.species === 'lizard_white') {
         ctx.strokeStyle = col; // (the head's own colour)
         ctx.lineWidth = Math.max(u, 0.55);
         ctx.beginPath();

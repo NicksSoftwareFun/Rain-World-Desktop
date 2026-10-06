@@ -198,7 +198,6 @@
           spines: 0,
           pattern: 'spots',
           camouflage: true,
-          feelers: true, // a mole-like fan of nose feelers, the head's colour
         },
       },
       lizard_red: {
