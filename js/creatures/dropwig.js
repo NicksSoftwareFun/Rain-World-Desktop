@@ -71,9 +71,17 @@
       const W = this.W;
       const eco = this.eco;
       const h = this.spine.pts[0];
+      // (not by a batfly nest, which hangs from the same ceiling; nor a
+      // spot it lately couldn't get up to)
+      const x0 = (cx) => W.centerX(cx);
+      const y0 = (cy) => W.centerY(cy);
+      const near = (list, cx, cy, r) => list.some((q) => Math.abs(q.x - x0(cx)) < r && Math.abs(q.y - y0(cy)) < r);
+      const bad = (this.badSpots || []).filter((q) => q.until > eco.t);
+      this.badSpots = bad;
       const ok = (cx, cy) => {
         if (!W.solid(cx, cy - 1) || W.solid(cx - 1, cy) || W.solid(cx + 1, cy)) return false;
         for (let k = 1; k <= 7; k++) if (W.solid(cx, cy + k)) return false;
+        if (near(eco.nests || [], cx, cy, W.cell * 2.5) || near(bad, cx, cy, W.cell * 1.5)) return false;
         return true;
       };
       // (in heavy rain, a ceiling the rain doesn't reach: under a ledge,
@@ -83,7 +91,11 @@
         if (dry) return dry;
         this.noCoverUntil = eco.t + 12;
       }
-      return Nav.randomValid(W, this.caps, h.x, h.y, 600, ok);
+      // (nothing near: look further; nowhere at all it can hang from, it
+      // moves on rather than standing about)
+      const spot = Nav.randomValid(W, this.caps, h.x, h.y, 600, ok) || Nav.randomValid(W, this.caps, h.x, h.y, 2000, ok);
+      if (!spot) this.migrating = true;
+      return spot;
     }
 
     underCeiling() {
@@ -130,6 +142,14 @@
       if (this.state === 'seek') {
         this.mandible = 0;
         if (!this.spot || this.stateT > 30 || (this.pather.done() && this.pather.nodes && U.dist(h.x, h.y, this.spot.x, this.spot.y) < 16 && !this.underCeiling())) {
+          this.spot = this.pickSpot();
+          this.stateT = 0;
+        }
+        // (getting no nearer to it: up there can't be reached from here, or
+        // there's no holding on; it's marked off for a minute and another
+        // found)
+        if (this.spot && this.noHeadway(this.spot, dt, 8)) {
+          (this.badSpots = this.badSpots || []).push({ x: this.spot.x, y: this.spot.y, until: eco.t + 60 });
           this.spot = this.pickSpot();
           this.stateT = 0;
         }
