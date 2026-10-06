@@ -140,8 +140,12 @@ open to the sky across the whole top, the way many Rain World rooms show
 the surface over a complex (SL_A02, SL_B01, SU_A13, CC_B04, HI_B02). Rain
 and daylight fall on all of it. The ground rolls in terraces 3-9 cells
 wide on two slow waves, with a cliff now and then, and carries ruins:
-stilted decks on two or three pillars (with a ladder up), broken
-crenellated towers with a window, rubble heaps. Under a crust of 3-4
+decks on two or three lattice girders (background props, so the ground
+under them stays open; a ladder up), broken crenellated towers with a
+window (a ladder up each side), rubble heaps. On a tall, portrait screen
+the sky is cut down with the map's width (half as tall at half as wide as
+high) and the rest goes to the complex. Each top room gets a shaft down
+from the surface every 22 cells or so. Under a crust of 3-4
 cells, a complex of rooms is carved in another region's style (`UNDER`:
 Industrial under Shoreline, Industrial or Outskirts under Outskirts,
 Industrial under Industrial; `world.under` picks one), in one or two rows,

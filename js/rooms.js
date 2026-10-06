@@ -509,8 +509,11 @@
     // the lie of the land: broad hills and hollows (two slow waves), stepped
     // into terraces 3-9 cells wide, a cliff now and then; leaving room for
     // the sky above and the complex below
-    const A = U.clamp(Math.round(Rows * 0.11), 2, 7);
-    const base = U.clamp(Math.round(Rows * U.lerp(0.4, 0.5, R())), 5 + A, Rows - 16 - A);
+    // (a tall, portrait map's sky is cut down with its width: half as
+    // tall at half as wide as high, the rest goes to the complex)
+    const tall = U.clamp(C / Rows, 0.5, 1);
+    const A = U.clamp(Math.round(Math.min(Rows, C) * 0.11), 2, 7);
+    const base = U.clamp(Math.round(Rows * U.lerp(0.4, 0.5, R()) * tall), 5 + A, Rows - 16 - A);
     const surf = new Int16Array(C);
     const f1 = U.TAU / U.lerp(C * 0.6, C * 1.4, R());
     const f2 = U.TAU / U.lerp(10, 22, R());
@@ -577,10 +580,13 @@
         g.fill(x, deckY, x + w - 1, deckY + t - 1);
         g.set(x, deckY + t - 1, 0);
         g.set(x + w - 1, deckY + t - 1, 0);
+        // held up on girders (background props: creatures walk on under
+        // the deck; solid pillars would wall the ground off into pockets)
         const np = w >= 14 ? 3 : 2;
+        f.supports = f.supports || [];
         for (let k = 0; k < np; k++) {
-          const px = Math.round(U.lerp(x + 2, x + w - 4, k / (np - 1)));
-          for (let c = px; c < px + 2; c++) g.fill(c, deckY + t, c, surf[c] - 1);
+          const px = Math.round(U.lerp(x + 1, x + w - 2, k / (np - 1)));
+          f.supports.push({ cx: px, y0: deckY + t, y1: surf[px] });
         }
         // a ladder up to it
         const lx = R() < 0.5 ? x - 1 : x + w;
@@ -592,9 +598,8 @@
         for (let c = x; c < x + w; c++) g.fill(c, top, c, surf[c] - 1);
         for (let k = x; k < x + w; k += 2) g.carve(k, top, k, top);
         if (w >= 4 && R() < 0.7) g.carve(x + 1, top + 3, x + w - 2, top + 4);
-        // a ladder up its side
-        const lx = R() < 0.5 ? x - 1 : x + w;
-        f.poles.push({ cx: lx, y0: top - 1, y1: surf[U.clamp(lx, 0, C - 1)] - 1, ladder: true });
+        // a ladder up each side (it walls the ground: over it both ways)
+        for (const lx of [x - 1, x + w]) if (lx >= 1 && lx < C - 1) f.poles.push({ cx: lx, y0: top - 1, y1: surf[lx] - 1, ladder: true });
       }
       built.push({ x0: x, x1: x + w - 1 });
       i++;
@@ -637,8 +642,14 @@
     }
     // shafts down from the surface into the rooms (one over each, now and
     // then a wider one, a skylight): the shortest drop through the crust
+    // (a wide room gets one every 22 cells or so)
+    const spans = [];
     for (const rm of rooms) {
       if (rm.j !== 0) continue;
+      const n = Math.max(1, Math.round((rm.x1 - rm.x0 + 1) / 22));
+      for (let i = 0; i < n; i++) spans.push({ x0: Math.round(U.lerp(rm.x0, rm.x1 + 1, i / n)), x1: Math.round(U.lerp(rm.x0, rm.x1 + 1, (i + 1) / n)) - 1 });
+    }
+    for (const rm of spans) {
       let best = null;
       for (let x = rm.x0 + 3; x <= rm.x1 - 3; x++) {
         if (built.some((b) => x >= b.x0 - 2 && x <= b.x1 + 2)) continue;
