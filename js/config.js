@@ -23,6 +23,7 @@
       region: 'auto', // experimental layout: 'auto' (a different one each map) or outskirts / shoreline / industrial / shaded
       surface: 'auto', // experimental layout: open ground on top, a complex of rooms below: 'auto' (about two maps in five), 'always' or 'never'
       under: 'auto', // the complex's region under a surface map ('auto': Industrial under Shoreline, either under Outskirts)
+      variant: 'auto', // the region's colour variant (Rooms.VARIANTS index), or 'auto' for a random one each map
       decorLedges: 7, // wallpaper ledges creatures can use
       decorPoles: 4, // extra free-standing poles (more are added wherever a ledge needs one)
       ledgePoles: 0.6, // chance a ledge gets a pole standing on it (linking up to a higher ledge if there is one)

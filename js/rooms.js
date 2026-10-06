@@ -95,9 +95,11 @@
   const UNDER_ARCH = { industrial: ['stacked', 'stacked', 'cruciform'], outskirts: ['cruciform', 'stacked'], shoreline: ['cruciform', 'cruciform', 'stacked'] };
   // A map's palette: its region's, in one of its variants; a surface map's
   // back walls underground are the complex's region's.
-  function makePalette(region, under, R) {
+  //   force: a variant's index to use (world.variant), else picked at random
+  function makePalette(region, under, R, force) {
     const vs = VARIANTS[region] || [{}];
-    const v = R() < 0.35 ? vs[0] : vs[Math.floor(R() * vs.length)];
+    const pick = R() < 0.35 ? vs[0] : vs[Math.floor(R() * vs.length)];
+    const v = force >= 0 && vs[force] ? vs[force] : pick;
     const P = Object.assign({}, REGIONS[region].pal, v);
     if (!P.crust) P.crust = U.rgba(U.mix(P.mass, P.rust, 0.28));
     if (under) {
@@ -1439,7 +1441,7 @@
     const surfRoll = rnd();
     const surfaceOn = !!UNDER[region] && Rows >= 22 && (sw === 'always' || (sw === 'auto' && surfRoll < 0.4));
     const under = surfaceOn ? (UNDER[region].includes(cfg.world.under) ? cfg.world.under : UNDER[region][Math.floor(rnd() * UNDER[region].length)]) : null;
-    const pal = makePalette(region, under, U.mulberry32((rnd() * 4294967296) >>> 0));
+    const pal = makePalette(region, under, U.mulberry32((rnd() * 4294967296) >>> 0), cfg.world.variant === undefined || cfg.world.variant === 'auto' ? -1 : +cfg.world.variant);
     let best = null;
     // (a big map takes a while to check: fewer re-rolls, then the nearest miss)
     const maxTries = W * H > 2.5e6 ? 5 : 12;
