@@ -828,7 +828,25 @@
         len = Math.hypot(b[2] - b[0], b[3] - b[1]) * 0.6 + 12;
       }
       this.layInPipe(mo, len);
-      this.unpiping = { t: 0, sx: mo.x, sy: mo.y, ax: mo.ax, ay: mo.ay, len: Math.min(420, len), k: 1, den: d, out: 0, side: Math.random() < 0.5 ? -1 : 1 };
+      // (out of a floor pipe it crawls off along the floor: toward whichever
+      // side has the room, not into the wall a den is often set against)
+      let side = Math.random() < 0.5 ? -1 : 1;
+      if (mo.ay > 0) {
+        const W = this.W;
+        const cy = W.cellY(mo.y - 6);
+        const room = (sd) => {
+          let n = 0;
+          for (let k = 1; k <= 4; k++) {
+            if (W.solid(W.cellX(mo.x + sd * k * W.cell), cy)) break;
+            n++;
+          }
+          return n;
+        };
+        const rl = room(-1);
+        const rr = room(1);
+        if (rl !== rr) side = rl > rr ? -1 : 1;
+      }
+      this.unpiping = { t: 0, sx: mo.x, sy: mo.y, ax: mo.ax, ay: mo.ay, len: Math.min(420, len), k: 1, den: d, out: 0, side };
       this.alpha = 1;
       if ('vx' in this) this.vx = this.vy = 0;
     }
@@ -868,8 +886,18 @@
       let dx = -up.ax * step;
       let dy = -up.ay * step;
       if (up.ay > 0 && depth < -8) {
-        // out of a ledge pipe: off along the ledge top, hugging it
-        dx = up.side * step;
+        // out of a ledge pipe: off along the ledge top, hugging it (never on
+        // into rock: blocked, it turns the other way; blocked both ways, it's
+        // out, and that will do)
+        const W = this.W;
+        const blocked = (sd) => W.solid(W.cellX(lead.x + sd * 8), W.cellY(lead.y)) || W.isSolidPt(lead.x + sd * 8, lead.y);
+        if (blocked(up.side)) {
+          if (!up.turned && !blocked(-up.side)) {
+            up.side = -up.side;
+            up.turned = true;
+          } else up.out = up.len + 20;
+        }
+        dx = blocked(up.side) ? 0 : up.side * step;
         dy = (up.sy - 6 - lead.y) * Math.min(1, 8 * dt);
       } else if (depth > 0) {
         // in the pipe: kept to its middle
