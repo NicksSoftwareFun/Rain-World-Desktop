@@ -2285,6 +2285,37 @@
 
       for (const l of this.legs) if (l.near && !this.onBack) this.drawLeg(ctx, l, px);
       ctx.restore(); // end of the mouth clip
+      if (wedge) {
+        // ...but its own tail, curled up behind the head, does show through
+        // the gap
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(wedge[0][0], wedge[0][1]);
+        for (let i = 1; i < wedge.length; i++) ctx.lineTo(wedge[i][0], wedge[i][1]);
+        ctx.closePath();
+        ctx.clip();
+        const k0 = this.bodyN - 1;
+        ctx.fillStyle = body;
+        U.taperPath(ctx, P.slice(k0), widths.slice(k0));
+        ctx.fill();
+        const t0 = k0 / (n - 1);
+        for (const sp of this.specks) {
+          if (sp.kind === 'fin' || sp.t < t0) continue;
+          const q = at(sp.t);
+          const sz = Math.max(1, Math.round(sp.size)) * px;
+          const x = q.x + q.nx * q.w * sp.side * 0.85;
+          const y = q.y + q.ny * q.w * sp.side * 0.85;
+          ctx.fillStyle = sp.kind === 'dark' ? 'rgb(78,80,90)' : headCol;
+          ctx.fillRect(Math.round(x / px) * px - sz / 2, Math.round(y / px) * px - sz / 2, sz, sz);
+        }
+        if (this.p.tailTip) {
+          ctx.fillStyle = headCol;
+          const k1 = Math.floor(n * 0.78);
+          U.taperPath(ctx, P.slice(k1), widths.slice(k1).map((w) => w * 0.95));
+          ctx.fill();
+        }
+        ctx.restore();
+      }
       this.drawHead(ctx, px);
       ctx.restore();
       this.drawPath(ctx, this.pather);
