@@ -1578,8 +1578,23 @@
         return m;
       };
       if (pn && W.pole(pn.cx, pn.cy) && !W.solid(pn.cx, pn.cy + 1)) mask = onePole(W.centerX(pn.cx));
-      let g = W.nearestSurface(head.x, head.y, 22 * L, mask);
-      if (!g) g = W.nearestSurface(P[3].x, P[3].y, 20 * L, mask);
+      else if (!pn && this.grip && String(this.grip.id).startsWith('pole')) {
+        // standing still on a pole (hissing at a rival, backing off): it
+        // stays on that pole rather than flicking to the rock beside it
+        const u = this.poleUnder(head) || this.poleUnder(P[2]);
+        if (u) mask = onePole(u.x);
+      }
+      // Squared up to a rival (rearing, hissing, backing off) it holds its
+      // head higher than a plain reach, and keeps the surface it's on unless
+      // another is clearly nearer. Without that it lost its grip, sagged,
+      // caught hold and reared again, or swapped between a ceiling and a
+      // wall, many times a second: vibrating through every display.
+      const rival = RIVALRY.includes(this.state);
+      const rr = rival ? Math.max(this.raise || 0, this.raiseS || 0) : 0;
+      const prefer = rival && this.grip ? this.grip.id : undefined;
+      for (const m of [this.mask, this.maskNoPole, this.maskOnePole]) if (m) m.prefer = prefer;
+      let g = W.nearestSurface(head.x, head.y, (22 + 14 * rr) * L, mask);
+      if (!g) g = W.nearestSurface(P[3].x, P[3].y, (20 + 6 * rr) * L, mask);
       // A blue lizard out in the open clings to the back wall behind it
       // (seen from above, legs splayed either side); knocked off by a hit,
       // it can't for a moment.

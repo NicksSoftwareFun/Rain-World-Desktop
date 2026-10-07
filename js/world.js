@@ -413,6 +413,8 @@
 
     // Closest exposed surface point within maxD. mask selects which surfaces
     // count: {floor, walls, ceil, poles}. Corners count as floor/ceiling.
+    // mask.prefer (a surface id) wins over another unless that one is
+    // PREFER px nearer: something holding still keeps the hold it has.
     // d is signed: negative when (x, y) is inside a solid.
     nearestSurface(x, y, maxD, mask) {
       mask = mask || ALL;
@@ -421,7 +423,9 @@
       const S = this.solids;
       for (let i = 0; i < S.length; i++) {
         const s = S[i];
-        if (x < s.x - bd || x > s.x + s.w + bd || y < s.y - bd || y > s.y + s.h + bd) continue;
+        const B = s.id === mask.prefer ? PREFER : 0;
+        const lim = bd + B;
+        if (x < s.x - lim || x > s.x + s.w + lim || y < s.y - lim || y > s.y + s.h + lim) continue;
         let qx = U.clamp(x, s.x, s.x + s.w);
         let qy = U.clamp(y, s.y, s.y + s.h);
         const dx = x - qx;
@@ -436,14 +440,14 @@
           const t = y - s.y;
           const b = s.y + s.h - y;
           const m = Math.min(l, r, t, b);
-          if (m >= bd) continue;
+          if (m >= lim) continue;
           if (m === t) { qy = s.y; nx = 0; ny = -1; }
           else if (m === b) { qy = s.y + s.h; nx = 0; ny = 1; }
           else if (m === l) { qx = s.x; nx = -1; ny = 0; }
           else { qx = s.x + s.w; nx = 1; ny = 0; }
           d = -m;
         } else {
-          if (d >= bd) continue;
+          if (d >= lim) continue;
           nx = dx / d;
           ny = dy / d;
         }
@@ -455,7 +459,7 @@
         const ay = qy + ny * 2;
         if (ax < 0 || ay < 0 || ax > this.w || ay > this.h) continue;
         if (this.pitCols && type === 'walls' && this.inPit(Math.floor(ax / this.cell), Math.floor(ay / this.cell))) continue;
-        bd = Math.abs(d);
+        bd = Math.abs(d) - B;
         best = { x: qx, y: qy, nx, ny, d, id: s.id, type };
       }
       if (mask.poles) {
@@ -466,9 +470,9 @@
           const dx = x - p.x;
           const dy = y - qy;
           const d = Math.hypot(dx, dy);
-          if (d >= bd) continue;
+          if (d - (p.id === mask.prefer ? PREFER : 0) >= bd) continue;
           if (this.isSolidPt(p.x, qy)) continue;
-          bd = d;
+          bd = d - (p.id === mask.prefer ? PREFER : 0);
           const nx = d > 1e-6 ? dx / d : -1;
           const ny = d > 1e-6 ? dy / d : 0;
           best = { x: p.x, y: qy, nx, ny, d, id: p.id, type: 'poles' };
@@ -545,6 +549,7 @@
   }
 
   const ALL = { floor: true, walls: true, ceil: true, poles: true };
+  const PREFER = 6;
   World.SOLID = SOLID;
   World.POLE = POLE;
   RW.World = World;
