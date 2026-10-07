@@ -1775,7 +1775,20 @@
       const W = this.W;
       const m = this.mainPoint();
       if (!isFinite(m.x) || !isFinite(m.y)) return false;
-      if (m.x < -2 || m.y < -2 || m.x > W.w + 2 || m.y > W.h + 2) return true;
+      if (m.x < -2 || m.y < -2 || m.x > W.w + 2 || m.y > W.h + 2) {
+        // (out past the edge of the screen: trapped only where that edge is
+        // rock; the sky over an open top, or past an open side, is just air,
+        // and digging a batfly out of it threw up dirt in mid-air)
+        const cx = W.cellX(m.x);
+        const cy = W.cellY(m.y);
+        const ox = cx < 0 ? -1 : cx >= W.cols ? W.cols : null;
+        const oy = cy < 0 ? -1 : cy >= W.rows ? W.rows : null;
+        const ix = U.clamp(cx, 0, W.cols - 1);
+        const iy = U.clamp(cy, 0, W.rows - 1);
+        // (off a corner: air if either edge there is open)
+        if (ox !== null && oy !== null) return W.solid(ix, oy) && W.solid(ox, iy);
+        return W.solid(ox !== null ? ox : ix, oy !== null ? oy : iy);
+      }
       if (W.isSolidPt(m.x, m.y)) return true;
       const c = this.squeezeClear || 3;
       return (
