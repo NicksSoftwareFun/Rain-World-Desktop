@@ -928,7 +928,9 @@
       for (const p of this.particles) dirty.push([p.x - 3, p.y - 3, p.x + 3, p.y + 3]);
       for (const d of this.dens) dirty.push([d.x - 24, d.y - 18, d.x + 24, d.y + 18]);
       const order = { daddy: 0, dropwig: 2, centipede: 3, slugcat: 4, squidcada: 4.5, noodlefly: 4.6, noodlefly_infant: 4.7, batfly: 5 };
-      const sorted = this.creatures.slice().sort((a, b) => (order[a.species] ?? 1) - (order[b.species] ?? 1));
+      // (a centipede coiled round its catch wraps it from in front)
+      const rank = (c) => Math.max(order[c.species] ?? 1, c.coil && c.holding ? (order[c.holding.species] ?? 1) + 0.05 : 0);
+      const sorted = this.creatures.slice().sort((a, b) => rank(a) - rank(b));
       // weapons stuck in creatures or in flight draw over them; the rest under
       const over = (it) => it.state === 'embedded' || it.state === 'flying';
       for (const it of this.items) if (!over(it)) it.draw(ctx);

@@ -349,15 +349,23 @@
       }
       const node = this.pather.current();
       // A head at each end: when the way on is behind it, it doesn't turn
-      // round, it just goes the other way (the far end leads).
-      if (node && !this.coil && P.length > 2) {
+      // round, it just goes the other way (the far end leads). Only when the
+      // far end really is nearer the way on, and not again straight after:
+      // a node level with the middle of the body is "behind" both ends, and
+      // it flipped back and forth every frame, frozen in place.
+      if (this.revCd > 0) this.revCd -= dt;
+      const tl = P[P.length - 1];
+      if (node && !this.coil && P.length > 2 && !(this.revCd > 0) && Math.hypot(node.x - tl.x, node.y - tl.y) < Math.hypot(node.x - h.x, node.y - h.y) - W.cell * 0.5) {
         const bx = h.x - P[1].x;
         const by = h.y - P[1].y;
         const bl = Math.hypot(bx, by) || 1;
         const nx = node.x - h.x;
         const ny = node.y - h.y;
         const nl = Math.hypot(nx, ny) || 1;
-        if ((bx / bl) * (nx / nl) + (by / bl) * (ny / nl) < -0.4 && nl > W.cell * 0.6) this.reverse();
+        if ((bx / bl) * (nx / nl) + (by / bl) * (ny / nl) < -0.4 && nl > W.cell * 0.6) {
+          this.reverse();
+          this.revCd = 0.8;
+        }
       }
       let dvx = 0;
       let dvy = 0;
