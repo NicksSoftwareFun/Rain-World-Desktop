@@ -83,9 +83,10 @@ titles.
   poles) smaller; smaller zooms in so everything is bigger. The ledge, pole
   and fruit plant counts are densities: they scale with the map's area, and
   the tiered layout adds a row of ledges for about every 140 px of height.
-- **World menu** (the globe, top left): the world type (rooms, the default,
-  or ledges: rows of ledges or scattered ones, the map's pick; tap the one
-  you're on for a new map) and the size (compact, normal, large, XL).
+- **World menu** (ruins under a cloud, top left): roll a new map, roll a
+  new wildlife mix, and the size (compact, normal, large, XL). After a roll
+  the map's and wildlife's names show along the top for a few seconds
+  ("Outskirts Bunker - Lizard Turf Wars"; an open-top map is a Surface).
 - **Rain**: cycle length and whether creatures take shelter in dens during
   the downpour. The cycle runs itself: it opens dripping from the last
   storm, the drips die away into a calm, then light rain starts, builds on

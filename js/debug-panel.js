@@ -5,6 +5,26 @@
   const RW = window.RW;
   const U = RW.U;
 
+  // The world menu's line art (24x24): ruins under a cloud on the hub; a die
+  // over the ruins (a new map) and over a lizard's open jaws (new wildlife).
+  const RUINS =
+    '<path d="M2.5 21.5h19"/><path d="M5 21.5v-9h3v9M4 12.5h5"/>' +
+    '<path d="M8 14.2c1.7-2.6 4.4-3.5 6.6-2.7l-.7 1.2.9.8-.5.8"/>' +
+    '<path d="M15.8 21.5v-6.4l1-.9.8.8 1.4-1.1v7.6"/><path d="M10.8 21.5v-1.7h2.5v1.7"/>';
+  const CLOUD = '<path d="M7.6 8.6h8.9a2.4 2.4 0 0 0 .2-4.8 3.7 3.7 0 0 0-6.9-.9 2.9 2.9 0 0 0-2.2 5.7z"/>';
+  const HEAD =
+    '<path class="fill" d="M1.8 9.6C1.6 6.6 3.6 4.4 7 4.1L16.6 3.6C19.8 3.5 22.2 5 22.3 7.4L22.2 8.4 12.2 9.9 2.4 11.1Z"/>' +
+    '<path class="fill" d="M2.8 12.6 12.2 11.6 20.6 15.2C19.1 17.1 15.9 17.8 12.6 17.3L5.2 16.2C3.5 15.8 2.6 14.4 2.8 12.6Z"/>' +
+    '<circle class="hole" cx="7.2" cy="6.9" r="1.35"/>';
+  const DIE =
+    '<rect class="occ" x="12.5" y="12" width="10" height="10" rx="2.2"/>' +
+    '<circle class="fill" cx="15.2" cy="14.7" r="0.95"/><circle class="fill" cx="17.5" cy="17" r="0.95"/><circle class="fill" cx="19.8" cy="19.3" r="0.95"/>';
+  const WORLD_ICONS = {
+    hub: CLOUD + RUINS,
+    rollMap: '<g transform="translate(-1.4 -3.6) scale(.82)" style="stroke-width:1.85">' + RUINS + '</g>' + DIE,
+    rollWild: '<g transform="translate(-0.9 0.6) scale(.86)">' + HEAD + '</g>' + DIE,
+  };
+
   function h(tag, attrs, ...kids) {
     const e = document.createElement(tag);
     for (const k in attrs || {}) {
@@ -175,38 +195,43 @@
       }
     }
 
-    // The world menu, top left: a globe that fans out the world type and the
-    // size (a RadialMenu, like the rain one). Tapping the type it's already
-    // on makes a new map of it.
+    // The world menu, top left: ruins under a cloud, fanning out two
+    // rerolls (a new map, a new wildlife mix) and the size (a RadialMenu,
+    // like the rain one). Each reroll puts the map's and wildlife's names
+    // along the top for a few seconds.
     buildWorldMenu() {
       const eng = this.engine;
       const cfg = this.cfg;
       const Wc = cfg.world;
-      const hub = h('button', { class: 'rw-world', type: 'button', title: 'World: type, size and a new background' });
-      hub.innerHTML =
-        '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 7.5h14M5 16.5h14"/></svg>';
+      const hub = h('button', { class: 'rw-world', type: 'button', title: 'World: a new map, new wildlife, size' });
+      hub.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + WORLD_ICONS.hub + '</svg>';
       // (every change goes through here: saved, and the side panel redrawn
       // to match)
       const done = () => {
         this.save();
         this.render();
       };
-      // ('ledges' covers the older tiers and scatter too)
-      const isType = (value) => Wc.layout === value || (value === 'ledges' && (Wc.layout === 'tiers' || Wc.layout === 'scatter'));
-      const type = (value, label, icon, title) => ({
-        type: 'toggle', ring: 0, label, icon, title: title + ' (tap again for a new map)',
-        get: () => isType(value),
-        set: () => {
-          if (isType(value)) {
-            eng.regenerate(true);
-            return;
-          }
-          Wc.layout = value;
-          eng.regenerate(false);
+      const rollMap = () => {
+        if (Wc.layout !== 'experimental') {
+          // (rooms are the default now; an old ledges setting moves over)
+          Wc.layout = 'experimental';
+          eng.regenerate(true);
           eng.restartWildlife();
-          done();
-        },
-      });
+        } else eng.regenerate(true);
+        done();
+        this.showBanner();
+      };
+      const rollWildlife = () => {
+        const now = (cfg.presets || {}).wildlife;
+        const names = Object.keys(RW.WILDLIFE_PRESETS).filter((k) => k !== now);
+        const name = names[Math.floor(Math.random() * names.length)];
+        const before = Wc.mapSize;
+        RW.applyWildlifePreset(cfg, name);
+        if (Wc.mapSize !== before) eng.regenerate(false);
+        eng.restartWildlife();
+        done();
+        this.showBanner();
+      };
       const size = (name, icon, ring) => ({
         type: 'toggle', ring, label: RW.SIZE_PRESETS[name].label.toLowerCase(), icon, title: RW.SIZE_PRESETS[name].label + ' size',
         get: () => (cfg.presets || {}).size === name,
@@ -228,14 +253,61 @@
         margin: 16,
         title: 'World',
         items: [
-          type('experimental', 'rooms', '\u25a6', 'Carved like real Rain World rooms'),
-          type('ledges', 'ledges', '\u2630', 'Ledges and poles over open space: in rows, or scattered'),
+          { type: 'action', ring: 0, label: 'new map', svg: WORLD_ICONS.rollMap, title: 'Roll a new map', run: rollMap },
+          { type: 'action', ring: 0, label: 'wildlife', svg: WORLD_ICONS.rollWild, title: 'Roll a new wildlife mix', run: rollWildlife },
           size('compact', 'S', 1),
           size('normal', 'M', 1),
           size('large', 'L', 1),
           size('xl', 'XL', 1),
         ],
       });
+    }
+
+    // "Outskirts Bunker - Lizard Turf Wars" along the top: shown at full
+    // strength, fading after a few seconds (a new reroll starts it over).
+    showBanner() {
+      const eng = this.engine;
+      const d = eng.decor || {};
+      const reg = d.region && RW.Rooms && RW.Rooms.REGIONS[d.region];
+      const where = reg ? reg.label + (d.under ? ' Surface' : ' Bunker') : 'Ledges';
+      const wp = RW.WILDLIFE_PRESETS[(this.cfg.presets || {}).wildlife];
+      const titled = (t) => t.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+      const text = where + ' - ' + (wp ? titled(wp.label) : 'Custom Wildlife');
+      if (!this.banner) {
+        this.banner = h('div', { class: 'rw-banner', role: 'status' });
+        this.bannerCv = document.createElement('canvas');
+        this.banner.appendChild(this.bannerCv);
+        this.mount.appendChild(this.banner);
+      }
+      const b = this.banner;
+      b.setAttribute('aria-label', text);
+      // Drawn small and scaled up by the game's own pixel size, every letter
+      // hard-edged: the same chunky pixels as the labels drawn in the game.
+      const ps = Math.max(1, Math.round(eng.ps || 2));
+      const cv = this.bannerCv;
+      const c = cv.getContext('2d');
+      const font = '8px "Cascadia Mono", Consolas, monospace';
+      c.font = font;
+      // (letter by letter, each on a whole pixel with one more between: run
+      // together at this size, some pairs merged into one blob)
+      const adv = c.measureText('M').width;
+      const step = Math.round(adv) + 1;
+      const w = step * text.length + 2;
+      const hgt = 11;
+      cv.width = w;
+      cv.height = hgt;
+      cv.style.width = w * ps + 'px';
+      cv.style.height = hgt * ps + 'px';
+      c.font = font;
+      c.textBaseline = 'middle';
+      c.fillStyle = '#e8e2c8';
+      for (let i = 0; i < text.length; i++) c.fillText(text[i], 1 + i * step, hgt / 2 + 0.5);
+      const img = c.getImageData(0, 0, w, hgt);
+      for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i] > 100 ? 255 : 0;
+      c.putImageData(img, 0, 0);
+      b.classList.add('show');
+      clearTimeout(this.bannerT);
+      this.bannerT = setTimeout(() => b.classList.remove('show'), 3500);
     }
 
     // The rain cycle timer, bottom left: a ring of pips emptying toward the

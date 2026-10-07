@@ -10,6 +10,7 @@
 //     items: [
 //       { type: 'toggle', label: 'rain', icon: '☂', get: () => on, set: (v) => {} },
 //       { type: 'action', label: 'downpour', icon: '⛈', run: () => {} },
+//       { type: 'action', label: 'new', svg: '<path d="..."/>', run },  // an SVG icon
 //       { type: 'dial', label: 'cycle', min: 1, max: 30, step: 0.5, get, set,
 //         format: (v) => v + 'm', onDrag: (v) => {} },
 //     ],
@@ -104,8 +105,12 @@
         this.bindDial(b, it);
       } else {
         // (an icon can be live text: a function, kept up to date while open)
+        // (or an SVG drawing: it.svg, the inside of a 24x24 viewBox)
         const live = typeof it.icon === 'function';
-        it._icon = el('span', live ? 'icon text' : 'icon', live ? it.icon() : it.icon || '•');
+        if (it.svg) {
+          it._icon = el('span', 'icon svg');
+          it._icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + it.svg + '</svg>';
+        } else it._icon = el('span', live ? 'icon text' : 'icon', live ? it.icon() : it.icon || '•');
         face.appendChild(it._icon);
         b.addEventListener('click', () => {
           if (it.type === 'toggle') it.set(!it.get());

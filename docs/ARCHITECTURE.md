@@ -413,11 +413,16 @@ a click skips to the next stage); cycle length and flood height (turning
 it shows the dotted line). Each new map picks its own flood height, 40-80%
 from its seed (`Engine.init`); the dial overrides it until the next map.
 
-A second one, the **world menu**, sits top left behind a globe
-(`Panel.buildWorldMenu`): the world type on the inner ring (rooms =
-experimental, the default; ledges = `tiers` or `scatter`, each map
-picking one from its seed; tapping the type it's already on makes a new
-map), the size (compact, normal, large, XL) outside. A size picked there keeps the world type;
+A second one, the **world menu**, sits top left behind ruins under a
+cloud (`Panel.buildWorldMenu`; line art in `WORLD_ICONS`, shown through a
+RadialMenu item's `svg`): two rerolls on the inner ring (a new map, which
+also moves an old ledges setting over to rooms; a new wildlife preset,
+never the current one), the size (compact, normal, large, XL) outside.
+Each reroll calls `Panel.showBanner`: "<region> Bunker|Surface - <wildlife>"
+along the top, pixel text drawn small on a canvas and scaled up by the
+game's pixel size, on a dark glow fading at its edges, gone after 3.5 s
+(another roll starts it over). The ledges layouts (`tiers`, `scatter`)
+remain in the side panel. A size picked there keeps the world type;
 everything saves and redraws the side panel to match. (Saves from before
 rooms became the default, `cfg.rev` < 2, open on rooms once. The tests pin
 `?layout=tiers` unless a check picks its own.) A room fills the whole
