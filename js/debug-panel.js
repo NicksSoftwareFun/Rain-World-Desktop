@@ -286,14 +286,14 @@
       const ps = Math.max(1, Math.round(eng.ps || 2));
       const cv = this.bannerCv;
       const c = cv.getContext('2d');
-      const font = '8px "Cascadia Mono", Consolas, monospace';
+      const font = '11px "Cascadia Mono", Consolas, monospace';
       c.font = font;
       // (letter by letter, each on a whole pixel with one more between: run
       // together at this size, some pairs merged into one blob)
       const adv = c.measureText('M').width;
       const step = Math.round(adv) + 1;
       const w = step * text.length + 2;
-      const hgt = 11;
+      const hgt = 15;
       cv.width = w;
       cv.height = hgt;
       cv.style.width = w * ps + 'px';
