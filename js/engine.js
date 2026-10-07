@@ -392,6 +392,13 @@
       this.regenerate(false);
     }
 
+    // Sheltering from the downpour (or in it) with no creature alive and out
+    // on the map: everything's in the pipes or dead, so time can pass faster.
+    emptyDownpour() {
+      const eco = this.eco;
+      if (!eco || !eco.shouldShelter || !eco.shouldShelter()) return false;
+      return !eco.creatures.some((c) => !c.dead && !c.corpse && !c.leaving);
+    }
     start() {
       if (this.running) return;
       this.running = true;
@@ -403,14 +410,17 @@
         this.last = now;
         this.fps += (1 / Math.max(real, 1e-3) - this.fps) * 0.05;
         const t0 = performance.now();
-        this.acc += real * U.clamp(+this.cfg.world.timeScale || 1, 0, 4);
+        // (the rain with nothing alive out on the map: time runs at triple
+        // speed until they come back out, rather than an empty screen)
+        const ff = this.emptyDownpour() ? 3 : 1;
+        this.acc += real * U.clamp(+this.cfg.world.timeScale || 1, 0, 4) * ff;
         let steps = 0;
-        while (this.acc >= STEP && steps < 5) {
+        while (this.acc >= STEP && steps < 5 * ff) {
           this.tick(STEP);
           this.acc -= STEP;
           steps++;
         }
-        if (steps >= 5) this.acc = 0;
+        if (steps >= 5 * ff) this.acc = 0;
         // optional 30 fps cap: the sim stays fixed-step, only drawing is halved
         this.frameN = (this.frameN || 0) + 1;
         const skip = +this.cfg.world.maxFps === 30 && this.frameN % 2 === 1;

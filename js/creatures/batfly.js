@@ -136,8 +136,11 @@
         if (den) {
           this.perched = false;
           this.goal = den;
-          if (U.dist(p.x, p.y, den.x, den.y) < 20) this.leave();
-        }
+          // (it flies straight for it: with rock in the way and no headway
+          // for a few seconds, it tucks itself into a crevice where it is)
+          const tgt = this.denTgt && this.denTgt.x === den.x && this.denTgt.y === den.y ? this.denTgt : (this.denTgt = { x: den.x, y: den.y });
+          if (U.dist(p.x, p.y, den.x, den.y) < 20 || this.noHeadway(tgt, dt, 5)) this.leave();
+        } else if (this.shelterTime()) this.leave(); // (no way out at all: likewise)
       } else {
         this.goal = null;
       }

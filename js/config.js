@@ -54,8 +54,8 @@
       showCycleHud: true,
     },
     ecosystem: {
-      maxPopulation: 5,
-      spawnPerMinute: 2.5, // new arrivals per minute while below the population cap
+      maxPopulation: 8,
+      spawnPerMinute: 4, // new arrivals per minute while below the population cap
       startPopulated: true, // fill the screen immediately on load
       predation: true, // predators actually eat prey (off = chase, bite, release)
       migrationPerMinute: 0.3,
@@ -430,8 +430,8 @@
   // and the art pixels get finer so zoomed-out creatures keep their detail;
   // population, spawn rate, weapons and each species' cap scale with it.
   RW.SIZE_PRESETS = {
-    compact: { label: 'Compact', mapSize: 1, pixelScale: 2.5, maxPopulation: 5, spawnPerMinute: 2.5, rocks: 15, spears: 3, caps: 1 },
-    normal: { label: 'Normal', mapSize: 1.4, pixelScale: 2, maxPopulation: 8, spawnPerMinute: 4, rocks: 28, spears: 6, caps: 1.7 },
+    compact: { label: 'Compact', mapSize: 1, pixelScale: 2.5, maxPopulation: 8, spawnPerMinute: 4, rocks: 15, spears: 3, caps: 1 },
+    normal: { label: 'Normal', mapSize: 1.4, pixelScale: 2, maxPopulation: 11, spawnPerMinute: 5.5, rocks: 28, spears: 6, caps: 1.7 },
     large: { label: 'Large', mapSize: 1.8, pixelScale: 1.5, maxPopulation: 12, spawnPerMinute: 6, rocks: 42, spears: 8, caps: 2.5 },
     xl: { label: 'XL', mapSize: 2.4, pixelScale: 1, maxPopulation: 18, spawnPerMinute: 9, rocks: 65, spears: 13, caps: 3.6 },
   };
@@ -543,7 +543,7 @@
 
   RW.DEFAULT_CONFIG = RW.U.clone(RW.BASE_CONFIG);
   RW.DEFAULT_CONFIG.presets = { size: 'normal', wildlife: 'balanced' };
-  RW.DEFAULT_CONFIG.rev = 8; // (see loadConfig)
+  RW.DEFAULT_CONFIG.rev = 9; // (see loadConfig)
   RW.applySizePreset(RW.DEFAULT_CONFIG, 'normal');
 
   const STORAGE_KEY = 'rw-desktop-config-v17'; // bumped when defaults change shape
@@ -579,6 +579,14 @@
         if (!(raw.rev >= 7) && cfg.species.lizard_cyan) cfg.species.lizard_cyan.params.bodyColor = RW.BASE_CONFIG.species.lizard_cyan.params.bodyColor;
         // rev 8: white lizards climb ceilings (to hang in ambush)
         if (!(raw.rev >= 8) && cfg.species.lizard_white) Object.assign(cfg.species.lizard_white.params, { climbCeilings: true, ambush: true });
+        // rev 9: compact and normal maps fuller (higher cap, quicker arrivals)
+        if (!(raw.rev >= 9)) {
+          const sz = cfg.presets && cfg.presets.size;
+          if (sz === 'compact' || sz === 'normal') {
+            cfg.ecosystem.maxPopulation = RW.SIZE_PRESETS[sz].maxPopulation;
+            cfg.ecosystem.spawnPerMinute = RW.SIZE_PRESETS[sz].spawnPerMinute;
+          }
+        }
         cfg.rev = RW.DEFAULT_CONFIG.rev;
       }
     } catch (e) {

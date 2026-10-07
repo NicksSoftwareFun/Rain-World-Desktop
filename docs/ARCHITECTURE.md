@@ -248,7 +248,15 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   with a ladder each: now and then on a screen-sized map, more on big ones.
   Poles, bars, dens, fruit and nests scale with the number of rooms.
 - **Population**: `Ecosystem.maxPopulation()` is 30% lower on an
-  experimental map (less open space).
+  experimental map (less open space). Compact and Normal hold 8 and 11
+  (rev 9 lifts older saves). Arrivals come quicker while the map is under
+  half full (x0.4 the interval; under 80%, x0.7), and when nothing fitted it
+  tries again in 4 s. A species long overdue (12+ draws passed over, none
+  about) may come out over the cap, at most one every 150 s
+  (`overdueAt`). With everything sheltered or dead during the rain, time runs
+  at triple speed until they come back out (`Engine.emptyDownpour`); a
+  batfly that can't make headway to its exit (it flies straight at it)
+  tucks itself away after 5 s.
 - **Sky edges**: a surface map's sky runs off both sides of the screen
   (`Engine.openings`: the air down each side column to the first rock is
   open), so nothing climbs the screen's edge up into the sky.

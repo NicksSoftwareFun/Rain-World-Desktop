@@ -432,6 +432,7 @@
       const pop = this.population();
       const entries = [];
       const waiting = []; // allowed and not at their cap, even if too big to fit right now
+      const overdueKinds = new Set(); // let in over the cap for being long overdue
       for (const k of Object.keys(cfg.species)) {
         const s = cfg.species[k];
         if (!s.enabled || !(s.weight > 0)) continue;
@@ -442,11 +443,17 @@
         const n = k === 'squidcada' ? Math.min(2, (s.max || 0) - this.count(k)) : k === 'lizard_yellow' ? (this.widowedYellow() ? 1 : 2) : 1;
         if (k === 'lizard_yellow' && this.count(k) + n > (s.max || 0)) continue;
         // (with nothing that counts about, anything fits: a Daddy Long Legs
-        // can still turn up on a small map)
-        if (pop > 0.01 && pop + n * (s.popCost !== undefined ? +s.popCost : 1) > this.maxPopulation() + 0.01) continue;
+        // can still turn up on a small map; and one that's long overdue may
+        // come out over the cap, one at a time, so a small map still sees
+        // the big, rare ones now and then)
+        const over = pop + n * (s.popCost !== undefined ? +s.popCost : 1) > this.maxPopulation() + 0.01;
+        const overdue = over && this.skipsOf(k) >= 12 && pop <= this.maxPopulation() + 0.01 && !this.count(k) && !(this.t - (this.overdueAt ?? -1e9) < 150);
+        if (pop > 0.01 && over && !overdue) continue;
+        if (pop > 0.01 && over) overdueKinds.add(k);
         entries.push([k, s.weight * this.varietyBoost(k)]);
       }
       const pick = U.weighted(entries);
+      if (pick && overdueKinds.has(pick)) this.overdueAt = this.t;
       // every allowed species passed over this time waits one draw longer
       if (pick) for (const k of waiting) this.skips[k] = k === pick ? 0 : this.skipsOf(k) + 1;
       return pick;
@@ -744,10 +751,15 @@
 
       this.spawnT -= dt;
       if (this.spawnT <= 0) {
-        this.spawnT = 60 / Math.max(0.1, +cfg.ecosystem.spawnPerMinute || 0.1);
+        // (well under the cap, arrivals come quicker, so a small map isn't
+        // left half empty for minutes; and if nothing fitted this time, it
+        // tries again soon rather than waiting the whole interval)
+        const fill = this.population() / Math.max(0.1, this.maxPopulation());
+        this.spawnT = (60 / Math.max(0.1, +cfg.ecosystem.spawnPerMinute || 0.1)) * (fill < 0.5 ? 0.4 : fill < 0.8 ? 0.7 : 1);
         if (!this.shouldShelter()) {
           const sp = this.chooseSpecies();
           if (sp) this.spawn(sp);
+          else if (fill < 0.8) this.spawnT = Math.min(this.spawnT, 4);
         }
       }
 
