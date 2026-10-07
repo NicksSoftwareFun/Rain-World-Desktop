@@ -420,7 +420,8 @@ also moves an old ledges setting over to rooms; a new wildlife preset,
 never the current one), the size (compact, normal, large, XL) outside.
 Each reroll calls `Panel.showBanner`: "<region> Bunker|Surface - <wildlife>"
 along the top, pixel text drawn small on a canvas and scaled up by the
-game's pixel size, on a dark glow fading at its edges, gone after 3.5 s
+screen height (not the map's pixel size, so it's the same on every map
+size), on a dark glow fading at its edges, gone after 3.5 s
 (another roll starts it over). The ledges layouts (`tiers`, `scatter`)
 remain in the side panel. A size picked there keeps the world type;
 everything saves and redraws the side panel to match. (Saves from before

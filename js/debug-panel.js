@@ -281,9 +281,11 @@
       }
       const b = this.banner;
       b.setAttribute('aria-label', text);
-      // Drawn small and scaled up by the game's own pixel size, every letter
-      // hard-edged: the same chunky pixels as the labels drawn in the game.
-      const ps = Math.max(1, Math.round(eng.ps || 2));
+      // Drawn small and scaled up, every letter hard-edged: chunky pixels
+      // like the labels drawn in the game. (Scaled by the screen, not the
+      // map's pixel size, which shrinks on large and XL maps: the same size
+      // on the screen whatever the map.)
+      const ps = Math.max(2, Math.round(window.innerHeight / 360));
       const cv = this.bannerCv;
       const c = cv.getContext('2d');
       const font = '11px "Cascadia Mono", Consolas, monospace';
