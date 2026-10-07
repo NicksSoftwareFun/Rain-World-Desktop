@@ -573,9 +573,14 @@ const checks = [
         const C = RW.Creature.prototype;
         const lv = C.leave;
         C.leave = function () {
+          // (only a call that actually sends it off: one beside a floor pipe
+          // waits to get over the mouth first, see Creature.leave)
+          const was = this.leaving;
           const r = lv.apply(this, arguments);
-          if (this.piping) out.piped++;
-          else out.faded++;
+          if (!was && this.leaving) {
+            if (this.piping) out.piped++;
+            else out.faded++;
+          }
           return r;
         };
         let after = -1;

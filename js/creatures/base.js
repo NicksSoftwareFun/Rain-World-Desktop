@@ -605,6 +605,24 @@
       if (this.holding) this.release();
     }
     leave() {
+      // A pipe standing up out of the floor goes in from above. Beside it
+      // (on a pole next to it, across the floor at its level) it isn't in
+      // yet: it keeps on to the spot over the mouth (where its path ends
+      // anyway) rather than sliding in sideways through the rock. If it
+      // can't get there in a while, it slips away where it is instead.
+      let pipe = !this.grabbedBy && !this.corpse ? this.denMouthNear(70) : null;
+      if (pipe && !pipe.sky && !pipe.wall && !this.overMouth(pipe)) {
+        // (another pipe close by that it is over will do)
+        const over = (this.eco.dens || []).find((d) => !d.sky && !d.wall && this.overMouth(d));
+        if (over) pipe = over;
+      }
+      if (pipe && !pipe.sky && !pipe.wall && !this.overMouth(pipe)) {
+        const t = this.eco.t;
+        if (this.denWaitSince === undefined || t - this.denWaitSince > 30) this.denWaitSince = t;
+        if (t - this.denWaitSince < 10) return;
+        pipe = null;
+      }
+      this.denWaitSince = undefined;
       // a catch carried in out of the rain is eaten in there
       if (this.holding && this.eco.shouldShelter() && !this.holding.isHand) this.eco.consume(this.holding, this);
       if (this.holding) this.release();
@@ -614,8 +632,14 @@
       const fam = this.family;
       this.sheltered = this.eco.shouldShelter() && !this.exitDen && !(fam && fam.exitDen) && !this.migrating;
       // at a den: squeeze in through the pipe mouth rather than fade out
-      const d = !this.grabbedBy && !this.corpse ? this.denMouthNear(70) : null;
-      if (d) this.startPiping(d);
+      if (pipe) this.startPiping(pipe);
+    }
+    // Over a floor pipe's mouth, ready to go in from above (the head or lead
+    // point right over the opening, not off to the side of it or below).
+    overMouth(d) {
+      const mo = RW.Creature.denMouth(d);
+      const L = this.pipeLead();
+      return L.y <= mo.y + 2 && L.y >= mo.y - 40 && Math.abs(L.x - mo.x) <= this.W.cell;
     }
 
     // --- going into a pipe ---
