@@ -468,7 +468,7 @@
       caps: { dropwig: 2, lizard_white: 3, lizard_cyan: 2 },
     },
     daddy: {
-      label: "Daddy's buffet",
+      label: "Long Legs buffet",
       note: 'Daddy Long Legs drifting through a crowd of prey',
       weights: { daddy: 2.5, slugcat: 5, batfly: 4, centipede: 5, lizard_pink: 1, squidcada: 2, noodlefly: 0.5 },
       caps: { daddy: 2 },

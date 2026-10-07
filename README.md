@@ -57,7 +57,7 @@ titles.
     screen is small but its pixels are dense): Normal on a phone is what
     XL used to be there, and XL comes near a desktop's XL.
   - **Wildlife**: Balanced (the default), Lizard turf wars, Slugcat hunters,
-    Centipede hunt, Ambushers, Daddy's buffet, Flyers, Peaceful. Sets the spawn
+    Centipede hunt, Ambushers, Long Legs buffet, Flyers, Peaceful. Sets the spawn
     weights to show off a set of behaviours; creatures that aren't in the new
     mix walk off to a den.
   - Changing a setting a preset governs by hand switches that preset to
