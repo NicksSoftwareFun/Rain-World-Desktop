@@ -2481,6 +2481,54 @@
       ctx.lineTo(16.6, 0.6);
       ctx.closePath();
       ctx.fill();
+      // Big heads (the red's, the green's) read flat as one block of colour
+      // at their size: the same solid colour, modelled with a few tones of
+      // itself (lit along the top, shaded under the brow and along the
+      // cheek and jaw line, a brow ridge, a nostril, a few scale flecks).
+      // Same outline; clipped to it.
+      if ((this.p.headScale || 1) * this.L >= 1.1) {
+        const base = this.headColor;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(-5.5, 0.6);
+        ctx.lineTo(-7, -2.2);
+        ctx.lineTo(-5.8, -5.6);
+        ctx.lineTo(-2, -6.6);
+        ctx.lineTo(10, -6.4);
+        ctx.quadraticCurveTo(16.6, -6.2, 16.6, -1.6);
+        ctx.lineTo(16.6, 0.6);
+        ctx.closePath();
+        ctx.clip();
+        const dk = U.rgba(U.scale(base, 0.78));
+        const dk2 = U.rgba(U.scale(base, 0.66));
+        const lt = U.rgba(U.mix(base, '#ffffff', 0.22));
+        // shade low on the skull, deepening toward the jaw line
+        ctx.fillStyle = dk;
+        ctx.fillRect(-8, -2.2, 26, 3);
+        ctx.fillStyle = dk2;
+        ctx.fillRect(-8, -0.6, 26, 1.4);
+        // the cheek: a rounded shade at the back of the skull
+        ctx.fillStyle = dk;
+        ctx.beginPath();
+        ctx.ellipse(-3.2, -2.4, 3.4, 2.6, 0, 0, U.TAU);
+        ctx.fill();
+        // lit along the top of the skull and down the snout
+        ctx.fillStyle = lt;
+        ctx.fillRect(-4.5, -6.7, 14, 1.3);
+        ctx.fillRect(10.5, -6, 4, 1);
+        // brow ridge over the eye, shade under it
+        ctx.fillStyle = lt;
+        ctx.fillRect(2.6, -6.6, 5.6, 0.9);
+        ctx.fillStyle = dk2;
+        ctx.fillRect(2.8, -5.7, 5.2, 0.7);
+        // a few scale flecks
+        ctx.fillStyle = dk;
+        for (const [fx, fy] of [[-1, -4.8], [1.4, -3.4], [8.8, -4.6], [11.6, -3.2], [6.2, -2.9]]) ctx.fillRect(fx, fy, u * 1.2, u * 1.2);
+        // nostril
+        ctx.fillStyle = dk2;
+        ctx.fillRect(14.4, -4.4, Math.max(u * 1.4, 0.9), Math.max(u * 1.2, 0.8));
+        ctx.restore();
+      }
 
       // a blue lizard's frilled crest: a few ragged spikes along the top of
       // the skull, raised with the rest of its frills
