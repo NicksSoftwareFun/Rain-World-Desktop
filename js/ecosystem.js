@@ -223,17 +223,34 @@
       this.populate();
     }
 
+    // The nearest open den, by straight line; given a walker's caps, the
+    // nearest it can actually get to (so a creature making for shelter heads
+    // for an exit it can reach, rather than the closest one through rock and
+    // ending up tucked into a passage short of it). Remembered a couple of
+    // seconds per spot, as it's asked every frame.
     nearestDen(x, y, caps) {
-      let best = null;
-      let bd = Infinity;
-      for (const d of this.openDens(caps && caps.fly)) {
-        const p = this.denSpawnPoint(d);
-        const dd = U.dist2(x, y, p.x, p.y);
-        if (dd < bd) {
-          bd = dd;
+      const pts = this.openDens(caps && caps.fly).map((d) => this.denSpawnPoint(d));
+      if (!pts.length) return null;
+      pts.sort((a, b) => U.dist2(x, y, a.x, a.y) - U.dist2(x, y, b.x, b.y));
+      if (!caps || caps.fly || pts.length === 1) return pts[0];
+      const W = this.world;
+      const key = (caps.key || Nav.capsKey(caps)) + ':' + W.cellX(x) + ',' + W.cellY(y);
+      const memo = this.denMemo || (this.denMemo = new Map());
+      const hit = memo.get(key);
+      if (hit && this.t - hit.t < 2.5) {
+        const p = pts.find((q) => q.x === hit.x && q.y === hit.y);
+        if (p) return p;
+      }
+      let best = pts[0];
+      for (const p of pts.slice(0, 5)) {
+        const r = Nav.findPath(W, x, y, p.x, p.y, caps, 6000);
+        if (r && r.complete) {
           best = p;
+          break;
         }
       }
+      if (memo.size > 400) memo.clear();
+      memo.set(key, { t: this.t, x: best.x, y: best.y });
       return best;
     }
 

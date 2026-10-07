@@ -132,7 +132,7 @@
       }
       if (this.wantsToLeave(dt)) {
         this.setState('leave');
-        const den = eco.nearestDen(h.x, h.y);
+        const den = eco.nearestDen(h.x, h.y, this.caps);
         if (den) {
           this.pather.setGoal(den.x, den.y);
           if (U.dist(h.x, h.y, den.x, den.y) < 22) this.leave();

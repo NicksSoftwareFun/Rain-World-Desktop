@@ -283,8 +283,17 @@ and the dataset brief's rules are in `docs/EXPERIMENTAL_LAYOUT.md`).
   `waterCell`/`hasWater` ask it (scratch worlds fall back to the rects).
   Drawn over the creatures: everything under the surface is desaturated,
   multiplied toward the water's tint and lifted a touch (never black), then
-  the translucent body, a rippling surface line, thin streams where it
-  spills, spray where they land.
+  the translucent body, a rippling surface line, and where it spills down
+  into a hollow, a waterfall drawn whole per column (`fallW`: a sheet with
+  streaks running down it, mist and spray where it lands, as the ledge-end
+  waterfalls), its width easing with the flow and fading out when it stops,
+  so it never flickers as the cells fill and empty. Creatures making for
+  shelter head for the nearest den they can actually reach
+  (`Ecosystem.nearestDen` with caps, remembered a couple of seconds per
+  spot), and a route that can't reach its goal never ends inside a passage
+  (`Nav.findPath`). Lizards snap reflexively at a slugcat right in front of
+  their jaws (`p.reflexBite`, bites a second while it's in reach: red 2.8,
+  green 2.2, others 0.7).
 - **In the water** (`base.js`): `Nav.valid` lets swimmers (`caps.swim`, a
   cost multiplier: slugcat 3, lizards 4) anywhere in it; everything else
   keeps out (no jumps into or out of it either). Only divers (`caps.dive`:

@@ -420,7 +420,7 @@
           }
         }
         this.setState('leave');
-        const den = passing ? this.exitDen : eco.nearestDen(hip.x, hip.y);
+        const den = passing ? this.exitDen : eco.nearestDen(hip.x, hip.y, this.caps);
         if (den) {
           this.pather.setGoal(den.x, den.y);
           if (U.dist(hip.x, hip.y, den.x, den.y) < 22) this.leave();

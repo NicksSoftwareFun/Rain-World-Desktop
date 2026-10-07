@@ -262,6 +262,30 @@
         return;
       }
 
+      // A reflex snap: a slugcat that passes right in front of the jaws (hops
+      // over it at the foot of a pole, bounces off its nose) may be snatched
+      // there and then, whatever the lizard was about; reds and greens are
+      // the quickest to it (p.reflexBite: bites a second while in reach).
+      if (cfgE.predation && !this.tunnel && this.lungeT <= 0 && this.diet.includes('slugcat')) {
+        const L = this.L;
+        const mx = head.x + Math.cos(this.headAng) * 9 * L;
+        const my = head.y + Math.sin(this.headAng) * 9 * L;
+        const rate = this.p.reflexBite ?? 0.7;
+        for (const c of eco.creatures) {
+          if (c.species !== 'slugcat' || c.dead || c.corpse || c.leaving || c.grabbedBy || c.piping || c.unpiping) continue;
+          const m = c.mainPoint();
+          if (Math.hypot(m.x - mx, m.y - my) > 11 * L) continue;
+          if (Math.random() < rate * dt && this.grab(c)) {
+            eco.reflexBites = (eco.reflexBites || 0) + 1;
+            this.jaw = 1;
+            this.thrashT = 0.8;
+            this.eatT = 0;
+            this.prey = null;
+            return;
+          }
+        }
+      }
+
       if (this.wantsToLeave(dt)) {
         this.setState('leave');
         const den = eco.nearestDen(head.x, head.y, this.caps);

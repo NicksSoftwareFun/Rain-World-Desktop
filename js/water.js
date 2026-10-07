@@ -492,31 +492,76 @@
       ctx.restore();
       ctx.fillStyle = g;
       ctx.fill(body);
-      // streams spilling over: narrow, paler, wavering
+      // Streams spilling down into a hollow as it floods: drawn whole, top to
+      // landing, as the ledge-end waterfalls are (a sheet with streaks
+      // running down it, mist and spray where it lands), not cell by cell.
+      // Each column's width eases toward how much is pouring and fades out
+      // when it stops, so it doesn't flicker as the cells fill and empty.
       const sc = U.mix(wc, pal.light || '#ffffff', 0.45);
-      this.falls.length = 0;
+      const runs = new Map(); // column -> { y0, y1, a }
       for (let k = 0; k < streams.length; k += 3) {
         const x = streams[k];
         const y = streams[k + 1];
-        const a = streams[k + 2];
-        const w = U.clamp(a * cell * 2, 2, cell * 0.7);
-        const cx = (x + 0.5) * cell + Math.sin(t * 7 + y * 1.7) * 1.2;
-        ctx.fillStyle = U.rgba(sc, 0.75);
-        ctx.fillRect(Math.round(cx - w / 2), y * cell, Math.max(2, Math.round(w)), cell);
-        // where it lands: on water or a floor
-        const j = (y + 1) * C + x;
-        if (y + 1 < R && (B[j] || !this.falling(x, y + 1))) this.falls.push(cx, (y + 1) * cell + (B[j] ? 0 : (1 - Math.min(1, m[j])) * cell), w);
+        const r = runs.get(x);
+        if (r && y <= r.y1 + 1) {
+          r.y1 = Math.max(r.y1, y);
+          r.a = Math.max(r.a, streams[k + 2]);
+        } else if (!r) runs.set(x, { y0: y, y1: y, a: streams[k + 2] });
       }
-      // spray where streams land
-      ctx.fillStyle = U.rgba(sc, 0.6);
-      for (let k = 0; k < this.falls.length; k += 3) {
+      const FW = this.fallW || (this.fallW = new Map());
+      const dtw = Math.min(0.1, Math.max(0, t - (this.fallT === undefined ? t : this.fallT)));
+      this.fallT = t;
+      for (const [x, r] of runs) {
+        const want = U.clamp(r.a * cell * 1.6, 3, cell * 0.8);
+        const j = (r.y1 + 1) * C + x;
+        // where it lands: on water or a floor
+        const land = r.y1 + 1 < R ? (r.y1 + 1) * cell + (B[j] ? 0 : (1 - Math.min(1, m[j])) * cell) : R * cell;
+        const f = FW.get(x);
+        if (f) {
+          f.w += (want - f.w) * Math.min(1, dtw * 3);
+          f.top += (r.y0 * cell - f.top) * Math.min(1, dtw * 6);
+          f.bot += (land - f.bot) * Math.min(1, dtw * 6);
+          f.on = true;
+        } else FW.set(x, { w: 2, top: r.y0 * cell, bot: land, on: true, ph: Math.random() * 10 });
+      }
+      this.falls.length = 0;
+      for (const [x, f] of FW) {
+        if (!f.on) f.w -= dtw * 12; // (stopped: thinning out)
+        f.on = false;
+        if (f.w < 1) {
+          FW.delete(x);
+          continue;
+        }
+        const w = Math.round(f.w);
+        const x0 = Math.round((x + 0.5) * cell - w / 2);
+        const top = Math.round(f.top);
+        const bot = Math.round(f.bot);
+        if (bot <= top) continue;
+        const a = U.clamp(f.w / 6, 0.3, 1);
+        ctx.fillStyle = U.rgba(sc, 0.35 * a);
+        ctx.fillRect(x0, top, w, bot - top);
+        // the water's streaks running down it
+        for (let lane = 0; lane < Math.max(2, w / 3); lane++) {
+          const lx = x0 + ((lane * 7 + 1) % Math.max(1, w - 1));
+          const off = (t * 260 * (0.85 + (lane % 3) * 0.12) + lane * 11 + f.ph * 40) % 26;
+          ctx.fillStyle = U.rgba(sc, 0.8 * a * (lane % 2 ? 0.7 : 1));
+          for (let y = top + off - 26; y < bot; y += 26) ctx.fillRect(lx, Math.max(top, y), lane % 3 ? 1 : 2, Math.min(14, bot - Math.max(top, y)));
+        }
+        this.falls.push(x0 + w / 2, bot, w, a);
+      }
+      // mist and spray where streams land
+      for (let k = 0; k < this.falls.length; k += 4) {
         const fx = this.falls[k];
         const fy = this.falls[k + 1];
         const w = this.falls[k + 2];
-        for (let d = 0; d < 4; d++) {
-          const ph = (t * 3 + d * 0.25 + fx * 0.01) % 1;
-          const dx = (d % 2 ? 1 : -1) * (w * 0.5 + ph * 8);
-          ctx.fillRect(Math.round(fx + dx), Math.round(fy - 6 * Math.sin(ph * Math.PI)), 2, 2);
+        const a = this.falls[k + 3];
+        ctx.fillStyle = U.rgba(sc, 0.18 * a);
+        ctx.fillRect(Math.round(fx - w / 2 - 6), Math.round(fy - 8), Math.round(w + 12), 8);
+        ctx.fillStyle = U.rgba(sc, 0.6 * a);
+        for (let d = 0; d < 6; d++) {
+          const ph = (t * 2.6 + d * 0.17 + fx * 0.01) % 1;
+          const dx = (d % 2 ? 1 : -1) * (w * 0.5 + ph * 9);
+          ctx.fillRect(Math.round(fx + dx), Math.round(fy - 7 * Math.sin(ph * Math.PI)), 2, 2);
         }
       }
       // the surface line, rippling

@@ -456,6 +456,9 @@
       i = from[i];
     }
     nodes.reverse();
+    // (no way all the way there: don't end up wedged in a passage, the
+    // closest it could get; stop short of it, out in the open)
+    if (!found && !c.fly && W.passageAt) while (nodes.length && W.passage(nodes[nodes.length - 1].cx, nodes[nodes.length - 1].cy) >= 0) nodes.pop();
     return { nodes, complete: found, start };
   }
 

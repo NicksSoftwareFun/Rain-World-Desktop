@@ -125,6 +125,7 @@
         popCost: 1.5,
         params: {
           noSwim: true, // keeps out of the water (too heavy to climb back out)
+          reflexBite: 2.2, // snaps at a slugcat right in front of its jaws (bites a second while in reach; others 0.7)
           headColor: '#41f53c',
           bodyColor: '#0c0d10',
           length: 1.25,
@@ -211,6 +212,7 @@
         max: 1,
         popCost: 2,
         params: {
+          reflexBite: 2.8, // the quickest to snap at a slugcat right in front of its jaws
           headColor: '#ff1e2a',
           bodyColor: '#0c0608',
           length: 1.35,
